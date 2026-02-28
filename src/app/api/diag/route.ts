@@ -4,45 +4,60 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 export async function GET() {
-  const results: Record<string, any> = {};
+  const results: string[] = [];
 
+  // Clear prepared statement caches that reference old enum types
+  const steps = [
+    `DISCARD ALL`,
+  ];
+
+  for (const sql of steps) {
+    try {
+      await prisma.$executeRawUnsafe(sql);
+      results.push(`OK: ${sql}`);
+    } catch (e: any) {
+      results.push(`ERR: ${sql} -> ${e.message.substring(0, 200)}`);
+    }
+  }
+
+  // Verify column types
   try {
-    // Check column types
     const colTypes = await prisma.$queryRawUnsafe(`
       SELECT table_name, column_name, data_type, udt_name
       FROM information_schema.columns
       WHERE table_schema = 'public'
         AND column_name IN ('role', 'type', 'status', 'urgency')
-      ORDER BY table_name, column_name
-    `);
-    results.columnTypes = colTypes;
+        AND data_type = 'USER-DEFINED'
+      ORDER BY table_name
+    `) as any[];
+    results.push(`Remaining enum columns: ${colTypes.length}`);
+    if (colTypes.length > 0) {
+      results.push(JSON.stringify(colTypes));
+    }
   } catch (e: any) {
-    results.columnTypesError = e.message;
+    results.push(`Verify error: ${e.message.substring(0, 200)}`);
   }
 
+  // Check remaining enum types
   try {
-    // Check if old enum types still exist
-    const enumTypes = await prisma.$queryRawUnsafe(`
-      SELECT t.typname, e.enumlabel
+    const enums = await prisma.$queryRawUnsafe(`
+      SELECT DISTINCT t.typname
       FROM pg_type t
       JOIN pg_enum e ON t.oid = e.enumtypid
       WHERE t.typnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
-      ORDER BY t.typname, e.enumsortorder
-    `);
-    results.existingEnums = enumTypes;
+    `) as any[];
+    results.push(`Remaining enum types: ${enums.map((e: any) => e.typname).join(', ') || 'none'}`);
   } catch (e: any) {
-    results.existingEnumsError = e.message;
+    results.push(`Enum check error: ${e.message.substring(0, 200)}`);
   }
 
+  // Test user query
   try {
-    // Sample user roles
-    const users = await prisma.$queryRawUnsafe(`
-      SELECT id, email, role, pg_typeof(role) as role_type FROM "User" LIMIT 5
-    `);
-    results.sampleUsers = users;
+    const user = await prisma.user.findUnique({ where: { email: 'testvendor2@dispatchtogo.com' } });
+    results.push(`User query: ${user ? `found ${user.email} role=${user.role}` : 'not found'}`);
   } catch (e: any) {
-    results.sampleUsersError = e.message;
+    results.push(`User query error: ${e.message.substring(0, 200)}`);
   }
 
-  return NextResponse.json(results);
+  return NextResponse.json({ results });
 }
