@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateReferenceNumber } from "@/lib/utils";
 import { autoDispatch } from "@/lib/auto-dispatch";
+import type { DispatchDiag } from "@/lib/auto-dispatch";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -111,14 +112,20 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Auto-dispatch: try to find a matching vendor and assign automatically
-  let dispatchResult: boolean | null = null;
-  let dispatchError: string | null = null;
+  // Auto-dispatch
+  let diag: DispatchDiag | null = null;
   try {
-    dispatchResult = await autoDispatch(serviceRequest.id);
+    diag = await autoDispatch(serviceRequest.id);
   } catch (err: unknown) {
-    dispatchError = err instanceof Error ? err.message : String(err);
-    console.error("[auto-dispatch] Error:", err);
+    diag = {
+      result: false,
+      error: err instanceof Error ? err.message : String(err),
+      requestCategory: null,
+      activeVendorCount: 0,
+      vendorSkills: [],
+      matchCount: 0,
+      assignedTo: null,
+    };
   }
 
   // Re-fetch with updated status after dispatch attempt
@@ -133,7 +140,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(
     {
       ...(updated ?? serviceRequest),
-      _dispatch: { result: dispatchResult, error: dispatchError },
+      _dispatch: diag,
     },
     { status: 201 }
   );
