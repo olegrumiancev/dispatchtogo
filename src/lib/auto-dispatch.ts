@@ -1,5 +1,10 @@
 import { prisma } from "@/lib/prisma";
 
+/**
+ * Culture- and case-invariant equality check for category strings.
+ * Normalises whitespace, trims, and lowercases both sides so that
+ * "PLUMBING", "Plumbing", "plumbing", etc. all match.
+ */
 function categoriesMatch(a: string, b: string): boolean {
   return (
     a.trim().toLowerCase().replace(/\s+/g, " ") ===
@@ -7,42 +12,34 @@ function categoriesMatch(a: string, b: string): boolean {
   );
 }
 
-export type DispatchDiag = {
-  result: boolean;
-  error: string | null;
-  requestCategory: string | null;
-  activeVendorCount: number;
-  vendorSkills: Array<{ vendor: string; skills: string[] }>;
-  matchCount: number;
-  assignedTo: string | null;
-};
-
+/**
+ * Auto-dispatch: find a matching vendor for the given service request
+ * and create a job assignment.
+ *
+ * Matching logic:
+ * 1. Pull all active vendors with their skills
+ * 2. Filter in-app using case-invariant comparison against request category
+ * 3. Pick the vendor with the fewest active (incomplete) jobs (load balancing)
+ * 4. Create a Job (OFFERED) and update the request status to DISPATCHED
+ *
+ * If no vendor matches, moves the request to READY_TO_DISPATCH for manual
+ * assignment.
+ */
 export async function autoDispatch(
   serviceRequestId: string
-): Promise<DispatchDiag> {
-  const diag: DispatchDiag = {
-    result: false,
-    error: null,
-    requestCategory: null,
-    activeVendorCount: 0,
-    vendorSkills: [],
-    matchCount: 0,
-    assignedTo: null,
-  };
-
+): Promise<boolean> {
   try {
     const request = await prisma.serviceRequest.findUnique({
       where: { id: serviceRequestId },
       select: { category: true, organizationId: true },
     });
 
-    if (!request) {
-      diag.error = "Request not found";
-      return diag;
-    }
+    if (!request) return false;
 
-    diag.requestCategory = request.category;
+    const requestCategory = request.category;
 
+    // Pull all active vendors with their skills and active-job count.
+    // Filtering is done in-app so we can do case-invariant matching.
     const allActiveVendors = await prisma.vendor.findMany({
       where: { isActive: true },
       include: {
@@ -55,32 +52,27 @@ export async function autoDispatch(
       },
     });
 
-    diag.activeVendorCount = allActiveVendors.length;
-    diag.vendorSkills = allActiveVendors.map((v) => ({
-      vendor: v.companyName,
-      skills: v.skills.map((s) => s.category),
-    }));
-
+    // Keep only vendors whose skills include the requested category
     const matchingVendors = allActiveVendors.filter((v) =>
-      v.skills.some((s) => categoriesMatch(s.category, request.category))
+      v.skills.some((s) => categoriesMatch(s.category, requestCategory))
     );
 
-    diag.matchCount = matchingVendors.length;
-
     if (matchingVendors.length === 0) {
+      // No matching vendor \u2014 move to READY_TO_DISPATCH for manual assignment
       await prisma.serviceRequest.update({
         where: { id: serviceRequestId },
         data: { status: "READY_TO_DISPATCH" },
       });
-      return diag;
+      return false;
     }
 
+    // Pick the vendor with the fewest active jobs
     const sorted = matchingVendors.sort(
       (a, b) => a._count.jobs - b._count.jobs
     );
     const bestVendor = sorted[0];
-    diag.assignedTo = bestVendor.companyName;
 
+    // Create job and update request status in a transaction
     await prisma.$transaction([
       prisma.job.create({
         data: {
@@ -96,11 +88,9 @@ export async function autoDispatch(
       }),
     ]);
 
-    diag.result = true;
-    return diag;
-  } catch (error: unknown) {
-    diag.error = error instanceof Error ? error.message : String(error);
+    return true;
+  } catch (error) {
     console.error("[auto-dispatch] Error:", error);
-    return diag;
+    return false;
   }
 }

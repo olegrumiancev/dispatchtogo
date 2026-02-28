@@ -166,6 +166,7 @@ model Job {
   vendorNotes        String?
   completionSummary  String?
   createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id])
   vendor         Vendor         @relation(fields: [vendorId], references: [id])
