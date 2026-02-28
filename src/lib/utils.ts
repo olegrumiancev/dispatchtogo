@@ -1,8 +1,9 @@
-import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+/**
+ * Merge CSS class names, filtering out falsy values.
+ * Lightweight replacement for clsx + tailwind-merge.
+ */
+export function cn(...inputs: (string | undefined | null | false | 0)[]) {
+  return inputs.filter(Boolean).join(" ");
 }
 
 export function formatDate(date: Date | string): string {
