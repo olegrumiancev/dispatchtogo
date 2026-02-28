@@ -10,63 +10,8 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Enums ────────────────────────────────────────────────────────────────────
-
-enum UserRole {
-  OPERATOR
-  VENDOR
-  ADMIN
-}
-
-enum OrganizationType {
-  OPERATOR
-  VENDOR
-}
-
-enum Urgency {
-  LOW
-  MEDIUM
-  HIGH
-  EMERGENCY
-}
-
-enum RequestStatus {
-  SUBMITTED
-  TRIAGING
-  NEEDS_CLARIFICATION
-  READY_TO_DISPATCH
-  TRIAGED
-  DISPATCHED
-  ACCEPTED
-  IN_PROGRESS
-  COMPLETED
-  VERIFIED
-  CANCELLED
-}
-
-enum JobStatus {
-  OFFERED
-  ACCEPTED
-  EN_ROUTE
-  ON_SITE
-  COMPLETED
-  DECLINED
-}
-
-enum PhotoType {
-  BEFORE
-  DURING
-  AFTER
-  INTAKE
-}
-
-enum InvoiceStatus {
-  DRAFT
-  SENT
-  PAID
-  OVERDUE
-  CANCELLED
-}
+// NOTE: All enum columns have been migrated to TEXT in the database.
+// We use String types here to match the actual DB column types.
 
 // ─── Models ───────────────────────────────────────────────────────────────────
 
@@ -75,7 +20,7 @@ model User {
   email          String    @unique
   passwordHash   String
   name           String?
-  role           UserRole  @default(OPERATOR)
+  role           String    @default("OPERATOR")
   organizationId String?
   vendorId       String?
   createdAt      DateTime  @default(now())
@@ -94,15 +39,15 @@ model User {
 }
 
 model Organization {
-  id           String           @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
-  type         OrganizationType @default(OPERATOR)
+  type         String   @default("OPERATOR")
   contactEmail String?
   contactPhone String?
   phone        String?
   email        String?
   address      String?
-  createdAt    DateTime         @default(now())
+  createdAt    DateTime @default(now())
 
   users           User[]
   properties      Property[]
@@ -175,20 +120,20 @@ model VendorCredential {
 }
 
 model ServiceRequest {
-  id               String        @id @default(cuid())
-  referenceNumber  String        @unique
-  title            String        @default("")
+  id               String   @id @default(cuid())
+  referenceNumber  String   @unique
+  title            String   @default("")
   description      String
   category         String
   propertyId       String
   organizationId   String
-  urgency          Urgency       @default(MEDIUM)
-  status           RequestStatus @default(SUBMITTED)
+  urgency          String   @default("MEDIUM")
+  status           String   @default("SUBMITTED")
   aiTriageSummary  String?
   aiUrgencyScore   Int?
   resolvedAt       DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   property     Property     @relation(fields: [propertyId], references: [id])
   organization Organization @relation(fields: [organizationId], references: [id])
@@ -210,7 +155,7 @@ model Job {
   serviceRequestId   String    @unique
   vendorId           String
   organizationId     String?
-  status             JobStatus @default(OFFERED)
+  status             String    @default("OFFERED")
   acceptedAt         DateTime?
   enRouteAt          DateTime?
   arrivedAt          DateTime?
@@ -249,13 +194,13 @@ model JobNote {
 }
 
 model JobPhoto {
-  id        String    @id @default(cuid())
+  id        String   @id @default(cuid())
   jobId     String
-  type      PhotoType
+  type      String
   url       String
   caption   String?
-  takenAt   DateTime  @default(now())
-  createdAt DateTime  @default(now())
+  takenAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   job Job @relation(fields: [jobId], references: [id])
 
@@ -263,14 +208,14 @@ model JobPhoto {
 }
 
 model Photo {
-  id               String    @id @default(cuid())
+  id               String   @id @default(cuid())
   serviceRequestId String
   url              String
-  type             String    @default("INTAKE")
+  type             String   @default("INTAKE")
   latitude         Float?
   longitude        Float?
-  takenAt          DateTime  @default(now())
-  createdAt        DateTime  @default(now())
+  takenAt          DateTime @default(now())
+  createdAt        DateTime @default(now())
 
   serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id])
 
@@ -291,14 +236,14 @@ model JobMaterial {
 }
 
 model Invoice {
-  id               String        @id @default(cuid())
-  serviceRequestId String        @unique
+  id               String   @id @default(cuid())
+  serviceRequestId String   @unique
   organizationId   String
-  invoiceNumber    String        @unique
+  invoiceNumber    String   @unique
   amount           Float
-  status           InvoiceStatus @default(DRAFT)
+  status           String   @default("DRAFT")
   paidAt           DateTime?
-  createdAt        DateTime      @default(now())
+  createdAt        DateTime @default(now())
 
   serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id])
   organization   Organization   @relation(fields: [organizationId], references: [id])
