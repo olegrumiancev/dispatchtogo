@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     data: {
       aiTriageSummary: triageResult.summary,
       aiUrgencyScore: triageResult.urgencyScore,
-      status: "TRIAGING",
+      status: "TRIAGED",
     },
   });
 

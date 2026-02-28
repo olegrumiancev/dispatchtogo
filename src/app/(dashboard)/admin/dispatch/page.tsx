@@ -32,10 +32,10 @@ export default async function DispatchBoardPage() {
   if (user.role !== "ADMIN") redirect("/");
 
   const [unassignedRequests, activeJobs, availableVendors] = await Promise.all([
-    // Requests ready to be dispatched (no job yet, status READY_TO_DISPATCH or SUBMITTED)
+    // Requests ready to be dispatched (triaged but no job yet, or freshly submitted)
     prisma.serviceRequest.findMany({
       where: {
-        status: { in: ["READY_TO_DISPATCH", "SUBMITTED"] },
+        status: { in: ["TRIAGED", "SUBMITTED"] },
         job: null, // no job assigned yet
       },
       include: {
