@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
+import { isStorageConfigured, uploadFile } from "@/lib/s3-client";
 import crypto from "crypto";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
@@ -12,6 +10,13 @@ export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!isStorageConfigured()) {
+    return NextResponse.json(
+      { error: "Photo storage is not configured" },
+      { status: 503 }
+    );
   }
 
   try {
@@ -39,17 +44,12 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Ensure upload directory exists
-    await mkdir(UPLOAD_DIR, { recursive: true });
-
     const ext = file.name.split(".").pop() ?? "jpg";
-    const filename = `${crypto.randomUUID()}.${ext}`;
-    const filepath = path.join(UPLOAD_DIR, filename);
+    const key = `photos/${crypto.randomUUID()}.${ext}`;
 
-    await writeFile(filepath, buffer);
+    const url = await uploadFile(key, buffer, file.type);
 
-    const url = `/uploads/${filename}`;
-    return NextResponse.json({ url }, { status: 201 });
+    return NextResponse.json({ url, key }, { status: 201 });
   } catch (err) {
     console.error("[upload] Error:", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });
