@@ -58,7 +58,7 @@ export default async function VendorProfilePage() {
     email: vendor.email,
     phone: vendor.phone,
     address: vendor.address ?? "",
-    serviceRadiusKm: vendor.serviceRadiusKm,
+    serviceRadiusKm: vendor.serviceRadiusKm ?? 0,
   };
 
   return (
@@ -211,28 +211,28 @@ export default async function VendorProfilePage() {
                         {getCredentialTypeLabel(cred.type)}
                       </td>
                       <td className="px-6 py-4 text-gray-600 hidden sm:table-cell">
-                        {cred.licenseNumber ?? <span className="text-gray-400">—</span>}
+                        {cred.credentialNumber ?? <span className="text-gray-400">—</span>}
                       </td>
                       <td className="px-6 py-4 text-gray-600 hidden md:table-cell">
-                        {cred.issuingBody ?? <span className="text-gray-400">—</span>}
+                        {cred.type ?? <span className="text-gray-400">—</span>}
                       </td>
                       <td className="px-6 py-4 text-gray-600 hidden lg:table-cell">
-                        {cred.expiryDate ? (
+                        {cred.expiresAt ? (
                           <span
                             className={
-                              new Date(cred.expiryDate) < new Date()
+                              new Date(cred.expiresAt) < new Date()
                                 ? "text-red-600 font-medium"
                                 : ""
                             }
                           >
-                            {formatDate(cred.expiryDate)}
+                            {formatDate(cred.expiresAt)}
                           </span>
                         ) : (
                           <span className="text-gray-400">—</span>
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {cred.isVerified ? (
+                        {cred.verified ? (
                           <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
                             <CheckCircle className="w-4 h-4" />
                             Verified

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
-import { v4 as uuidv4 } from "uuid";
+import crypto from "crypto";
 
 const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads");
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     await mkdir(UPLOAD_DIR, { recursive: true });
 
     const ext = file.name.split(".").pop() ?? "jpg";
-    const filename = `${uuidv4()}.${ext}`;
+    const filename = `${crypto.randomUUID()}.${ext}`;
     const filepath = path.join(UPLOAD_DIR, filename);
 
     await writeFile(filepath, buffer);

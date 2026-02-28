@@ -90,12 +90,12 @@ export async function GET(
     resolvedAt: req.resolvedAt,
 
     propertyName: req.property.name,
-    propertyAddress: req.property.address,
+    propertyAddress: req.property.address ?? "",
 
     organizationName: req.organization.name,
-    organizationEmail: req.organization.contactEmail,
-    organizationPhone: req.organization.contactPhone,
-    organizationAddress: req.organization.address,
+    organizationEmail: req.organization.contactEmail ?? "",
+    organizationPhone: req.organization.contactPhone ?? "",
+    organizationAddress: req.organization.address ?? "",
 
     jobId: job.id,
     vendorCompanyName: job.vendor.companyName,

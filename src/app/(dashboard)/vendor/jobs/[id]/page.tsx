@@ -20,11 +20,7 @@ export default async function VendorJobDetailPage({
     include: {
       serviceRequest: {
         include: {
-          property: {
-            include: {
-              contacts: true,
-            },
-          },
+          property: true,
           photos: true,
         },
       },

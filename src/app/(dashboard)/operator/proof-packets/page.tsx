@@ -20,7 +20,7 @@ export default async function ProofPacketsPage() {
   if (user.role !== "OPERATOR") redirect("/");
 
   // Only show completed requests for this operator's org
-  const completedRequests = await prisma.serviceRequest.findMany({
+  const completedRequests = (await prisma.serviceRequest.findMany({
     where: {
       organizationId: user.organizationId,
       status: "COMPLETED",
@@ -30,12 +30,12 @@ export default async function ProofPacketsPage() {
       job: {
         include: {
           vendor: { select: { companyName: true, phone: true } },
-          photos: { select: { id: true, url: true, uploadedAt: true } },
+          photos: { select: { id: true, url: true, createdAt: true } },
         },
       },
     },
     orderBy: { updatedAt: "desc" },
-  });
+  })) as any[];
 
   return (
     <div className="space-y-6">

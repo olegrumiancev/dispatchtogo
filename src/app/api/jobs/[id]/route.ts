@@ -151,7 +151,7 @@ export async function PATCH(
     const serviceRequest = updated.serviceRequest as any;
     const vendor = updated.vendor as any;
     const refNumber = serviceRequest?.referenceNumber ?? id;
-    const orgId = updated.organizationId;
+    const orgId = updated.organizationId ?? "";
 
     // Resolve the operator phone (org contactPhone for MVP)
     prisma.organization
@@ -238,7 +238,7 @@ export async function POST(
     const note = await prisma.jobNote.create({
       data: {
         jobId: id,
-        authorId: user.id,
+        userId: user.id,
         text,
       },
       include: {
@@ -273,13 +273,11 @@ export async function POST(
       return NextResponse.json({ error: "url is required for photo type" }, { status: 400 });
     }
 
-    const photo = await prisma.photo.create({
+    const photo = await prisma.jobPhoto.create({
       data: {
         jobId: id,
         url,
         type: photoType ?? "DURING",
-        latitude: latitude ?? null,
-        longitude: longitude ?? null,
       },
     });
 
