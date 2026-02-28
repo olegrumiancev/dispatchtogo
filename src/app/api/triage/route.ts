@@ -23,7 +23,10 @@ export async function POST(request: NextRequest) {
 
   const serviceRequest = await prisma.serviceRequest.findUnique({
     where: { id: serviceRequestId },
-    include: { property: true },
+    include: {
+      property: true,
+      category: true,
+    },
   });
 
   if (!serviceRequest) {
@@ -32,23 +35,32 @@ export async function POST(request: NextRequest) {
 
   const triageResult = await triageServiceRequest({
     description: serviceRequest.description,
-    category: serviceRequest.category as string,
+    category: serviceRequest.category.name,
     urgency: serviceRequest.urgency as string,
     propertyType: (serviceRequest.property as any)?.type ?? "unknown",
   });
 
-  // Persist AI results
-  const updated = await prisma.serviceRequest.update({
-    where: { id: serviceRequestId },
-    data: {
-      aiTriageSummary: triageResult.summary,
-      aiUrgencyScore: triageResult.urgencyScore,
-      status: "TRIAGED",
-    },
-  });
+  // Store triage result as an AiClassification record and update status to TRIAGED
+  const [classification, updated] = await prisma.$transaction([
+    prisma.aiClassification.create({
+      data: {
+        requestId: serviceRequestId,
+        suggestedCategoryId: serviceRequest.categoryId,
+        confidence: triageResult.urgencyScore / 10,
+        reasoning: triageResult.summary,
+      },
+    }),
+    prisma.serviceRequest.update({
+      where: { id: serviceRequestId },
+      data: {
+        status: "TRIAGED",
+      },
+    }),
+  ]);
 
   return NextResponse.json({
     serviceRequest: updated,
     triage: triageResult,
+    classification,
   });
 }

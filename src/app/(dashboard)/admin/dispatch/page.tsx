@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
+import { URGENCY_LEVELS, REQUEST_STATUSES } from "@/lib/constants";
 import { Clock, MapPin, User, AlertTriangle } from "lucide-react";
 import AssignModal from "./assign-modal";
 import { formatDate } from "@/lib/utils";
@@ -20,10 +20,6 @@ function getStatusLabel(status: string) {
   return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
 export default async function DispatchBoardPage() {
   const session = await auth();
   if (!session) redirect("/login");
@@ -32,18 +28,18 @@ export default async function DispatchBoardPage() {
   if (user.role !== "ADMIN") redirect("/");
 
   const [unassignedRequests, activeJobs, availableVendors] = await Promise.all([
-    // Requests ready to be dispatched (triaged but no job yet, or freshly submitted)
+    // Requests ready to be dispatched (triaged or freshly submitted, with no jobs yet)
     prisma.serviceRequest.findMany({
       where: {
         status: { in: ["TRIAGED", "SUBMITTED"] },
-        job: null, // no job assigned yet
+        jobs: { none: {} },
       },
       include: {
         property: { select: { name: true, address: true } },
         organization: { select: { name: true } },
+        category: { select: { name: true } },
       },
       orderBy: [
-        // Emergency first, then by createdAt
         { urgency: "desc" },
         { createdAt: "asc" },
       ],
@@ -55,32 +51,35 @@ export default async function DispatchBoardPage() {
         completedAt: null,
       },
       include: {
-        serviceRequest: {
+        request: {
           include: {
             property: { select: { name: true } },
+            category: { select: { name: true } },
           },
         },
-        vendor: { select: { companyName: true, phone: true } },
+        vendor: { select: { name: true, phone: true } },
       },
       orderBy: { createdAt: "desc" },
     }),
 
-    // All active vendors with their skills for the assign modal
-    prisma.vendor.findMany({
-      where: { isActive: true },
+    // All vendor organizations with their skills for the assign modal
+    prisma.organization.findMany({
+      where: { type: "VENDOR" },
       include: {
-        skills: { select: { category: true } },
+        vendorSkills: {
+          include: { category: { select: { name: true } } },
+        },
       },
-      orderBy: { companyName: "asc" },
+      orderBy: { name: "asc" },
     }),
   ]);
 
   // Serialize for client components
   const vendorsForModal = availableVendors.map((v) => ({
     id: v.id,
-    companyName: v.companyName,
-    phone: v.phone,
-    skills: v.skills.map((s) => ({ category: s.category })),
+    name: v.name,
+    phone: v.phone ?? "",
+    skills: v.vendorSkills.map((s) => ({ category: s.category.name })),
   }));
 
   return (
@@ -119,7 +118,7 @@ export default async function DispatchBoardPage() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-semibold text-gray-900">
-                          {req.referenceNumber}
+                          {req.id.slice(-8).toUpperCase()}
                         </span>
                         <Badge variant={getUrgencyColor(req.urgency)}>
                           {req.urgency === "EMERGENCY" && (
@@ -136,7 +135,7 @@ export default async function DispatchBoardPage() {
                         {req.property.name}
                       </div>
                       <div className="text-xs text-gray-500">
-                        {getCategoryLabel(req.category)} · {req.organization.name}
+                        {req.category.name} \u00b7 {req.organization.name}
                       </div>
                       <div className="flex items-center gap-1 text-xs text-gray-400">
                         <Clock className="w-3 h-3" />
@@ -144,7 +143,7 @@ export default async function DispatchBoardPage() {
                       </div>
                     </div>
                     <AssignModal
-                      requestRef={req.referenceNumber}
+                      requestRef={req.id.slice(-8).toUpperCase()}
                       requestId={req.id}
                       vendors={vendorsForModal}
                     />
@@ -174,7 +173,7 @@ export default async function DispatchBoardPage() {
             </Card>
           ) : (
             activeJobs.map((job) => {
-              const sr = job.serviceRequest;
+              const sr = job.request;
               return (
                 <Card key={job.id}>
                   <CardContent className="py-4 space-y-3">
@@ -182,7 +181,7 @@ export default async function DispatchBoardPage() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-gray-900">
-                            {sr.referenceNumber}
+                            {sr.id.slice(-8).toUpperCase()}
                           </span>
                           <Badge variant={getStatusColor(sr.status)}>
                             {getStatusLabel(sr.status)}
@@ -197,17 +196,21 @@ export default async function DispatchBoardPage() {
                         </div>
                         <div className="flex items-center gap-1 text-sm text-gray-600">
                           <User className="w-3.5 h-3.5 text-gray-400" />
-                          <span>{job.vendor.companyName}</span>
-                          <span className="text-gray-400 mx-1">·</span>
-                          <a
-                            href={`tel:${job.vendor.phone}`}
-                            className="text-blue-600 hover:text-blue-700 text-xs"
-                          >
-                            {job.vendor.phone}
-                          </a>
+                          <span>{job.vendor.name}</span>
+                          {job.vendor.phone && (
+                            <>
+                              <span className="text-gray-400 mx-1">\u00b7</span>
+                              <a
+                                href={`tel:${job.vendor.phone}`}
+                                className="text-blue-600 hover:text-blue-700 text-xs"
+                              >
+                                {job.vendor.phone}
+                              </a>
+                            </>
+                          )}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {getCategoryLabel(sr.category)}
+                          {sr.category.name}
                         </div>
                       </div>
                     </div>
