@@ -154,7 +154,7 @@ export function AddPropertyDialog({ onSuccess }: AddPropertyDialogProps) {
                     onChange={(e) => setAddress(e.target.value)}
                     required
                     disabled={isLoading}
-                    placeholder="e.g. 123 Main St, New York, NY 10001"
+                    placeholder="e.g. 123 Main St, Cornwall, ON"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
                   />
                 </div>
@@ -190,14 +190,14 @@ export function AddPropertyDialog({ onSuccess }: AddPropertyDialogProps) {
                 <div className="flex items-center justify-end gap-3 pt-1">
                   <Button
                     type="button"
-                    variant="outline"
+                    variant="secondary"
                     onClick={closeDialog}
                     disabled={isLoading}
                   >
                     Cancel
                   </Button>
                   <Button type="submit" variant="primary" disabled={isLoading}>
-                    {isLoading ? "Saving…" : "Add Property"}
+                    {isLoading ? "Saving\u2026" : "Add Property"}
                   </Button>
                 </div>
               </form>
