@@ -32,10 +32,15 @@ enum Urgency {
 
 enum RequestStatus {
   SUBMITTED
+  TRIAGING
+  NEEDS_CLARIFICATION
+  READY_TO_DISPATCH
   TRIAGED
   DISPATCHED
+  ACCEPTED
   IN_PROGRESS
   COMPLETED
+  VERIFIED
   CANCELLED
 }
 
@@ -52,12 +57,15 @@ enum PhotoType {
   BEFORE
   DURING
   AFTER
+  INTAKE
 }
 
 enum InvoiceStatus {
   DRAFT
   SENT
   PAID
+  OVERDUE
+  CANCELLED
 }
 
 // ─── Models ───────────────────────────────────────────────────────────────────
@@ -66,41 +74,41 @@ model User {
   id             String    @id @default(cuid())
   email          String    @unique
   passwordHash   String
-  name           String
+  name           String?
   role           UserRole  @default(OPERATOR)
   organizationId String?
+  vendorId       String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  organization   Organization?    @relation(fields: [organizationId], references: [id])
-  serviceRequests ServiceRequest[] @relation("CreatedBy")
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  vendor         Vendor?       @relation(fields: [vendorId], references: [id])
   jobNotes       JobNote[]
   notifications  Notification[]
   chatMessages   ChatMessage[]
   auditLogs      AuditLog[]
-  assignedJobs   Job[]            @relation("AssignedBy")
 
   @@index([email])
   @@index([organizationId])
+  @@index([vendorId])
 }
 
 model Organization {
-  id        String           @id @default(cuid())
-  name      String
-  type      OrganizationType
-  phone     String?
-  email     String?
-  address   String?
-  createdAt DateTime         @default(now())
+  id           String           @id @default(cuid())
+  name         String
+  type         OrganizationType @default(OPERATOR)
+  contactEmail String?
+  contactPhone String?
+  phone        String?
+  email        String?
+  address      String?
+  createdAt    DateTime         @default(now())
 
-  users              User[]
-  properties         Property[]
-  serviceRequests    ServiceRequest[]
-  vendorJobs         Job[]              @relation("VendorOrg")
-  invoices           Invoice[]          @relation("OperatorInvoices")
-  vendorInvoices     Invoice[]          @relation("VendorInvoices")
-  vendorCredentials  VendorCredential[]
-  vendorSkills       VendorSkill[]
+  users           User[]
+  properties      Property[]
+  serviceRequests ServiceRequest[]
+  invoices        Invoice[]
+  jobs            Job[]
 
   @@index([type])
 }
@@ -109,7 +117,9 @@ model Property {
   id             String   @id @default(cuid())
   name           String
   address        String
+  description    String?
   organizationId String
+  isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
 
   organization    Organization     @relation(fields: [organizationId], references: [id])
@@ -118,65 +128,109 @@ model Property {
   @@index([organizationId])
 }
 
-model ServiceCategory {
-  id               String  @id @default(cuid())
-  name             String  @unique
-  description      String?
-  requiresLicense  Boolean @default(false)
+model Vendor {
+  id              String   @id @default(cuid())
+  companyName     String
+  contactName     String
+  email           String   @unique
+  phone           String
+  address         String?
+  serviceArea     String?
+  serviceRadiusKm Int?
+  specialties     String[] @default([])
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  serviceRequests  ServiceRequest[]
-  vendorSkills     VendorSkill[]
-  aiClassifications AiClassification[]
+  user        User[]
+  skills      VendorSkill[]
+  credentials VendorCredential[]
+  jobs        Job[]
+
+  @@index([isActive])
+}
+
+model VendorSkill {
+  id       String @id @default(cuid())
+  vendorId String
+  category String
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@unique([vendorId, category])
+  @@index([vendorId])
+}
+
+model VendorCredential {
+  id               String    @id @default(cuid())
+  vendorId         String
+  type             String
+  credentialNumber String
+  expiresAt        DateTime?
+  verified         Boolean   @default(false)
+
+  vendor Vendor @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId])
 }
 
 model ServiceRequest {
-  id             String        @id @default(cuid())
-  title          String
-  description    String
-  categoryId     String
-  propertyId     String
-  organizationId String
-  urgency        Urgency       @default(MEDIUM)
-  status         RequestStatus @default(SUBMITTED)
-  createdById    String
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  referenceNumber  String        @unique
+  title            String        @default("")
+  description      String
+  category         String
+  propertyId       String
+  organizationId   String
+  urgency          Urgency       @default(MEDIUM)
+  status           RequestStatus @default(SUBMITTED)
+  aiTriageSummary  String?
+  aiUrgencyScore   Int?
+  resolvedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  category          ServiceCategory    @relation(fields: [categoryId], references: [id])
-  property          Property           @relation(fields: [propertyId], references: [id])
-  organization      Organization       @relation(fields: [organizationId], references: [id])
-  createdBy         User               @relation("CreatedBy", fields: [createdById], references: [id])
-  jobs              Job[]
-  chatMessages      ChatMessage[]
+  property     Property     @relation(fields: [propertyId], references: [id])
+  organization Organization @relation(fields: [organizationId], references: [id])
+  job          Job?
+  invoice      Invoice?
+  photos       Photo[]
+  chatMessages ChatMessage[]
   aiClassifications AiClassification[]
 
   @@index([organizationId])
   @@index([status])
-  @@index([categoryId])
+  @@index([category])
   @@index([createdAt])
+  @@index([referenceNumber])
 }
 
 model Job {
-  id           String    @id @default(cuid())
-  requestId    String
-  vendorId     String
-  status       JobStatus @default(OFFERED)
-  assignedById String
-  acceptedAt   DateTime?
-  enRouteAt    DateTime?
-  arrivedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime  @default(now())
+  id                 String    @id @default(cuid())
+  serviceRequestId   String    @unique
+  vendorId           String
+  organizationId     String?
+  status             JobStatus @default(OFFERED)
+  acceptedAt         DateTime?
+  enRouteAt          DateTime?
+  arrivedAt          DateTime?
+  completedAt        DateTime?
+  totalLabourHours   Float?
+  totalMaterialsCost Float?
+  totalCost          Float?
+  vendorNotes        String?
+  completionSummary  String?
+  createdAt          DateTime  @default(now())
 
-  request    ServiceRequest @relation(fields: [requestId], references: [id])
-  vendor     Organization   @relation("VendorOrg", fields: [vendorId], references: [id])
-  assignedBy User           @relation("AssignedBy", fields: [assignedById], references: [id])
-  notes      JobNote[]
-  photos     JobPhoto[]
-  materials  JobMaterial[]
-  invoices   Invoice[]
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+  vendor         Vendor         @relation(fields: [vendorId], references: [id])
+  organization   Organization?  @relation(fields: [organizationId], references: [id])
+  notes          JobNote[]
+  photos         JobPhoto[]
+  materials      JobMaterial[]
+  proofPacket    ProofPacket?
 
-  @@index([requestId])
+  @@index([serviceRequestId])
   @@index([vendorId])
   @@index([status])
 }
@@ -185,11 +239,11 @@ model JobNote {
   id        String   @id @default(cuid())
   jobId     String
   userId    String
-  content   String
+  text      String
   createdAt DateTime @default(now())
 
-  job  Job  @relation(fields: [jobId], references: [id])
-  user User @relation(fields: [userId], references: [id])
+  job    Job  @relation(fields: [jobId], references: [id])
+  author User @relation(fields: [userId], references: [id])
 
   @@index([jobId])
 }
@@ -200,11 +254,27 @@ model JobPhoto {
   type      PhotoType
   url       String
   caption   String?
+  takenAt   DateTime  @default(now())
   createdAt DateTime  @default(now())
 
   job Job @relation(fields: [jobId], references: [id])
 
   @@index([jobId])
+}
+
+model Photo {
+  id               String    @id @default(cuid())
+  serviceRequestId String
+  url              String
+  type             String    @default("INTAKE")
+  latitude         Float?
+  longitude        Float?
+  takenAt          DateTime  @default(now())
+  createdAt        DateTime  @default(now())
+
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+
+  @@index([serviceRequestId])
 }
 
 model JobMaterial {
@@ -221,48 +291,32 @@ model JobMaterial {
 }
 
 model Invoice {
-  id                  String        @id @default(cuid())
-  jobId               String
-  organizationId      String
-  vendorOrganizationId String
-  laborTotal          Float
-  materialsTotal      Float
-  total               Float
-  status              InvoiceStatus @default(DRAFT)
-  createdAt           DateTime      @default(now())
+  id               String        @id @default(cuid())
+  serviceRequestId String        @unique
+  organizationId   String
+  invoiceNumber    String        @unique
+  amount           Float
+  status           InvoiceStatus @default(DRAFT)
+  createdAt        DateTime      @default(now())
 
-  job                Job          @relation(fields: [jobId], references: [id])
-  organization       Organization @relation("OperatorInvoices", fields: [organizationId], references: [id])
-  vendorOrganization Organization @relation("VendorInvoices", fields: [vendorOrganizationId], references: [id])
+  serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+  organization   Organization   @relation(fields: [organizationId], references: [id])
 
-  @@index([jobId])
+  @@index([serviceRequestId])
   @@index([organizationId])
   @@index([status])
 }
 
-model VendorCredential {
-  id               String    @id @default(cuid())
-  organizationId   String
-  credentialType   String
-  credentialNumber String
-  expiresAt        DateTime?
-  verified         Boolean   @default(false)
+model ProofPacket {
+  id          String   @id @default(cuid())
+  jobId       String   @unique
+  generatedAt DateTime @default(now())
+  summary     String?
+  pdfUrl      String?
 
-  organization Organization @relation(fields: [organizationId], references: [id])
+  job Job @relation(fields: [jobId], references: [id])
 
-  @@index([organizationId])
-}
-
-model VendorSkill {
-  id             String @id @default(cuid())
-  organizationId String
-  categoryId     String
-
-  organization Organization    @relation(fields: [organizationId], references: [id])
-  category     ServiceCategory @relation(fields: [categoryId], references: [id])
-
-  @@unique([organizationId, categoryId])
-  @@index([organizationId])
+  @@index([jobId])
 }
 
 model Notification {
@@ -280,15 +334,14 @@ model Notification {
 }
 
 model AiClassification {
-  id                String   @id @default(cuid())
-  requestId         String
-  suggestedCategoryId String
-  confidence        Float
-  reasoning         String
-  createdAt         DateTime @default(now())
+  id                  String   @id @default(cuid())
+  requestId           String
+  suggestedCategory   String
+  confidence          Float
+  reasoning           String
+  createdAt           DateTime @default(now())
 
-  request           ServiceRequest  @relation(fields: [requestId], references: [id])
-  suggestedCategory ServiceCategory @relation(fields: [suggestedCategoryId], references: [id])
+  request ServiceRequest @relation(fields: [requestId], references: [id])
 
   @@index([requestId])
 }
