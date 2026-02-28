@@ -297,6 +297,7 @@ model Invoice {
   invoiceNumber    String        @unique
   amount           Float
   status           InvoiceStatus @default(DRAFT)
+  paidAt           DateTime?
   createdAt        DateTime      @default(now())
 
   serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id])
