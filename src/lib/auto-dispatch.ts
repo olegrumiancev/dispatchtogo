@@ -1,34 +1,33 @@
 import { prisma } from "@/lib/prisma";
 
-// Category normalization map: handle seeded title-case values
-const CATEGORY_NORMALIZE: Record<string, string> = {
-  Plumbing: "PLUMBING",
-  Electrical: "ELECTRICAL",
-  HVAC: "HVAC",
-  "Snow Removal": "SNOW_REMOVAL",
-  Landscaping: "LANDSCAPING",
-  "General Maintenance": "GENERAL",
-  Cleaning: "CLEANING",
-  "Pest Control": "PEST",
-  Locksmith: "LOCKSMITH",
-  "Dock / Marina": "DOCK_MARINA",
-  Structural: "STRUCTURAL",
-  "Appliance Repair": "APPLIANCE",
-  Other: "OTHER",
-};
-
-function normalizeCategory(cat: string): string {
-  return CATEGORY_NORMALIZE[cat] ?? cat;
+/**
+ * Culture- and case-invariant equality check for category strings.
+ * Normalises whitespace, trims, and lowercases both sides so that
+ * "PLUMBING", "Plumbing", "plumbing", etc. all match.
+ */
+function categoriesMatch(a: string, b: string): boolean {
+  return (
+    a.trim().toLowerCase().replace(/\s+/g, " ") ===
+    b.trim().toLowerCase().replace(/\s+/g, " ")
+  );
 }
 
 /**
  * Auto-dispatch: find a matching vendor for the given service request
- * and create a job assignment. Matching logic:
- * 1. Find active vendors with a VendorSkill matching the request category
- * 2. Pick the vendor with the fewest active (incomplete) jobs (load balancing)
- * 3. Create a Job and update the request status to DISPATCHED
+ * and create a job assignment.
+ *
+ * Matching logic:
+ * 1. Pull all active vendors with their skills
+ * 2. Filter in-app using case-invariant comparison against request category
+ * 3. Pick the vendor with the fewest active (incomplete) jobs (load balancing)
+ * 4. Create a Job (OFFERED) and update the request status to DISPATCHED
+ *
+ * If no vendor matches, moves the request to READY_TO_DISPATCH for manual
+ * assignment.
  */
-export async function autoDispatch(serviceRequestId: string): Promise<boolean> {
+export async function autoDispatch(
+  serviceRequestId: string
+): Promise<boolean> {
   try {
     const request = await prisma.serviceRequest.findUnique({
       where: { id: serviceRequestId },
@@ -39,37 +38,27 @@ export async function autoDispatch(serviceRequestId: string): Promise<boolean> {
 
     const requestCategory = request.category;
 
-    // Find active vendors whose skills match the request category
-    // Check both the raw value and normalized value for compatibility
-    const matchingVendors = await prisma.vendor.findMany({
-      where: {
-        isActive: true,
-        skills: {
-          some: {
-            OR: [
-              { category: requestCategory },
-              { category: normalizeCategory(requestCategory) },
-              // Also check reverse: if DB has title-case and request is uppercase
-              ...Object.entries(CATEGORY_NORMALIZE)
-                .filter(([, v]) => v === requestCategory)
-                .map(([k]) => ({ category: k })),
-            ],
-          },
-        },
-      },
+    // Pull all active vendors with their skills and active-job count.
+    // Filtering is done in-app so we can do case-invariant matching.
+    const allActiveVendors = await prisma.vendor.findMany({
+      where: { isActive: true },
       include: {
+        skills: true,
         _count: {
           select: {
-            jobs: {
-              where: { completedAt: null },
-            },
+            jobs: { where: { completedAt: null } },
           },
         },
       },
     });
 
+    // Keep only vendors whose skills include the requested category
+    const matchingVendors = allActiveVendors.filter((v) =>
+      v.skills.some((s) => categoriesMatch(s.category, requestCategory))
+    );
+
     if (matchingVendors.length === 0) {
-      // No matching vendor \u2014 move to READY_TO_DISPATCH for manual assignment
+      // No matching vendor — move to READY_TO_DISPATCH for manual assignment
       await prisma.serviceRequest.update({
         where: { id: serviceRequestId },
         data: { status: "READY_TO_DISPATCH" },
