@@ -22,6 +22,7 @@ import {
   LogOut,
   Truck,
   ShieldCheck,
+  UserCog,
 } from "lucide-react";
 
 interface NavItem {
@@ -44,9 +45,11 @@ const VENDOR_NAV: NavItem[] = [
 ];
 
 const ADMIN_NAV: NavItem[] = [
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/dispatch", label: "Dispatch Board", icon: Send },
   { href: "/admin/vendors", label: "Vendors", icon: Users },
   { href: "/admin/organizations", label: "Organizations", icon: Building },
+  { href: "/admin/users", label: "Users", icon: UserCog },
   { href: "/admin/reports", label: "Reports", icon: BarChart3 },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/proof-packets", label: "Proof Packets", icon: ShieldCheck },
@@ -69,7 +72,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
       : ADMIN_NAV;
 
   const isActive = (href: string) => {
-    if (href === "/operator" || href === "/vendor/jobs" || href === "/admin/dispatch") {
+    if (href === "/operator" || href === "/vendor/jobs" || href === "/admin") {
       return pathname === href;
     }
     return pathname.startsWith(href);
@@ -127,7 +130,6 @@ export function Sidebar({ role, userName }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile hamburger toggle (rendered in Header, but we expose a trigger) */}
       {/* Desktop sidebar */}
       <aside className="hidden md:flex md:flex-col md:w-64 md:fixed md:inset-y-0 bg-slate-800 z-30">
         <SidebarContent />

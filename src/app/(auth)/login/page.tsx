@@ -1,12 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, getSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Truck, AlertCircle } from "lucide-react";
+
+function getDashboardUrl(role: string): string {
+  switch (role) {
+    case "ADMIN":
+      return "/admin";
+    case "VENDOR":
+      return "/vendor/jobs";
+    case "OPERATOR":
+    default:
+      return "/operator";
+  }
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,10 +41,17 @@ export default function LoginPage() {
 
       if (result?.error) {
         setError("Invalid email or password. Please try again.");
-      } else {
-        router.push("/");
-        router.refresh();
+        setLoading(false);
+        return;
       }
+
+      // Fetch the session to get the user's role for redirect
+      const session = await getSession();
+      const role = (session?.user as any)?.role ?? "OPERATOR";
+      const dashboardUrl = getDashboardUrl(role);
+
+      router.push(dashboardUrl);
+      router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -75,7 +94,7 @@ export default function LoginPage() {
           <Input
             label="Password"
             type="password"
-            placeholder="••••••••"
+            placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
