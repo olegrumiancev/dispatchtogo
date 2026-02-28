@@ -1,3 +1,5 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Force cache bust - ensure Tailwind utilities are generated */
