@@ -23,3 +23,18 @@ export function formatCurrency(amount: number): string {
     currency: "CAD",
   }).format(amount);
 }
+
+/**
+ * Generate a unique reference number with a given prefix.
+ * Format: PREFIX-YYYYMMDD-XXXX (random 4-char alphanumeric suffix)
+ */
+export function generateReferenceNumber(prefix: string): string {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let suffix = "";
+  for (let i = 0; i < 4; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `${prefix}-${date}-${suffix}`;
+}
