@@ -1,97 +1,113 @@
-interface TriageInput {
-  description: string;
-  category: string;
-  urgency: string;
-  propertyType: string;
-}
+import { prisma } from "@/lib/prisma";
+import { chatCompletion, isAiConfigured } from "@/lib/ai-client";
 
 interface TriageResult {
-  summary: string;
-  urgencyScore: number;
   suggestedCategory: string;
-  suggestedVendorSkills: string[];
+  confidence: number;
+  urgencyScore: number;
+  reasoning: string;
+  summary: string;
 }
 
 /**
- * AI-based triage for service requests.
+ * AI-powered triage for incoming service requests.
  *
- * For MVP this uses a rule-based heuristic. A future version will call an LLM
- * (e.g. OpenAI) to produce richer triage recommendations.
+ * Analyses the description and returns:
+ *  - Suggested category (matched against active vendor skills)
+ *  - Confidence score (0-100)
+ *  - Urgency score (1-5)
+ *  - Short reasoning
+ *  - One-line summary
+ *
+ * Results are stored in AiClassification + ServiceRequest fields.
+ * If AI is not configured or the call fails, this is a no-op.
  */
 export async function triageServiceRequest(
-  input: TriageInput
-): Promise<TriageResult> {
-  const { description, category, urgency, propertyType } = input;
+  serviceRequestId: string
+): Promise<TriageResult | null> {
+  if (!isAiConfigured()) return null;
 
-  // --- Urgency scoring (1\u201310) based on keywords + stated urgency -----------
-  let score = 5; // baseline
+  // Fetch the request and available vendor categories
+  const [request, vendorCategories] = await Promise.all([
+    prisma.serviceRequest.findUnique({
+      where: { id: serviceRequestId },
+      select: {
+        description: true,
+        category: true,
+        urgency: true,
+        property: { select: { name: true, address: true } },
+      },
+    }),
+    prisma.vendorSkill
+      .findMany({ select: { category: true }, distinct: ["category"] })
+      .then((rows) => rows.map((r) => r.category)),
+  ]);
 
-  const urgencyMap: Record<string, number> = {
-    EMERGENCY: 10,
-    URGENT: 8,
-    HIGH: 7,
-    MEDIUM: 5,
-    LOW: 3,
-    ROUTINE: 2,
-  };
-  score = urgencyMap[urgency.toUpperCase()] ?? 5;
+  if (!request) return null;
 
-  const highUrgencyKeywords = [
-    "flood",
-    "fire",
-    "burst",
-    "leak",
-    "sewage",
-    "gas",
-    "mold",
-    "electrical",
-    "sparking",
-    "no heat",
-    "no water",
-    "broken pipe",
-    "collapsed",
-    "unsafe",
-    "injury",
-    "smoke",
-  ];
-  const desc = description.toLowerCase();
-  for (const kw of highUrgencyKeywords) {
-    if (desc.includes(kw)) {
-      score = Math.min(10, score + 2);
-      break;
-    }
+  const systemPrompt = `You are a service request triage assistant for a tourism property management platform in Cornwall & SDG, Ontario, Canada.
+
+Your job is to analyse incoming maintenance/service requests and provide:
+1. The best matching vendor category from the available list
+2. A confidence score (0-100) for your category suggestion
+3. An urgency score (1-5): 1=routine, 2=low, 3=medium, 4=high, 5=emergency
+4. A brief reasoning (1-2 sentences)
+5. A one-line summary of the issue
+
+Available vendor categories: ${vendorCategories.join(", ")}
+
+The operator already selected category "${request.category}" and urgency "${request.urgency}".
+You may agree or suggest a different/more specific category if one fits better.
+
+Respond ONLY with valid JSON (no markdown, no code fences):
+{"suggestedCategory":"...","confidence":85,"urgencyScore":3,"reasoning":"...","summary":"..."}`;
+
+  const userPrompt = `Property: ${request.property?.name ?? "Unknown"} (${request.property?.address ?? "N/A"})
+
+Description: ${request.description}`;
+
+  const raw = await chatCompletion(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+    { temperature: 0.1, maxTokens: 512 }
+  );
+
+  if (!raw) return null;
+
+  let result: TriageResult;
+  try {
+    // Strip markdown code fences if the model adds them anyway
+    const cleaned = raw.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+    result = JSON.parse(cleaned);
+  } catch {
+    console.error("[ai-triage] Failed to parse AI response:", raw);
+    return null;
   }
 
-  // --- Suggested vendor skills ----------------------------------------------
-  const skillMap: Record<string, string[]> = {
-    PLUMBING: ["Licensed Plumber", "Emergency Plumbing"],
-    ELECTRICAL: ["Licensed Electrician", "Emergency Electrical"],
-    HVAC: ["HVAC Technician", "Refrigeration"],
-    LANDSCAPING: ["Landscaping", "Grounds Maintenance"],
-    CLEANING: ["Commercial Cleaning", "Janitorial"],
-    GENERAL_MAINTENANCE: ["Handyperson", "General Maintenance"],
-    PEST_CONTROL: ["Pest Control", "Exterminator"],
-    ROOFING: ["Roofing Contractor", "Emergency Tarping"],
-    SNOW_REMOVAL: ["Snow Removal", "De-icing"],
-  };
-  const skills =
-    skillMap[category.toUpperCase()] ?? ["General Maintenance"];
+  // Persist results
+  try {
+    await prisma.$transaction([
+      prisma.aiClassification.create({
+        data: {
+          requestId: serviceRequestId,
+          suggestedCategory: result.suggestedCategory,
+          confidence: result.confidence / 100, // store as 0-1 float
+          reasoning: result.reasoning,
+        },
+      }),
+      prisma.serviceRequest.update({
+        where: { id: serviceRequestId },
+        data: {
+          aiTriageSummary: result.summary,
+          aiUrgencyScore: result.urgencyScore,
+        },
+      }),
+    ]);
+  } catch (err) {
+    console.error("[ai-triage] Failed to persist results:", err);
+  }
 
-  // --- Summary ---------------------------------------------------------------
-  const summary = [
-    `Triage for ${category} request at ${propertyType} property.`,
-    `Stated urgency: ${urgency} \u2192 computed score: ${score}/10.`,
-    skills.length
-      ? `Recommended vendor skills: ${skills.join(", ")}.`
-      : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-
-  return {
-    summary,
-    urgencyScore: score,
-    suggestedCategory: category,
-    suggestedVendorSkills: skills,
-  };
+  return result;
 }

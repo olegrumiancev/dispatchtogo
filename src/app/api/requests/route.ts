@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateReferenceNumber } from "@/lib/utils";
 import { autoDispatch } from "@/lib/auto-dispatch";
+import { triageServiceRequest } from "@/lib/ai-triage";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -111,20 +112,28 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // AI triage: classify the request (non-blocking — failure is OK)
+  try {
+    await triageServiceRequest(serviceRequest.id);
+  } catch (err) {
+    console.error("[ai-triage] Error:", err);
+  }
+
   // Auto-dispatch: try to find a matching vendor and assign automatically
-  // Must await on serverless (Vercel) \u2014 fire-and-forget won't survive function teardown
+  // Must await on serverless (Vercel) — fire-and-forget won't survive function teardown
   try {
     await autoDispatch(serviceRequest.id);
   } catch (err) {
     console.error("[auto-dispatch] Error:", err);
   }
 
-  // Re-fetch with updated status after dispatch attempt
+  // Re-fetch with updated status after triage + dispatch
   const updated = await prisma.serviceRequest.findUnique({
     where: { id: serviceRequest.id },
     include: {
       property: true,
       job: { include: { vendor: true } },
+      aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
     },
   });
 
