@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, OrganizationType, Urgency, RequestStatus, JobStatus, InvoiceStatus } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
@@ -6,14 +6,14 @@ const prisma = new PrismaClient()
 async function main() {
   console.log('🌱 Seeding DispatchToGo database...')
 
-  // ── Operator Organizations ──────────────────────────────────────────────────
+  // ── Operator Organizations ──────────────────────────────────────────────────────────
   const orgBW = await prisma.organization.upsert({
     where: { id: 'org_bestwestern' },
     update: {},
     create: {
       id: 'org_bestwestern',
       name: 'Best Western Plus Cornwall',
-      type: OrganizationType.OPERATOR,
+      type: "OPERATOR",
       phone: '613-938-0001',
       email: 'maintenance@bwcornwall.ca',
       contactEmail: 'maintenance@bwcornwall.ca',
@@ -28,7 +28,7 @@ async function main() {
     create: {
       id: 'org_farran',
       name: 'Farran Park Campground',
-      type: OrganizationType.OPERATOR,
+      type: "OPERATOR",
       phone: '613-543-2221',
       email: 'ops@farranpark.ca',
       contactEmail: 'ops@farranpark.ca',
@@ -43,7 +43,7 @@ async function main() {
     create: {
       id: 'org_marina',
       name: 'Cornwall Marina',
-      type: OrganizationType.OPERATOR,
+      type: "OPERATOR",
       phone: '613-932-4255',
       email: 'facilities@cornwallmarina.ca',
       contactEmail: 'facilities@cornwallmarina.ca',
@@ -104,7 +104,7 @@ async function main() {
     },
   })
 
-  // ── Vendor Credentials ──────────────────────────────────────────────────────
+  // ── Vendor Credentials ────────────────────────────────────────────────────────
   await prisma.vendorCredential.createMany({
     data: [
       { vendorId: vendorSDGPlumbing.id, type: 'Master Plumber License', credentialNumber: 'MP-ON-48291', expiresAt: new Date('2026-12-31'), verified: true },
@@ -116,7 +116,7 @@ async function main() {
     skipDuplicates: true,
   })
 
-  // ── Vendor Skills ───────────────────────────────────────────────────────────
+  // ── Vendor Skills ─────────────────────────────────────────────────────────────
   await prisma.vendorSkill.createMany({
     data: [
       { vendorId: vendorSDGPlumbing.id, category: 'Plumbing' },
@@ -129,7 +129,7 @@ async function main() {
     skipDuplicates: true,
   })
 
-  // ── Properties ──────────────────────────────────────────────────────────────
+  // ── Properties ────────────────────────────────────────────────────────────────
   const propBW1 = await prisma.property.upsert({
     where: { id: 'prop_bw_main' },
     update: {},
@@ -162,43 +162,43 @@ async function main() {
   const adminUser = await prisma.user.upsert({
     where: { email: 'admin@demo.com' },
     update: {},
-    create: { email: 'admin@demo.com', passwordHash: password, name: 'Admin User', role: UserRole.ADMIN },
+    create: { email: 'admin@demo.com', passwordHash: password, name: 'Admin User', role: "ADMIN" },
   })
 
   const userOp1 = await prisma.user.upsert({
     where: { email: 'operator1@demo.com' },
     update: {},
-    create: { email: 'operator1@demo.com', passwordHash: password, name: 'Sarah Mitchell', role: UserRole.OPERATOR, organizationId: orgBW.id },
+    create: { email: 'operator1@demo.com', passwordHash: password, name: 'Sarah Mitchell', role: "OPERATOR", organizationId: orgBW.id },
   })
 
   const userOp2 = await prisma.user.upsert({
     where: { email: 'operator2@demo.com' },
     update: {},
-    create: { email: 'operator2@demo.com', passwordHash: password, name: 'James Tremblay', role: UserRole.OPERATOR, organizationId: orgFarran.id },
+    create: { email: 'operator2@demo.com', passwordHash: password, name: 'James Tremblay', role: "OPERATOR", organizationId: orgFarran.id },
   })
 
   await prisma.user.upsert({
     where: { email: 'operator3@demo.com' },
     update: {},
-    create: { email: 'operator3@demo.com', passwordHash: password, name: 'Marina Manager', role: UserRole.OPERATOR, organizationId: orgMarina.id },
+    create: { email: 'operator3@demo.com', passwordHash: password, name: 'Marina Manager', role: "OPERATOR", organizationId: orgMarina.id },
   })
 
   const userVendor1 = await prisma.user.upsert({
     where: { email: 'vendor1@demo.com' },
     update: {},
-    create: { email: 'vendor1@demo.com', passwordHash: password, name: 'Mike Plumber', role: UserRole.VENDOR, vendorId: vendorSDGPlumbing.id },
+    create: { email: 'vendor1@demo.com', passwordHash: password, name: 'Mike Plumber', role: "VENDOR", vendorId: vendorSDGPlumbing.id },
   })
 
   const userVendor2 = await prisma.user.upsert({
     where: { email: 'vendor2@demo.com' },
     update: {},
-    create: { email: 'vendor2@demo.com', passwordHash: password, name: 'Ellen Sparks', role: UserRole.VENDOR, vendorId: vendorCornwallElec.id },
+    create: { email: 'vendor2@demo.com', passwordHash: password, name: 'Ellen Sparks', role: "VENDOR", vendorId: vendorCornwallElec.id },
   })
 
   await prisma.user.upsert({
     where: { email: 'vendor3@demo.com' },
     update: {},
-    create: { email: 'vendor3@demo.com', passwordHash: password, name: 'Tom Seaway', role: UserRole.VENDOR, vendorId: vendorSeaway.id },
+    create: { email: 'vendor3@demo.com', passwordHash: password, name: 'Tom Seaway', role: "VENDOR", vendorId: vendorSeaway.id },
   })
 
   // ── Service Requests ────────────────────────────────────────────────────────
@@ -213,8 +213,8 @@ async function main() {
       category: 'Plumbing',
       propertyId: propBW1.id,
       organizationId: orgBW.id,
-      urgency: Urgency.EMERGENCY,
-      status: RequestStatus.COMPLETED,
+      urgency: "EMERGENCY",
+      status: "COMPLETED",
     },
   })
 
@@ -229,8 +229,8 @@ async function main() {
       category: 'Electrical',
       propertyId: propBW1.id,
       organizationId: orgBW.id,
-      urgency: Urgency.HIGH,
-      status: RequestStatus.IN_PROGRESS,
+      urgency: "HIGH",
+      status: "IN_PROGRESS",
     },
   })
 
@@ -245,8 +245,8 @@ async function main() {
       category: 'Snow Removal',
       propertyId: propBW1.id,
       organizationId: orgBW.id,
-      urgency: Urgency.HIGH,
-      status: RequestStatus.DISPATCHED,
+      urgency: "HIGH",
+      status: "DISPATCHED",
     },
   })
 
@@ -261,8 +261,8 @@ async function main() {
       category: 'Plumbing',
       propertyId: propFarran2.id,
       organizationId: orgFarran.id,
-      urgency: Urgency.HIGH,
-      status: RequestStatus.TRIAGED,
+      urgency: "HIGH",
+      status: "TRIAGED",
     },
   })
 
@@ -277,8 +277,8 @@ async function main() {
       category: 'Electrical',
       propertyId: propMarina1.id,
       organizationId: orgMarina.id,
-      urgency: Urgency.MEDIUM,
-      status: RequestStatus.SUBMITTED,
+      urgency: "MEDIUM",
+      status: "SUBMITTED",
     },
   })
 
@@ -293,12 +293,12 @@ async function main() {
       category: 'HVAC',
       propertyId: propBW2.id,
       organizationId: orgBW.id,
-      urgency: Urgency.MEDIUM,
-      status: RequestStatus.SUBMITTED,
+      urgency: "MEDIUM",
+      status: "SUBMITTED",
     },
   })
 
-  // ── Jobs ─────────────────────────────────────────────────────────────────────
+  // ── Jobs ────────────────────────────────────────────────────────────────────
   const job1 = await prisma.job.upsert({
     where: { id: 'job_001' },
     update: {},
@@ -307,7 +307,7 @@ async function main() {
       serviceRequestId: req1.id,
       vendorId: vendorSDGPlumbing.id,
       organizationId: orgBW.id,
-      status: JobStatus.COMPLETED,
+      status: "COMPLETED",
       acceptedAt: new Date('2024-12-10T08:00:00Z'),
       enRouteAt: new Date('2024-12-10T08:30:00Z'),
       arrivedAt: new Date('2024-12-10T09:00:00Z'),
@@ -327,7 +327,7 @@ async function main() {
       serviceRequestId: req2.id,
       vendorId: vendorCornwallElec.id,
       organizationId: orgBW.id,
-      status: JobStatus.ON_SITE,
+      status: "ON_SITE",
       acceptedAt: new Date('2024-12-11T09:00:00Z'),
       enRouteAt: new Date('2024-12-11T09:45:00Z'),
       arrivedAt: new Date('2024-12-11T10:15:00Z'),
@@ -342,12 +342,12 @@ async function main() {
       serviceRequestId: req3.id,
       vendorId: vendorSeaway.id,
       organizationId: orgBW.id,
-      status: JobStatus.ACCEPTED,
+      status: "ACCEPTED",
       acceptedAt: new Date('2024-12-12T05:30:00Z'),
     },
   })
 
-  // ── Job Notes ────────────────────────────────────────────────────────────────
+  // ── Job Notes ───────────────────────────────────────────────────────────────
   await prisma.jobNote.createMany({
     data: [
       { jobId: job1.id, userId: userVendor1.id, text: 'Arrived on site. Located burst in main supply line behind wall panel. Will need to shut off water to wing.' },
@@ -367,7 +367,7 @@ async function main() {
     skipDuplicates: true,
   })
 
-  // ── Invoices ─────────────────────────────────────────────────────────────────
+  // ── Invoices ────────────────────────────────────────────────────────────────
   await prisma.invoice.upsert({
     where: { id: 'inv_001' },
     update: {},
@@ -377,7 +377,7 @@ async function main() {
       organizationId: orgBW.id,
       invoiceNumber: 'INV-2024-001',
       amount: 358.00,
-      status: InvoiceStatus.SENT,
+      status: "SENT",
     },
   })
 
