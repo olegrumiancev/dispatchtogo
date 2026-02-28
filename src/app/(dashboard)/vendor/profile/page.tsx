@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SERVICE_CATEGORIES } from "@/lib/constants";
-import { formatDate } from "@/lib/utils";
-import { Building2, MapPin, Phone, Mail, Star, CheckCircle, XCircle } from "lucide-react";
+import { Building2, MapPin, Phone, Mail, Star } from "lucide-react";
 import VendorProfileForm from "@/components/forms/vendor-profile-form";
+import VendorCredentialsForm from "@/components/forms/vendor-credentials-form";
 
 export const metadata = {
   title: "My Profile | DispatchToGo",
@@ -14,17 +14,6 @@ export const metadata = {
 
 function getCategoryLabel(category: string) {
   return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
-function getCredentialTypeLabel(type: string) {
-  const map: Record<string, string> = {
-    TRADE_LICENSE: "Trade License",
-    WSIB: "WSIB",
-    INSURANCE_COI: "Insurance / COI",
-    BUSINESS_LICENSE: "Business License",
-    OTHER: "Other",
-  };
-  return map[type] ?? type;
 }
 
 export default async function VendorProfilePage() {
@@ -50,7 +39,6 @@ export default async function VendorProfilePage() {
 
   if (!vendor) redirect("/vendor/jobs");
 
-  // Serialize vendor for client component (Dates → strings)
   const vendorForForm = {
     id: vendor.id,
     companyName: vendor.companyName,
@@ -178,78 +166,16 @@ export default async function VendorProfilePage() {
           <CardTitle>Credentials &amp; Licenses</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {vendor.credentials.length === 0 ? (
-            <div className="px-6 py-10 text-center text-sm text-gray-400">
-              No credentials on file. Contact support to add credentials.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                      License Number
-                    </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
-                      Issuing Body
-                    </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
-                      Expiry Date
-                    </th>
-                    <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Verified
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {vendor.credentials.map((cred) => (
-                    <tr key={cred.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 font-medium text-gray-900">
-                        {getCredentialTypeLabel(cred.type)}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 hidden sm:table-cell">
-                        {cred.credentialNumber ?? <span className="text-gray-400">—</span>}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 hidden md:table-cell">
-                        {cred.type ?? <span className="text-gray-400">—</span>}
-                      </td>
-                      <td className="px-6 py-4 text-gray-600 hidden lg:table-cell">
-                        {cred.expiresAt ? (
-                          <span
-                            className={
-                              new Date(cred.expiresAt) < new Date()
-                                ? "text-red-600 font-medium"
-                                : ""
-                            }
-                          >
-                            {formatDate(cred.expiresAt)}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        {cred.verified ? (
-                          <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
-                            <CheckCircle className="w-4 h-4" />
-                            Verified
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-gray-400 text-xs">
-                            <XCircle className="w-4 h-4" />
-                            Pending
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <VendorCredentialsForm
+            vendorId={vendorId}
+            credentials={vendor.credentials.map((c) => ({
+              id: c.id,
+              type: c.type,
+              credentialNumber: c.credentialNumber,
+              expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,
+              verified: c.verified,
+            }))}
+          />
         </CardContent>
       </Card>
     </div>
