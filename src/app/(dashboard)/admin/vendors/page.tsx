@@ -20,7 +20,6 @@ export default async function AdminVendorsPage() {
   const vendors = await prisma.vendor.findMany({
     include: {
       skills: true,
-      user: { select: { name: true, email: true } },
       _count: {
         select: {
           jobs: true,
@@ -75,12 +74,10 @@ export default async function AdminVendorsPage() {
                       {vendor.phone}
                     </a>
                   </div>
-                  {vendor.user && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Mail className="w-3.5 h-3.5 text-gray-400" />
-                      <span className="truncate">{vendor.user.email}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Mail className="w-3.5 h-3.5 text-gray-400" />
+                    <span className="truncate">{vendor.email}</span>
+                  </div>
                 </div>
 
                 {/* Skills */}
