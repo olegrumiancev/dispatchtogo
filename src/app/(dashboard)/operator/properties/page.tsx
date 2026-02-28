@@ -2,10 +2,11 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, Eye } from "lucide-react";
+import { Eye, Building2 } from "lucide-react";
+import { AddPropertyDialog } from "@/components/forms/add-property-dialog";
 
 export const metadata = {
   title: "Properties | DispatchToGo",
@@ -42,11 +43,7 @@ export default async function PropertiesPage() {
             {activeCount} active{inactiveCount > 0 ? `, ${inactiveCount} inactive` : ""}
           </p>
         </div>
-        {/* Placeholder button — full form would be added in a future phase */}
-        <Button variant="primary">
-          <Plus className="w-4 h-4" />
-          Add Property
-        </Button>
+        <AddPropertyDialog />
       </div>
 
       {/* Table */}
