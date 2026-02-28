@@ -112,9 +112,21 @@ export async function POST(request: NextRequest) {
   });
 
   // Auto-dispatch: try to find a matching vendor and assign automatically
-  autoDispatch(serviceRequest.id).catch((err) =>
-    console.error("[auto-dispatch] Background error:", err)
-  );
+  // Must await on serverless (Vercel) — fire-and-forget won’t survive function teardown
+  try {
+    await autoDispatch(serviceRequest.id);
+  } catch (err) {
+    console.error("[auto-dispatch] Error:", err);
+  }
 
-  return NextResponse.json(serviceRequest, { status: 201 });
+  // Re-fetch with updated status after dispatch attempt
+  const updated = await prisma.serviceRequest.findUnique({
+    where: { id: serviceRequest.id },
+    include: {
+      property: true,
+      job: { include: { vendor: true } },
+    },
+  });
+
+  return NextResponse.json(updated ?? serviceRequest, { status: 201 });
 }
