@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Send } from "lucide-react";
+import { SERVICE_CATEGORIES } from "@/lib/constants";
 
 interface Vendor {
   id: string;
-  name: string;
+  companyName: string;
   phone: string;
   skills: Array<{ category: string }>;
 }
@@ -17,6 +18,10 @@ interface AssignModalProps {
   requestRef: string;
   requestId: string;
   vendors: Vendor[];
+}
+
+function getCategoryLabel(category: string) {
+  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
 }
 
 export default function AssignModal({ requestRef, requestId, vendors }: AssignModalProps) {
@@ -96,10 +101,10 @@ export default function AssignModal({ requestRef, requestId, vendors }: AssignMo
                     className="text-blue-600"
                   />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{vendor.name}</p>
+                    <p className="text-sm font-medium text-gray-900">{vendor.companyName}</p>
                     <p className="text-xs text-gray-500">
-                      {vendor.skills.map((s) => s.category).join(", ")}
-                      {vendor.skills.length > 0 && vendor.phone && " \u00b7 "}
+                      {vendor.skills.map((s) => getCategoryLabel(s.category)).join(", ")}
+                      {vendor.skills.length > 0 && " · "}
                       {vendor.phone}
                     </p>
                   </div>
