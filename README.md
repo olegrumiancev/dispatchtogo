@@ -1,221 +1,108 @@
 # DispatchToGo
 
-**B2B Dispatch Platform for Tourism Operators**
-
-DispatchToGo connects tourism operators (hotels, campgrounds, marinas) with service vendors for seamless maintenance and service delivery. Operators submit service requests, admins triage and dispatch to qualified vendors, and vendors manage job workflows end-to-end.
-
----
+A Next.js 15 field service dispatch management platform with AI-powered triage, SMS notifications, and proof-of-service packets.
 
 ## Tech Stack
 
-| Layer        | Technology                        |
-|--------------|-----------------------------------|
-| Framework    | Next.js 14+ (App Router)          |
-| Language     | TypeScript                        |
-| Database     | PostgreSQL 16                     |
-| ORM          | Prisma                            |
-| Auth         | NextAuth.js (JWT + Credentials)   |
-| Styling      | Tailwind CSS                      |
-| AI Ready     | Ollama (local LLM for classification) |
-| Dev Infra    | Docker Compose                    |
+- **Framework**: Next.js 15 (App Router)
+- **Database**: PostgreSQL + Prisma ORM
+- **Auth**: NextAuth.js v5
+- **AI Triage**: Ollama (llama3.2:3b) with graceful fallback
+- **SMS**: Twilio
+- **Styling**: Tailwind CSS
+- **Containerization**: Docker + Docker Compose
 
----
+## Features
 
-## Prerequisites
+### Phase 1: Core Foundation
+- Multi-role authentication (Admin, Operator, Vendor)
+- Service request creation and management
+- Vendor management
+- Dashboard views per role
 
-- Node.js 18+
-- Docker Desktop (for Postgres + Ollama)
-- npm or yarn
+### Phase 2: Dispatch & Job Workflow
+- Admin dispatch queue with drag-and-drop assignment
+- Vendor job acceptance/rejection workflow
+- Photo upload for proof of service
+- Job status tracking (PENDING → ASSIGNED → ACCEPTED → IN_PROGRESS → COMPLETED)
 
----
+### Phase 3: AI & Notifications
+- AI-powered request triage (priority classification via Ollama)
+- SMS notifications via Twilio at key workflow stages
+- Notification log with admin override
+- Proof-of-service packet generation (PDF-ready data)
+- Invoice generation
 
 ## Quick Start
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/yourorg/dispatchtogo.git
-cd dispatchtogo
+### Prerequisites
+- Node.js 20+
+- PostgreSQL
+- Ollama (optional, for AI triage)
+- Twilio account (optional, for SMS)
 
-# 2. Install dependencies
+### Setup
+
+```bash
+# Install dependencies
 npm install
 
-# 3. Copy environment variables
+# Copy environment variables
 cp .env.example .env
-# Edit .env if needed (defaults work for local dev)
+# Edit .env with your database URL and secrets
 
-# 4. Start infrastructure
-docker compose up -d
+# Run database migrations
+npx prisma migrate dev
 
-# 5. Generate Prisma client
-npm run db:generate
+# Seed the database with demo data
+npx prisma db seed
 
-# 6. Push schema to database
-npm run db:push
-
-# 7. Seed demo data
-npm run db:seed
-
-# 8. Start development server
+# Start development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+### Docker Setup
 
----
+```bash
+docker-compose up -d
+```
 
-## Demo Accounts
-
-All accounts use password: **`demo123`**
-
-| Email                  | Role     | Organization                   |
-|------------------------|----------|--------------------------------|
-| `admin@demo.com`       | Admin    | —                              |
-| `operator1@demo.com`   | Operator | Best Western Plus Cornwall     |
-| `operator2@demo.com`   | Operator | Farran Park Campground         |
-| `operator3@demo.com`   | Operator | Cornwall Marina                |
-| `vendor1@demo.com`     | Vendor   | SDG Plumbing & Heating         |
-| `vendor2@demo.com`     | Vendor   | Cornwall Electric Services     |
-| `vendor3@demo.com`     | Vendor   | Seaway Snow & Grounds          |
-
----
+This starts PostgreSQL and the Next.js app.
 
 ## Project Structure
 
 ```
-dispatchtogo/
-├── prisma/
-│   ├── schema.prisma          # 16 models: User, Org, Property, Request, Job, etc.
-│   └── seed.ts                # Cornwall/SDG themed demo data
-├── src/
-│   ├── app/
-│   │   ├── layout.tsx          # Root layout with SessionProvider
-│   │   ├── page.tsx            # Login page with demo account shortcuts
-│   │   ├── providers.tsx       # NextAuth SessionProvider wrapper
-│   │   ├── globals.css         # Global styles + Tailwind
-│   │   ├── api/
-│   │   │   ├── auth/[...nextauth]/  # NextAuth handler
-│   │   │   ├── requests/           # GET/POST + GET/PATCH by ID
-│   │   │   ├── jobs/               # GET/POST + GET/PATCH + PATCH status
-│   │   │   ├── vendors/            # GET/POST vendors
-│   │   │   ├── invoices/           # GET/POST invoices
-│   │   │   ├── categories/         # GET service categories
-│   │   │   ├── properties/         # GET properties (scoped by org)
-│   │   │   └── upload/             # POST file upload
-│   │   ├── operator/          # Operator portal (role-protected)
-│   │   │   ├── page.tsx        # Dashboard with KPIs + recent activity
-│   │   │   ├── requests/       # List, new, and detail pages
-│   │   │   ├── properties/     # Property management
-│   │   │   └── invoices/       # Invoice list with status filters
-│   │   ├── vendor/            # Vendor portal (role-protected)
-│   │   │   ├── page.tsx        # Job offers + active jobs dashboard
-│   │   │   └── jobs/[id]/      # Full job workflow (accept→complete)
-│   │   └── admin/             # Admin portal (role-protected)
-│   │       ├── page.tsx        # Dispatch board
-│   │       ├── DispatchBoard.tsx  # Client dispatch component
-│   │       └── vendors/        # Vendor directory
-│   ├── components/
-│   │   ├── ui/                # Button, Input, Select, Textarea, Card, Table
-│   │   ├── Navbar.tsx         # Top navbar with notifications
-│   │   ├── Sidebar.tsx        # Role-aware collapsible sidebar
-│   │   └── StatusBadge.tsx    # Color-coded status badges
-│   ├── lib/
-│   │   ├── prisma.ts          # Prisma client singleton
-│   │   ├── auth.ts            # NextAuth options (credentials provider)
-│   │   ├── utils.ts           # Formatting, color helpers
-│   │   └── next-auth.d.ts     # Session type extensions
-│   └── middleware.ts          # Role-based route protection
-├── docker-compose.yml
-├── package.json
-├── tsconfig.json
-├── tailwind.config.ts
-└── .env.example
+src/
+  app/
+    (auth)/          # Login, register pages
+    (dashboard)/     # Protected dashboard routes
+      admin/         # Admin: dispatch queue, vendors, notifications
+      operator/      # Operator: requests, proof packets
+      vendor/        # Vendor: job list, job details
+    api/             # API routes
+  components/
+    forms/           # Form components
+    layout/          # Header, sidebar, session provider
+    ui/              # Reusable UI components
+  lib/               # Business logic (AI triage, SMS, auth, etc.)
+  types/             # TypeScript type extensions
+prisma/
+  schema.prisma      # Database schema
+  seed.ts            # Demo data seeder
 ```
 
----
+## Demo Accounts (after seeding)
 
-## API Routes
+| Role     | Email                    | Password  |
+|----------|--------------------------|-----------|
+| Admin    | admin@dispatchtogo.com   | password  |
+| Operator | operator@dispatchtogo.com| password  |
+| Vendor   | vendor@dispatchtogo.com  | password  |
 
-| Method | Endpoint | Description |
-|--------|----------|--------------|
-| POST | `/api/auth/[...nextauth]` | NextAuth sign in/out |
-| GET | `/api/categories` | List all service categories |
-| GET | `/api/properties` | List properties (scoped by org) |
-| GET/POST | `/api/requests` | List/create service requests |
-| GET/PATCH | `/api/requests/[id]` | Get/update a request |
-| GET/POST | `/api/jobs` | List/dispatch jobs |
-| GET/PATCH | `/api/jobs/[id]` | Get/update job (add notes/materials) |
-| PATCH | `/api/jobs/[id]/status` | Advance/decline job status |
-| GET/POST | `/api/vendors` | List/create vendors |
-| GET/POST | `/api/invoices` | List/generate invoices |
-| POST | `/api/upload` | Upload photos/files |
+## Environment Variables
 
----
+See `.env.example` for all required variables.
 
-## Service Request Flow
+## License
 
-```
-[Operator] Submit Request
-        ↓
-[Admin]  Triage → Dispatch to Vendor
-        ↓
-[Vendor] Job Offered → Accept
-        ↓
-        En Route → On Site → Complete
-        ↓
-[Admin/Vendor] Generate Invoice
-        ↓
-[Operator] View Invoice → Pays
-```
-
----
-
-## Role-Based Access
-
-| Route | Operator | Vendor | Admin |
-|-------|----------|--------|-------|
-| `/operator/*` | ✅ | ❌ | ✅ |
-| `/vendor/*` | ❌ | ✅ | ✅ |
-| `/admin/*` | ❌ | ❌ | ✅ |
-
----
-
-## Development Commands
-
-```bash
-npm run dev          # Start Next.js dev server
-npm run build        # Production build
-npm run db:generate  # Regenerate Prisma client after schema changes
-npm run db:push      # Push schema changes to database
-npm run db:migrate   # Create and run a migration
-npm run db:seed      # Seed demo data
-npm run db:studio    # Open Prisma Studio (database GUI)
-```
-
----
-
-## Roadmap
-
-### Phase 2 — AI Integration
-- Ollama-powered automatic service request classification
-- Suggested vendor matching based on skills + availability
-- AI-generated job summaries for operators
-
-### Phase 3 — Real-time Features
-- WebSocket live job status updates
-- Push notifications (email + SMS via Twilio)
-- In-app chat between operators and vendors
-
-### Phase 4 — Scheduling & Availability
-- Vendor calendar and availability windows
-- Automatic scheduling suggestions
-- Recurring maintenance job templates
-
-### Phase 5 — Reporting & Analytics
-- Operator spend analytics and dashboards
-- Vendor performance metrics
-- SLA tracking and compliance reporting
-
-### Phase 6 — Mobile
-- React Native vendor app for field technicians
-- Offline-capable job management
-- Native camera integration for before/during/after photos
+MIT
