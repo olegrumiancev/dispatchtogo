@@ -112,10 +112,12 @@ export async function POST(request: NextRequest) {
   });
 
   // Auto-dispatch: try to find a matching vendor and assign automatically
-  // Must await on serverless (Vercel) — fire-and-forget won’t survive function teardown
+  let dispatchResult: boolean | null = null;
+  let dispatchError: string | null = null;
   try {
-    await autoDispatch(serviceRequest.id);
-  } catch (err) {
+    dispatchResult = await autoDispatch(serviceRequest.id);
+  } catch (err: unknown) {
+    dispatchError = err instanceof Error ? err.message : String(err);
     console.error("[auto-dispatch] Error:", err);
   }
 
@@ -128,5 +130,11 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(updated ?? serviceRequest, { status: 201 });
+  return NextResponse.json(
+    {
+      ...(updated ?? serviceRequest),
+      _dispatch: { result: dispatchResult, error: dispatchError },
+    },
+    { status: 201 }
+  );
 }
