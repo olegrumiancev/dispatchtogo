@@ -28,212 +28,223 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const [files, setFiles] = useState<File[]>([]);
   const [form, setForm] = useState({
     propertyId: "",
+    description: "",
     category: "",
     urgency: "MEDIUM",
-    description: "",
   });
 
-  function handleChange(field: string, value: string) {
+  const handleChange = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
-  }
+  };
 
-  function handleFiles(incoming: FileList | null) {
-    if (!incoming) return;
-    const newFiles = Array.from(incoming).filter((f) =>
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragging(false);
+    const dropped = Array.from(e.dataTransfer.files).filter((f) =>
       f.type.startsWith("image/")
     );
-    setFiles((prev) => [
-      ...prev,
-      ...newFiles.filter(
-        (nf) => !prev.some((pf) => pf.name === nf.name && pf.size === nf.size)
-      ),
-    ]);
-  }
+    setFiles((prev) => [...prev, ...dropped]);
+  };
 
-  function removeFile(index: number) {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
-  }
-
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     setError(null);
 
-    if (!form.propertyId || !form.category || !form.description.trim()) {
-      setError("Please fill in all required fields.");
-      return;
-    }
-
-    setLoading(true);
-
     try {
-      // 1. Create the service request
       const res = await fetch("/api/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          propertyId: form.propertyId,
+          description: form.description,
+          category: form.category || undefined,
+          urgency: form.urgency,
+        }),
       });
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to create request");
+        setError(data.error ?? "Failed to submit request.");
+        return;
       }
 
-      const { id: requestId } = await res.json();
-
-      // 2. Upload photos if any
-      if (files.length > 0) {
-        const formData = new FormData();
-        files.forEach((f) => formData.append("files", f));
-
-        const uploadRes = await fetch(`/api/requests/${requestId}/photos`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!uploadRes.ok) {
-          console.warn("Photo upload failed, but request was created.");
-        }
-      }
-
-      router.push("/operator/requests");
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const created = await res.json();
+      router.push(`/operator/requests/${created.id}`);
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  const propertyOptions = properties.map((p) => ({
+    value: p.id,
+    label: p.address ? `${p.name} — ${p.address}` : p.name,
+  }));
 
   return (
-    <form onSubmit={handleSubmit} className="max-w-2xl">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Link href="/operator/requests">
-              <Button type="button" variant="ghost" size="sm">
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </Link>
-            <CardTitle>New Service Request</CardTitle>
-          </div>
-        </CardHeader>
+    <div className="max-w-2xl mx-auto space-y-6">
+      {/* Back link */}
+      <Link
+        href="/operator/requests"
+        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Requests
+      </Link>
 
-        <CardContent className="space-y-5">
-          {error && (
-            <div className="p-3 rounded-md bg-red-50 border border-red-200 text-sm text-red-700">
-              {error}
+      <h1 className="text-2xl font-bold text-gray-900">New Service Request</h1>
+
+      {error && (
+        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Request Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            {/* Property */}
+            {properties.length === 0 ? (
+              <div className="rounded-md bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800">
+                No properties found for your organization. Please contact your administrator.
+              </div>
+            ) : (
+              <Select
+                label="Property"
+                options={propertyOptions}
+                placeholder="Select a property..."
+                value={form.propertyId}
+                onChange={(e) => handleChange("propertyId", e.target.value)}
+                required
+              />
+            )}
+
+            {/* Description */}
+            <Textarea
+              label="Description"
+              placeholder="Describe the issue in detail..."
+              value={form.description}
+              onChange={(e) => handleChange("description", e.target.value)}
+              rows={5}
+              required
+            />
+
+            {/* Category + Urgency */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Select
+                label="Category"
+                options={SERVICE_CATEGORIES.map((c) => ({
+                  value: c.value,
+                  label: c.label,
+                }))}
+                placeholder="Select category..."
+                value={form.category}
+                onChange={(e) => handleChange("category", e.target.value)}
+              />
+              <Select
+                label="Urgency"
+                options={URGENCY_LEVELS.map((u) => ({
+                  value: u.value,
+                  label: u.label,
+                }))}
+                value={form.urgency}
+                onChange={(e) => handleChange("urgency", e.target.value)}
+              />
             </div>
-          )}
+          </CardContent>
+        </Card>
 
-          {/* Property */}
-          <Select
-            label="Property *"
-            options={properties.map((p) => ({
-              value: p.id,
-              label: p.address ? `${p.name} – ${p.address}` : p.name,
-            }))}
-            placeholder="Select a property"
-            value={form.propertyId}
-            onChange={(e) => handleChange("propertyId", e.target.value)}
-          />
-
-          {/* Category */}
-          <Select
-            label="Service Category *"
-            options={SERVICE_CATEGORIES}
-            placeholder="Select a category"
-            value={form.category}
-            onChange={(e) => handleChange("category", e.target.value)}
-          />
-
-          {/* Urgency */}
-          <Select
-            label="Urgency"
-            options={URGENCY_LEVELS}
-            value={form.urgency}
-            onChange={(e) => handleChange("urgency", e.target.value)}
-          />
-
-          {/* Description */}
-          <Textarea
-            label="Description *"
-            placeholder="Describe the issue in detail…"
-            rows={5}
-            value={form.description}
-            onChange={(e) => handleChange("description", e.target.value)}
-          />
-
-          {/* Photo upload */}
-          <div>
-            <p className="text-sm font-medium text-gray-700 mb-1">
-              Photos (optional)
-            </p>
+        {/* Photo upload */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Photos (Optional)</CardTitle>
+          </CardHeader>
+          <CardContent>
             <div
-              className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+              onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+              onDragLeave={() => setDragging(false)}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                 dragging
                   ? "border-blue-400 bg-blue-50"
-                  : "border-gray-200 hover:border-gray-300"
+                  : "border-gray-300 hover:border-gray-400"
               }`}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragging(true);
-              }}
-              onDragLeave={() => setDragging(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragging(false);
-                handleFiles(e.dataTransfer.files);
-              }}
             >
-              <ImagePlus className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">
-                Drag & drop images or{" "}
-                <label className="text-blue-600 cursor-pointer hover:underline">
-                  browse
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => handleFiles(e.target.files)}
-                  />
-                </label>
-              </p>
+              <div className="flex flex-col items-center gap-3">
+                <ImagePlus className="w-10 h-10 text-gray-400" />
+                <div>
+                  <p className="text-sm font-medium text-gray-700">
+                    Drag &amp; drop photos here
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    or{" "}
+                    <label className="text-blue-600 hover:text-blue-700 cursor-pointer font-medium">
+                      browse files
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="sr-only"
+                        onChange={(e) => {
+                          const selected = Array.from(e.target.files ?? []);
+                          setFiles((prev) => [...prev, ...selected]);
+                        }}
+                      />
+                    </label>
+                  </p>
+                  <p className="text-xs text-gray-400 mt-1">PNG, JPG, HEIC up to 10MB each</p>
+                </div>
+              </div>
             </div>
 
             {files.length > 0 && (
-              <ul className="mt-3 space-y-1.5">
+              <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {files.map((file, i) => (
-                  <li
-                    key={i}
-                    className="flex items-center justify-between text-sm bg-gray-50 border border-gray-200 rounded-md px-3 py-2"
-                  >
-                    <span className="truncate text-gray-700">{file.name}</span>
+                  <div key={i} className="relative group">
+                    <div className="aspect-square rounded-md bg-gray-100 flex items-center justify-center overflow-hidden">
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
                     <button
                       type="button"
-                      onClick={() => removeFile(i)}
-                      className="ml-2 text-gray-400 hover:text-red-500 flex-shrink-0"
+                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                     >
-                      ✕
+                      ×
                     </button>
-                  </li>
+                    <p className="text-xs text-gray-500 mt-1 truncate">{file.name}</p>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
-          </div>
-        </CardContent>
+          </CardContent>
+        </Card>
 
-        <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-          <Link href="/operator/requests">
-            <Button type="button" variant="secondary">
+        <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+          <Link href="/operator/requests" className="sm:flex-none">
+            <Button type="button" variant="secondary" className="w-full sm:w-auto justify-center">
               Cancel
             </Button>
           </Link>
-          <Button type="submit" loading={loading}>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={loading}
+            disabled={properties.length === 0}
+            className="w-full sm:w-auto justify-center"
+          >
             Submit Request
           </Button>
         </div>
-      </Card>
-    </form>
+      </form>
+    </div>
   );
 }

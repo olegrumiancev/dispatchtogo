@@ -113,8 +113,8 @@ export default function AssignModal({ requestRef, requestId, vendors }: AssignMo
             </div>
           )}
 
-          <div className="flex gap-3 justify-end pt-2">
-            <Button variant="secondary" onClick={() => { setOpen(false); setError(null); setSelectedVendor(""); }}>
+          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end pt-2">
+            <Button variant="secondary" onClick={() => { setOpen(false); setError(null); setSelectedVendor(""); }} className="w-full sm:w-auto justify-center">
               Cancel
             </Button>
             <Button
@@ -122,6 +122,7 @@ export default function AssignModal({ requestRef, requestId, vendors }: AssignMo
               disabled={!selectedVendor}
               loading={assigning}
               onClick={handleAssign}
+              className="w-full sm:w-auto justify-center"
             >
               Dispatch
             </Button>

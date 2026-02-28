@@ -1,4 +1,4 @@
-import { redirect, notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { VendorJobDetail } from "@/components/forms/vendor-job-detail";
@@ -10,28 +10,47 @@ export default async function VendorJobDetailPage({
 }) {
   const session = await auth();
   if (!session) redirect("/login");
-  const user = session.user as any;
-  if (user.role !== "VENDOR") redirect("/");
 
+  const user = session.user as any;
+  const vendorId: string = user.vendorId!;
   const { id } = await params;
 
   const job = await prisma.job.findUnique({
     where: { id },
     include: {
-      photos: { orderBy: { uploadedAt: "asc" } },
-      request: {
+      serviceRequest: {
         include: {
-          property: { select: { name: true, address: true } },
-          operator: { select: { name: true, email: true } },
+          property: {
+            include: {
+              contacts: true,
+            },
+          },
+          photos: true,
         },
       },
+      notes: {
+        include: {
+          author: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      },
+      photos: true,
+      materials: true,
+      proofPacket: true,
     },
   });
 
-  if (!job || job.vendorId !== user.vendorId) notFound();
+  if (!job) notFound();
 
-  // Serialize dates for the client component
-  const serializedJob = JSON.parse(JSON.stringify(job));
+  // Vendor can only view their own jobs
+  if (job.vendorId !== vendorId) {
+    redirect("/vendor/jobs");
+  }
 
-  return <VendorJobDetail job={serializedJob} />;
+  // Serialize dates so they can be passed to client components
+  const serialized = JSON.parse(JSON.stringify(job));
+
+  return <VendorJobDetail job={serialized} />;
 }

@@ -3,82 +3,61 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Check, X } from "lucide-react";
 
 interface VendorJobActionsProps {
   jobId: string;
-  currentStatus: string;
+  mode: "available";
 }
 
-export function VendorJobActions({ jobId, currentStatus }: VendorJobActionsProps) {
+export function VendorJobActions({ jobId, mode }: VendorJobActionsProps) {
   const router = useRouter();
-  const [loading, setLoading] = useState<string | null>(null);
+  const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function updateStatus(action: "accept" | "reject" | "start" | "complete") {
-    setLoading(action);
+  const handleAccept = async () => {
+    setAccepting(true);
     setError(null);
     try {
       const res = await fetch(`/api/jobs/${jobId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify({ action: "accept" }),
       });
-
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to update job");
+        setError(data.error ?? "Failed to accept job.");
+        return;
       }
-
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      router.push(`/vendor/jobs/${jobId}`);
+    } catch {
+      setError("Network error. Please try again.");
     } finally {
-      setLoading(null);
+      setAccepting(false);
     }
-  }
+  };
+
+  const handleDecline = async () => {
+    // For now, declining just removes from view by refreshing
+    // (no explicit "decline" API action — vendor just doesn't accept)
+    setDeclining(true);
+    router.refresh();
+    setDeclining(false);
+  };
 
   return (
-    <div className="space-y-3">
-      {error && (
-        <p className="text-sm text-red-600">{error}</p>
-      )}
-
-      <div className="flex flex-wrap gap-3">
-        {currentStatus === "ASSIGNED" && (
-          <>
-            <Button
-              onClick={() => updateStatus("accept")}
-              loading={loading === "accept"}
-            >
-              Accept Job
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => updateStatus("reject")}
-              loading={loading === "reject"}
-            >
-              Decline
-            </Button>
-          </>
-        )}
-
-        {currentStatus === "ACCEPTED" && (
-          <Button
-            onClick={() => updateStatus("start")}
-            loading={loading === "start"}
-          >
-            Start Work
-          </Button>
-        )}
-
-        {currentStatus === "IN_PROGRESS" && (
-          <Button
-            onClick={() => updateStatus("complete")}
-            loading={loading === "complete"}
-          >
-            Mark Complete
-          </Button>
-        )}
+    <div className="flex flex-col gap-2">
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      <div className="flex flex-col gap-2">
+        <Button variant="primary" size="sm" loading={accepting} onClick={handleAccept} className="w-full justify-center min-h-[44px]">
+          <Check className="w-4 h-4" />
+          Accept
+        </Button>
+        <Button variant="secondary" size="sm" loading={declining} onClick={handleDecline} className="w-full justify-center min-h-[44px]">
+          <X className="w-4 h-4" />
+          Decline
+        </Button>
       </div>
     </div>
   );
