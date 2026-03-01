@@ -25,7 +25,7 @@ export async function GET(
       return new NextResponse("Not found", { status: 404 });
     }
 
-    return new NextResponse(result.body, {
+    return new NextResponse(Buffer.from(result.body), {
       status: 200,
       headers: {
         "Content-Type": result.contentType || "application/octet-stream",
