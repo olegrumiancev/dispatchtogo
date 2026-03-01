@@ -34,6 +34,7 @@ export function TriageSection({ requestId, initialTriage }: TriageSectionProps) 
       }
 
       const json = await res.json();
+      // Server now returns a normalized triage shape matching `AiTriageData`.
       setTriage(json.triage);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");

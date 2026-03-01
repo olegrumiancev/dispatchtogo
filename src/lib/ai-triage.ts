@@ -9,6 +9,17 @@ interface TriageResult {
   summary: string;
 }
 
+export interface NormalizedTriage {
+  category: string;
+  urgency: "LOW" | "MEDIUM" | "HIGH" | "EMERGENCY";
+  requiresLicensedTrade: boolean;
+  summary: string;
+  clarifyingQuestions: string[];
+  suggestedVendorCategories: string[];
+  confidence: number; // 0-1 float
+  aiOffline?: boolean;
+}
+
 /**
  * Pre-submission AI classification data that the form already collected.
  * When present, we store it directly instead of calling AI again.
@@ -79,7 +90,7 @@ export async function storePreClassification(
  */
 export async function triageServiceRequest(
   serviceRequestId: string
-): Promise<TriageResult | null> {
+): Promise<NormalizedTriage | null> {
   if (!isAiConfigured()) return null;
 
   // Fetch the request and available vendor categories
@@ -165,5 +176,26 @@ Description: ${request.description}`;
     console.error("[ai-triage] Failed to persist results:", err);
   }
 
-  return result;
+  // Normalize for client consumption (match `AiTriageData` shape)
+  const rawConfidence = typeof result.confidence === "number" ? result.confidence : 0;
+  const confidence = rawConfidence > 1 ? rawConfidence / 100 : rawConfidence;
+
+  function mapUrgency(score: number): NormalizedTriage["urgency"] {
+    if (score >= 5) return "EMERGENCY";
+    if (score >= 4) return "HIGH";
+    if (score >= 2 && score <= 3) return "MEDIUM";
+    return "LOW";
+  }
+
+  const normalized: NormalizedTriage = {
+    category: result.suggestedCategory ?? "GENERAL",
+    urgency: mapUrgency(result.urgencyScore ?? 3),
+    requiresLicensedTrade: false,
+    summary: result.summary ?? "",
+    clarifyingQuestions: [],
+    suggestedVendorCategories: result.suggestedCategory ? [result.suggestedCategory] : [],
+    confidence,
+  };
+
+  return normalized;
 }

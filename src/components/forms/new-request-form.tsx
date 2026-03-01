@@ -64,6 +64,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   // Submit
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
@@ -130,8 +131,30 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const handleSubmit = async () => {
     setSubmitting(true);
     setSubmitError(null);
+    setUploadProgress(null);
 
     try {
+      // Upload photos to S3 first (if any), collect URLs
+      const photoUrls: string[] = [];
+      if (files.length > 0) {
+        for (let i = 0; i < files.length; i++) {
+          setUploadProgress(`Uploading photo ${i + 1} of ${files.length}…`);
+          const formData = new FormData();
+          formData.append("file", files[i]);
+          const uploadRes = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+          if (!uploadRes.ok) {
+            const data = await uploadRes.json().catch(() => ({}));
+            throw new Error(data.error ?? `Failed to upload photo ${i + 1}`);
+          }
+          const { url } = await uploadRes.json();
+          photoUrls.push(url);
+        }
+        setUploadProgress(null);
+      }
+
       const res = await fetch("/api/requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -140,6 +163,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
           description: description.trim(),
           category: editCategory || "GENERAL",
           urgency: editUrgency || "MEDIUM",
+          photoUrls,
           aiClassification: classification
             ? {
                 aiCategory: classification.category,
@@ -167,10 +191,11 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
 
       const created = await res.json();
       router.push(`/operator/requests/${created.id}`);
-    } catch {
-      setSubmitError("Network error. Please try again.");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
       setSubmitting(false);
+      setUploadProgress(null);
     }
   };
 
@@ -569,7 +594,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
               onClick={handleSubmit}
               className="w-full sm:w-auto justify-center"
             >
-              Submit Request
+              {uploadProgress ?? (submitting ? "Submitting…" : "Submit Request")}
             </Button>
           </div>
         </>

@@ -9,6 +9,8 @@ import { ArrowLeft, MapPin, Calendar, User, Wrench, CheckCircle, Phone, FileText
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { VerifyCompletionButton } from "@/components/forms/verify-completion-button";
 import { TriageSection } from "@/components/forms/triage-section";
+import { AddPhotosButton } from "@/components/forms/add-photos-button";
+import { CancelRequestButton } from "@/components/forms/cancel-request-button";
 import type { AiTriageData } from "@/components/ui/ai-triage-badge";
 
 function getUrgencyColor(urgency: string) {
@@ -140,6 +142,9 @@ export default async function RequestDetailPage({
           </div>
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
+          {["SUBMITTED", "TRIAGING", "NEEDS_CLARIFICATION", "READY_TO_DISPATCH"].includes(req.status) && (
+            <CancelRequestButton requestId={req.id} redirectTo="/operator/requests" />
+          )}
           {(req.status === "COMPLETED" || req.status === "VERIFIED") && req.job && (
             <a
               href={`/api/proof-packets/${req.job.id}`}
@@ -456,7 +461,12 @@ export default async function RequestDetailPage({
       {/* Photos */}
       <Card>
         <CardHeader>
-          <CardTitle>Photos</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Photos</CardTitle>
+            {["SUBMITTED", "TRIAGING", "READY_TO_DISPATCH"].includes(req.status) && (
+              <AddPhotosButton requestId={req.id} />
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {/* Intake photos on the request */}

@@ -92,7 +92,7 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
     return (
       <div className="flex items-center gap-2 p-3 rounded-md bg-gray-50 border border-gray-200">
         <Brain className="w-4 h-4 text-gray-400 flex-shrink-0" />
-        <p className="text-xs text-gray-500">AI triage is currently offline. Results will appear once Ollama is available.</p>
+        <p className="text-xs text-gray-500">AI triage is currently offline. Results will appear once connection is available.</p>
         {onRetriage && (
           <button
             onClick={handleRetriage}
@@ -128,7 +128,7 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
 
             {/* Confidence */}
             <Badge variant={confColor}>
-              {confLabel} ({Math.round(triage.confidence)}%)
+              {confLabel} ({Math.round(triage.confidence * 100)}%)
             </Badge>
 
             {/* Licensed trade warning */}
@@ -172,7 +172,7 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
       {expanded && (
         <div className="border-t border-purple-200 px-4 py-3 space-y-3 bg-white">
           {/* Suggested vendor categories */}
-          {triage.suggestedVendorCategories.length > 0 && (
+          {triage.suggestedVendorCategories?.length > 0 && (
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
                 Suggested vendor categories

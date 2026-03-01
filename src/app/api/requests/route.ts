@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { propertyId, description, category, urgency, aiClassification } = body;
+  const { propertyId, description, category, urgency, aiClassification, photoUrls } = body;
 
   if (!propertyId || !description || !category) {
     return NextResponse.json(
@@ -115,6 +115,17 @@ export async function POST(request: NextRequest) {
       property: true,
     },
   });
+
+  // Save intake photos if provided
+  if (Array.isArray(photoUrls) && photoUrls.length > 0) {
+    await prisma.photo.createMany({
+      data: photoUrls.map((url: string) => ({
+        serviceRequestId: serviceRequest.id,
+        url,
+        type: "INTAKE",
+      })),
+    });
+  }
 
   // AI triage: store pre-classification if provided, otherwise run fresh
   try {

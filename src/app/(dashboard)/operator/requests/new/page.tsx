@@ -11,7 +11,7 @@ export default async function NewRequestPage() {
   if (user.role !== "OPERATOR") redirect("/");
 
   const properties = await prisma.property.findMany({
-    where: { organizationId: user.organizationId },
+    where: { organizationId: user.organizationId, isActive: true },
     orderBy: { name: "asc" },
   });
 

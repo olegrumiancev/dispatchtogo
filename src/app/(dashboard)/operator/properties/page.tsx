@@ -5,26 +5,70 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye, Building2 } from "lucide-react";
+import { Eye, Building2, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { AddPropertyDialog } from "@/components/forms/add-property-dialog";
+import { PropertyActions } from "@/components/forms/property-actions";
+
+const ACTIVE_STATUSES = [
+  "SUBMITTED",
+  "TRIAGING",
+  "NEEDS_CLARIFICATION",
+  "READY_TO_DISPATCH",
+  "DISPATCHED",
+  "ACCEPTED",
+  "IN_PROGRESS",
+] as const;
 
 export const metadata = {
   title: "Properties | DispatchToGo",
 };
 
-export default async function PropertiesPage() {
+interface SearchParams {
+  sortBy?: string;
+  sortDir?: string;
+}
+
+export default async function PropertiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const session = await auth();
   if (!session) redirect("/login");
 
   const user = session.user as any;
   const orgId: string = user.organizationId!;
 
+  const sp = await searchParams;
+  const sortBy = sp.sortBy ?? "name";
+  const sortDir = sp.sortDir === "desc" ? "desc" : "asc";
+
+  const orderByMap: Record<string, any> = {
+    name:        { name: sortDir },
+    address:     { address: sortDir },
+    description: { description: sortDir },
+    requests:    { serviceRequests: { _count: sortDir } },
+    status:      { isActive: sortDir === "asc" ? "desc" : "asc" }, // asc = Active first
+  };
+  const orderBy = orderByMap[sortBy] ?? { name: "asc" };
+
+  function sortUrl(col: string) {
+    const newDir =
+      sortBy === col ? (sortDir === "asc" ? "desc" : "asc") : "asc";
+    const p: Record<string, string> = { sortBy: col, sortDir: newDir };
+    return `/operator/properties?${new URLSearchParams(p).toString()}`;
+  }
+
   const properties = await prisma.property.findMany({
     where: { organizationId: orgId },
-    orderBy: [{ isActive: "desc" }, { name: "asc" }],
+    orderBy,
     include: {
       _count: {
         select: { serviceRequests: true },
+      },
+      serviceRequests: {
+        where: { status: { in: [...ACTIVE_STATUSES] } },
+        select: { id: true },
       },
     },
   });
@@ -61,21 +105,27 @@ export default async function PropertiesPage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Property Name
-                  </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
-                    Address
-                  </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
-                    Description
-                  </th>
-                  <th className="text-center px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                    Requests
-                  </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
+                  {([
+                    { col: "name",        label: "Property Name", cls: "" },
+                    { col: "address",     label: "Address",       cls: "hidden md:table-cell" },
+                    { col: "description", label: "Description",   cls: "hidden lg:table-cell" },
+                    { col: "requests",    label: "Requests",      cls: "hidden sm:table-cell text-center" },
+                    { col: "status",      label: "Status",        cls: "" },
+                  ] as const).map(({ col, label, cls }) => {
+                    const active = sortBy === col;
+                    const Icon = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
+                    return (
+                      <th key={col} className={`text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${cls}`}>
+                        <Link
+                          href={sortUrl(col)}
+                          className={`inline-flex items-center gap-1 hover:text-gray-800 transition-colors ${active ? "text-gray-800" : ""}`}
+                        >
+                          {label}
+                          <Icon className={`w-3 h-3 ${active ? "text-blue-500" : "text-gray-400"}`} />
+                        </Link>
+                      </th>
+                    );
+                  })}
                   <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
                   </th>
@@ -121,12 +171,20 @@ export default async function PropertiesPage() {
                       </Badge>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link href={`/operator/requests?property=${property.id}`}>
-                        <Button variant="ghost" size="sm">
-                          <Eye className="w-4 h-4" />
-                          <span className="hidden sm:inline">View Requests</span>
-                        </Button>
-                      </Link>
+                      <div className="flex items-center justify-end gap-1">
+                        <Link href={`/operator/requests?property=${property.id}`}>
+                          <Button variant="ghost" size="sm">
+                            <Eye className="w-4 h-4" />
+                            <span className="hidden sm:inline">Requests</span>
+                          </Button>
+                        </Link>
+                        <PropertyActions
+                          propertyId={property.id}
+                          propertyName={property.name}
+                          isActive={property.isActive}
+                          activeRequestCount={property.serviceRequests.length}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
