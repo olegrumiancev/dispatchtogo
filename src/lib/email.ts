@@ -1,31 +1,19 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-const SMTP_HOST = process.env.SMTP_HOST || "";
-const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
-const SMTP_USER = process.env.SMTP_USER || "";
-const SMTP_PASS = process.env.SMTP_PASS || "";
-const SMTP_FROM = process.env.SMTP_FROM || "noreply@dispatchtogo.com";
-const SMTP_SECURE = process.env.SMTP_SECURE === "true";
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const EMAIL_FROM = process.env.EMAIL_FROM || "DispatchToGo <noreply@dispatchtogo.com>";
 
-let _transporter: nodemailer.Transporter | null = null;
+let _client: Resend | null = null;
 
-function getTransporter(): nodemailer.Transporter | null {
-  if (!SMTP_HOST) return null;
-  if (_transporter) return _transporter;
-
-  _transporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: SMTP_PORT,
-    secure: SMTP_SECURE,
-    auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
-    tls: { rejectUnauthorized: false },
-  });
-
-  return _transporter;
+function getClient(): Resend | null {
+  if (!RESEND_API_KEY) return null;
+  if (_client) return _client;
+  _client = new Resend(RESEND_API_KEY);
+  return _client;
 }
 
 export function isEmailConfigured(): boolean {
-  return SMTP_HOST.length > 0;
+  return RESEND_API_KEY.length > 0;
 }
 
 type EmailResult =
@@ -38,21 +26,25 @@ export async function sendEmail(
   html: string,
   text?: string
 ): Promise<EmailResult> {
-  const transporter = getTransporter();
-  if (!transporter) {
-    console.warn("[email] SMTP not configured \u2013 skipping email");
-    return { success: false, error: "SMTP not configured" };
+  const client = getClient();
+  if (!client) {
+    console.warn("[email] Resend not configured \u2013 skipping email");
+    return { success: false, error: "Resend not configured" };
   }
 
   try {
-    const info = await transporter.sendMail({
-      from: SMTP_FROM,
+    const { data, error } = await client.emails.send({
+      from: EMAIL_FROM,
       to,
       subject,
       html,
       text: text || html.replace(/<[^>]*>/g, ""),
     });
-    return { success: true, messageId: info.messageId };
+    if (error) {
+      console.error("[email] Send failed:", error.message);
+      return { success: false, error: error.message };
+    }
+    return { success: true, messageId: data?.id ?? "" };
   } catch (err: any) {
     console.error("[email] Send failed:", err?.message ?? err);
     return { success: false, error: err?.message ?? "Unknown error" };
@@ -61,10 +53,17 @@ export async function sendEmail(
 
 export async function checkEmailHealth(): Promise<string | null> {
   if (!isEmailConfigured()) return "not configured";
-  const transporter = getTransporter();
-  if (!transporter) return "transporter creation failed";
+  const client = getClient();
+  if (!client) return "client creation failed";
   try {
-    await transporter.verify();
+    // Validate key with a real delivery to Resend's test sink (does not count toward quota)
+    const { error } = await client.emails.send({
+      from: "DispatchToGo <onboarding@resend.dev>",
+      to: "delivered@resend.dev",
+      subject: "health",
+      text: "ping",
+    });
+    if (error) return error.message;
     return null;
   } catch (err: any) {
     return `${err.code || "Error"}: ${err.message || String(err)}`;
