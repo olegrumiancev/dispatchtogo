@@ -3,3 +3,6 @@ node_modules
 .env
 public/uploads/*
 !public/uploads/.gitkeep
+.vscode/settings.json
+.gitignore
+package-lock.json
