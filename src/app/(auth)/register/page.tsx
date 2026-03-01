@@ -1,19 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Truck, AlertCircle, CheckCircle } from "lucide-react";
+import { Truck, AlertCircle, Mail } from "lucide-react";
 
 type Role = "OPERATOR" | "VENDOR" | "";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState("");
 
   const [form, setForm] = useState({
     name: "",
@@ -21,9 +20,7 @@ export default function RegisterPage() {
     password: "",
     confirmPassword: "",
     role: "" as Role,
-    // Operator
     organizationName: "",
-    // Vendor
     companyName: "",
     phone: "",
   });
@@ -51,7 +48,7 @@ export default function RegisterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
-          email: form.email,
+          email: form.email.trim().toLowerCase(),
           password: form.password,
           role: form.role,
           organizationName: form.role === "OPERATOR" ? form.organizationName : undefined,
@@ -65,8 +62,8 @@ export default function RegisterPage() {
       if (!res.ok) {
         setError(data.error || "Registration failed. Please try again.");
       } else {
+        setRegisteredEmail(form.email);
         setSuccess(true);
-        setTimeout(() => router.push("/login"), 2000);
       }
     } catch {
       setError("Something went wrong. Please try again.");
@@ -79,15 +76,27 @@ export default function RegisterPage() {
     return (
       <div className="w-full max-w-md">
         <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
-          <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 text-emerald-600" />
+          <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Mail className="w-8 h-8 text-blue-600" />
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Account Created!
+            Check your email
           </h2>
-          <p className="text-sm text-gray-500">
-            Redirecting to sign in...
+          <p className="text-sm text-gray-500 mb-2">
+            We&apos;ve sent a verification link to:
           </p>
+          <p className="text-sm font-medium text-gray-900 mb-6">
+            {registeredEmail}
+          </p>
+          <p className="text-sm text-gray-500 mb-6">
+            Click the link in the email to verify your account, then you can sign in.
+          </p>
+          <Link
+            href="/login"
+            className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+          >
+            Go to Sign In
+          </Link>
         </div>
       </div>
     );

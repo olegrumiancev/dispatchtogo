@@ -17,8 +17,10 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
+        const normalizedEmail = credentials.email.trim().toLowerCase();
+
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+          where: { email: normalizedEmail },
           include: { organization: true },
         });
 
@@ -33,6 +35,11 @@ export const authOptions: NextAuthOptions = {
 
         if (!isPasswordValid) {
           return null;
+        }
+
+        // Check email verification
+        if (!user.emailVerified) {
+          throw new Error("EMAIL_NOT_VERIFIED");
         }
 
         return {
@@ -74,14 +81,14 @@ export const authOptions: NextAuthOptions = {
 };
 
 /**
- * auth() \u2013 returns the current server session (used across API routes).
+ * auth() – returns the current server session (used across API routes).
  */
 export async function auth() {
   return await getServerSession(authOptions);
 }
 
 /**
- * handlers \u2013 { GET, POST } for the [...nextauth] route.
+ * handlers – { GET, POST } for the [...nextauth] route.
  * In NextAuth v4 these are produced by NextAuth(authOptions).
  */
 const nextAuthHandler = NextAuth(authOptions);
