@@ -32,13 +32,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  const reachable = await checkStorageHealth();
+  const error = await checkStorageHealth();
 
   return NextResponse.json({
-    status: reachable ? "ok" : "unreachable",
+    status: error ? "unreachable" : "ok",
     endpoint,
     bucket,
     hasAccessKey,
     hasSecretKey,
+    ...(error ? { error } : {}),
   });
 }

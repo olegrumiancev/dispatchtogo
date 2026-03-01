@@ -101,14 +101,15 @@ export async function deleteFile(key: string): Promise<void> {
 
 /**
  * Check if the storage bucket is reachable.
+ * Returns null on success, or an error string on failure.
  */
-export async function checkStorageHealth(): Promise<boolean> {
-  if (!isStorageConfigured()) return false;
+export async function checkStorageHealth(): Promise<string | null> {
+  if (!isStorageConfigured()) return "not configured";
   try {
     const client = getClient();
     await client.send(new HeadBucketCommand({ Bucket: S3_BUCKET }));
-    return true;
-  } catch {
-    return false;
+    return null;
+  } catch (err: any) {
+    return `${err.name || "Error"}: ${err.message || String(err)} (HTTP ${err.$metadata?.httpStatusCode ?? "?"})`;
   }
 }
