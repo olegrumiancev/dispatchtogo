@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { propertyId, description, category, urgency, aiClassification, photoUrls } = body;
+  const { propertyId, description, category, urgency, aiClassification, photoUrls, preferredVendorId } = body;
 
   if (!propertyId || !description || !category) {
     return NextResponse.json(
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
   // Auto-dispatch: try to find a matching vendor and assign automatically
   // Must await on serverless (Vercel) — fire-and-forget won't survive function teardown
   try {
-    await autoDispatch(serviceRequest.id);
+    await autoDispatch(serviceRequest.id, preferredVendorId || null);
   } catch (err) {
     console.error("[auto-dispatch] Error:", err);
   }

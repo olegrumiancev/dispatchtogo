@@ -23,6 +23,7 @@ import {
   Truck,
   ShieldCheck,
   UserCog,
+  Heart,
 } from "lucide-react";
 
 interface NavItem {
@@ -35,6 +36,7 @@ const OPERATOR_NAV: NavItem[] = [
   { href: "/operator", label: "Dashboard", icon: LayoutDashboard },
   { href: "/operator/requests", label: "Service Requests", icon: ClipboardList },
   { href: "/operator/properties", label: "Properties", icon: Building2 },
+  { href: "/operator/vendors", label: "Preferred Vendors", icon: Heart },
   { href: "/operator/invoices", label: "Invoices", icon: FileText },
   { href: "/operator/proof-packets", label: "Proof Packets", icon: ShieldCheck },
 ];

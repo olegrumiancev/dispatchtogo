@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,13 @@ interface Property {
   id: string;
   name: string;
   address: string | null;
+}
+
+interface AvailableVendor {
+  id: string;
+  companyName: string;
+  contactName: string;
+  serviceArea: string | null;
 }
 
 interface NewRequestFormProps {
@@ -61,10 +68,49 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const [editUrgency, setEditUrgency] = useState("");
   const [editing, setEditing] = useState(false);
 
+  // Vendor picker
+  const [availableVendors, setAvailableVendors] = useState<AvailableVendor[]>([]);
+  const [preferredVendorId, setPreferredVendorId] = useState<string | null>(null);
+  const [selectedVendorId, setSelectedVendorId] = useState("");
+  const [loadingVendors, setLoadingVendors] = useState(false);
+
   // Submit
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+
+  // ─── Fetch available vendors when category changes on step 2 ────────────
+  useEffect(() => {
+    if (step !== "review" || !editCategory) {
+      setAvailableVendors([]);
+      setPreferredVendorId(null);
+      setSelectedVendorId("");
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingVendors(true);
+
+    const params = new URLSearchParams({ category: editCategory });
+    if (propertyId) params.set("propertyId", propertyId);
+
+    fetch(`/api/vendors/available?${params}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        setAvailableVendors(data.vendors ?? []);
+        setPreferredVendorId(data.preferredVendorId ?? null);
+        setSelectedVendorId("");
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setLoadingVendors(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [step, editCategory, propertyId]);
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
@@ -94,7 +140,6 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       if (!res.ok) {
         const data = await res.json();
         setClassifyError(data.error ?? "Classification failed. You can still submit manually.");
-        // Fall back — let them submit without AI
         setClassification(null);
         setStep("review");
         setEditCategory("");
@@ -126,6 +171,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     setClassification(null);
     setClassifyError(null);
     setEditing(false);
+    setSelectedVendorId("");
   };
 
   const handleSubmit = async () => {
@@ -164,6 +210,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
           category: editCategory || "GENERAL",
           urgency: editUrgency || "MEDIUM",
           photoUrls,
+          preferredVendorId: selectedVendorId || undefined,
           aiClassification: classification
             ? {
                 aiCategory: classification.category,
@@ -230,6 +277,13 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   };
 
   const canClassify = propertyId && description.trim().length >= 10;
+
+  const vendorOptions = availableVendors.map((v) => ({
+    value: v.id,
+    label: v.serviceArea
+      ? `${v.companyName} (${v.serviceArea})`
+      : v.companyName,
+  }));
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -572,6 +626,48 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                     Accepting AI suggestion
                   </span>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Optional vendor picker */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Preferred Vendor (Optional)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-gray-500">
+                Leave blank to let the system automatically assign the best available vendor.
+              </p>
+              {loadingVendors ? (
+                <p className="text-sm text-gray-400">Loading vendors…</p>
+              ) : availableVendors.length === 0 ? (
+                <p className="text-sm text-gray-400">
+                  No vendors available for this category yet.
+                </p>
+              ) : (
+                <>
+                  <Select
+                    label="Vendor"
+                    options={vendorOptions}
+                    placeholder="Auto-assign (recommended)"
+                    value={selectedVendorId}
+                    onChange={(e) => setSelectedVendorId(e.target.value)}
+                  />
+                  {preferredVendorId && (
+                    <p className="text-xs text-blue-600">
+                      Your saved preference:{" "}
+                      <button
+                        type="button"
+                        className="underline hover:text-blue-800"
+                        onClick={() => setSelectedVendorId(preferredVendorId)}
+                      >
+                        {availableVendors.find((v) => v.id === preferredVendorId)
+                          ?.companyName ?? "Preferred vendor"}
+                      </button>
+                    </p>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

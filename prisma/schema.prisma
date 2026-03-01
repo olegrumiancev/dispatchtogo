@@ -54,11 +54,12 @@ model Organization {
   address      String?
   createdAt    DateTime @default(now())
 
-  users           User[]
-  properties      Property[]
-  serviceRequests ServiceRequest[]
-  invoices        Invoice[]
-  jobs            Job[]
+  users            User[]
+  properties       Property[]
+  serviceRequests  ServiceRequest[]
+  invoices         Invoice[]
+  jobs             Job[]
+  preferredVendors PreferredVendor[]
 
   @@index([type])
 }
@@ -74,6 +75,7 @@ model Property {
 
   organization    Organization     @relation(fields: [organizationId], references: [id])
   serviceRequests ServiceRequest[]
+  preferredVendors PreferredVendor[]
 
   @@index([organizationId])
 }
@@ -92,10 +94,11 @@ model Vendor {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  user        User[]
-  skills      VendorSkill[]
-  credentials VendorCredential[]
-  jobs        Job[]
+  user             User[]
+  skills           VendorSkill[]
+  credentials      VendorCredential[]
+  jobs             Job[]
+  preferredVendors PreferredVendor[]
 
   @@index([isActive])
 }
@@ -108,6 +111,24 @@ model VendorSkill {
   vendor Vendor @relation(fields: [vendorId], references: [id])
 
   @@unique([vendorId, category])
+  @@index([vendorId])
+}
+
+model PreferredVendor {
+  id             String   @id @default(cuid())
+  organizationId String
+  propertyId     String?
+  category       String
+  vendorId       String
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  property     Property?    @relation(fields: [propertyId], references: [id])
+  vendor       Vendor       @relation(fields: [vendorId], references: [id])
+
+  @@unique([organizationId, propertyId, category])
+  @@index([organizationId])
+  @@index([propertyId])
   @@index([vendorId])
 }
 
