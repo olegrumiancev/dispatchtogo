@@ -38,18 +38,18 @@ function getClient(): S3Client {
     forcePathStyle: true, // Required for MinIO
   });
 
-  // Inject CF Access headers if configured
+  // Inject CF Access headers AFTER signing so they don't corrupt the S3v4 signature
   if (CF_ACCESS_CLIENT_ID) {
     _client.middlewareStack.add(
       (next) => async (args: any) => {
         if (args.request?.headers) {
-          args.request.headers["CF-Access-Client-Id"] = CF_ACCESS_CLIENT_ID;
-          args.request.headers["CF-Access-Client-Secret"] =
+          args.request.headers["cf-access-client-id"] = CF_ACCESS_CLIENT_ID;
+          args.request.headers["cf-access-client-secret"] =
             CF_ACCESS_CLIENT_SECRET;
         }
         return next(args);
       },
-      { step: "build", name: "cfAccessHeaders", priority: "high" }
+      { step: "finalizeRequest", name: "cfAccessHeaders", priority: "low" }
     );
   }
 
