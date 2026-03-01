@@ -109,6 +109,7 @@ export default async function RequestDetailPage({
         },
       },
       invoice: true,
+      aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
     },
   })) as any;
 
@@ -280,18 +281,17 @@ export default async function RequestDetailPage({
       {/* AI Triage */}
       {(() => {
         const reqAny = req as any;
-        const clarifyingQuestions = Array.isArray(reqAny.aiClarifyingQuestions)
-          ? (reqAny.aiClarifyingQuestions as string[])
-          : [];
-        const initialTriage: AiTriageData | null = reqAny.aiSummary
+        const aiClass = reqAny.aiClassifications?.[0];
+        const hasTriage = reqAny.aiTriageSummary || aiClass;
+        const initialTriage: AiTriageData | null = hasTriage
           ? {
-              category: req.category as AiTriageData["category"],
+              category: (aiClass?.suggestedCategory ?? req.category) as AiTriageData["category"],
               urgency: req.urgency as AiTriageData["urgency"],
-              requiresLicensedTrade: reqAny.requiresLicensedTrade,
-              summary: reqAny.aiSummary,
-              clarifyingQuestions,
+              requiresLicensedTrade: reqAny.requiresLicensedTrade ?? false,
+              summary: reqAny.aiTriageSummary ?? "",
+              clarifyingQuestions: [],
               suggestedVendorCategories: [req.category as AiTriageData["category"]],
-              confidence: 0.8,
+              confidence: aiClass?.confidence ?? 0.8,
             }
           : null;
         return (
