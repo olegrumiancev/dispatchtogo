@@ -14,9 +14,9 @@ export async function POST(request: NextRequest) {
   }
 
   const user = session.user as any;
-  if (user.role !== "ADMIN") {
+  if (user.role !== "ADMIN" && user.role !== "OPERATOR") {
     return NextResponse.json(
-      { error: "Forbidden: only ADMINs can trigger triage" },
+      { error: "Forbidden: only ADMINs and OPERATORs can trigger triage" },
       { status: 403 }
     );
   }
@@ -31,9 +31,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const serviceRequest = await prisma.serviceRequest.findUnique({
-    where: { id: serviceRequestId },
-  });
+  // Operators are scoped to their own organization
+  const where =
+    user.role === "OPERATOR"
+      ? { id: serviceRequestId, organizationId: user.organizationId as string }
+      : { id: serviceRequestId };
+
+  const serviceRequest = await prisma.serviceRequest.findFirst({ where });
 
   if (!serviceRequest) {
     return NextResponse.json(

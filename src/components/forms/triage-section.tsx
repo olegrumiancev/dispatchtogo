@@ -25,7 +25,7 @@ export function TriageSection({ requestId, initialTriage }: TriageSectionProps) 
       const res = await fetch("/api/triage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId }),
+        body: JSON.stringify({ serviceRequestId: requestId }),
       });
 
       if (!res.ok) {
