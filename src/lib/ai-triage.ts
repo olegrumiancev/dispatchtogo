@@ -10,7 +10,62 @@ interface TriageResult {
 }
 
 /**
+ * Pre-submission AI classification data that the form already collected.
+ * When present, we store it directly instead of calling AI again.
+ */
+export interface PreClassificationData {
+  aiCategory: string;
+  aiUrgency: string;
+  summary: string;
+  confidence: number;
+  reasoning: string;
+  requiresLicensedTrade: boolean;
+  operatorOverrodeCategory: boolean;
+  operatorOverrodeUrgency: boolean;
+}
+
+const URGENCY_TO_SCORE: Record<string, number> = {
+  low: 1,
+  medium: 3,
+  high: 4,
+  emergency: 5,
+};
+
+/**
+ * Store pre-submission classification data that was collected via
+ * /api/triage/classify. Skips calling the AI again.
+ */
+export async function storePreClassification(
+  serviceRequestId: string,
+  data: PreClassificationData
+): Promise<void> {
+  const urgencyScore =
+    URGENCY_TO_SCORE[data.aiUrgency.trim().toLowerCase()] ?? 3;
+
+  await prisma.$transaction([
+    prisma.aiClassification.create({
+      data: {
+        requestId: serviceRequestId,
+        suggestedCategory: data.aiCategory,
+        confidence: data.confidence,
+        reasoning: data.reasoning,
+      },
+    }),
+    prisma.serviceRequest.update({
+      where: { id: serviceRequestId },
+      data: {
+        aiTriageSummary: data.summary,
+        aiUrgencyScore: urgencyScore,
+      },
+    }),
+  ]);
+}
+
+/**
  * AI-powered triage for incoming service requests.
+ *
+ * This is the FALLBACK path — used only when pre-submission classification
+ * wasn't performed (e.g. AI was offline when the operator submitted).
  *
  * Analyses the description and returns:
  *  - Suggested category (matched against active vendor skills)
@@ -56,8 +111,8 @@ Your job is to analyse incoming maintenance/service requests and provide:
 
 Available vendor categories: ${vendorCategories.join(", ")}
 
-The operator already selected category "${request.category}" and urgency "${request.urgency}".
-You may agree or suggest a different/more specific category if one fits better.
+The request was submitted with category "${request.category}" and urgency "${request.urgency}".
+Classify the request independently based on the description. Your suggestion may agree or differ.
 
 Respond ONLY with valid JSON (no markdown, no code fences):
 {"suggestedCategory":"...","confidence":85,"urgencyScore":3,"reasoning":"...","summary":"..."}`;

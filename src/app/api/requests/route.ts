@@ -3,7 +3,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateReferenceNumber } from "@/lib/utils";
 import { autoDispatch } from "@/lib/auto-dispatch";
-import { triageServiceRequest } from "@/lib/ai-triage";
+import {
+  triageServiceRequest,
+  storePreClassification,
+  type PreClassificationData,
+} from "@/lib/ai-triage";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -74,7 +78,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { propertyId, description, category, urgency } = body;
+  const { propertyId, description, category, urgency, aiClassification } = body;
 
   if (!propertyId || !description || !category) {
     return NextResponse.json(
@@ -112,9 +116,16 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // AI triage: classify the request (non-blocking — failure is OK)
+  // AI triage: store pre-classification if provided, otherwise run fresh
   try {
-    await triageServiceRequest(serviceRequest.id);
+    if (aiClassification) {
+      await storePreClassification(
+        serviceRequest.id,
+        aiClassification as PreClassificationData
+      );
+    } else {
+      await triageServiceRequest(serviceRequest.id);
+    }
   } catch (err) {
     console.error("[ai-triage] Error:", err);
   }
