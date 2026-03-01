@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 import { sendVendorDispatchNotification } from "@/lib/sms";
+import { sendVendorDispatchEmail } from "@/lib/email";
 
 export async function POST(
   request: NextRequest,
@@ -77,25 +78,26 @@ export async function POST(
     }),
   ]);
 
-  // Fire-and-forget SMS to vendor
+  // Fire-and-forget SMS + email to vendor
   if (NOTIFICATION_SETTINGS.notifyVendorOnDispatch) {
     const property = (job.serviceRequest as any).property;
-    Promise.resolve(
-      sendVendorDispatchNotification(vendor.phone, vendor.companyName, {
-        category: serviceRequest.category,
-        propertyName: property?.name ?? "Unknown Property",
-        urgency: serviceRequest.urgency,
-        description: serviceRequest.description,
-        refNumber: serviceRequest.referenceNumber,
-      })
-    ).then((result) => {
-      if (!result.success) {
-        console.error(
-          `[dispatch] SMS to vendor ${vendor.companyName} failed:`,
-          result.error
-        );
-      }
+    const details = {
+      category: serviceRequest.category,
+      propertyName: property?.name ?? "Unknown Property",
+      urgency: serviceRequest.urgency,
+      description: serviceRequest.description,
+      refNumber: serviceRequest.referenceNumber,
+    };
+
+    sendVendorDispatchNotification(vendor.phone, vendor.companyName, details).then((r) => {
+      if (!r.success) console.error(`[dispatch] SMS to vendor ${vendor.companyName} failed:`, r.error);
     });
+
+    if (NOTIFICATION_SETTINGS.emailEnabled) {
+      sendVendorDispatchEmail(vendor.email, vendor.companyName, details).then((r) => {
+        if (!r.success) console.error(`[dispatch] Email to vendor ${vendor.companyName} failed:`, r.error);
+      });
+    }
   }
 
   return NextResponse.json(job, { status: 201 });

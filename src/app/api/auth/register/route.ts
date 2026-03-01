@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { sendWelcomeEmail } from "@/lib/email";
+import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 
 export async function POST(request: NextRequest) {
   try {
@@ -128,6 +130,13 @@ export async function POST(request: NextRequest) {
           vendorId: true,
           createdAt: true,
         },
+      });
+    }
+
+    // Fire-and-forget welcome email
+    if (NOTIFICATION_SETTINGS.emailEnabled) {
+      sendWelcomeEmail(user.email, user.name || "there", user.role).then((r) => {
+        if (!r.success) console.error(`[register] Welcome email failed:`, r.error);
       });
     }
 

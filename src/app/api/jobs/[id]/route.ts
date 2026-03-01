@@ -6,6 +6,10 @@ import {
   sendOperatorStatusUpdate,
   sendJobCompletionNotification,
 } from "@/lib/sms";
+import {
+  sendOperatorStatusEmail,
+  sendJobCompletionEmail,
+} from "@/lib/email";
 
 const JOB_INCLUDE = {
   serviceRequest: {
@@ -146,50 +150,52 @@ export async function PATCH(
     include: JOB_INCLUDE,
   });
 
-  // Fire-and-forget SMS notifications based on the new status
+  // Fire-and-forget SMS + email notifications based on the new status
   if (newStatus && updated) {
     const serviceRequest = updated.serviceRequest as any;
     const vendor = updated.vendor as any;
     const refNumber = serviceRequest?.referenceNumber ?? id;
     const orgId = updated.organizationId ?? "";
+    const vendorName = vendor?.companyName ?? "the vendor";
 
-    // Resolve the operator phone (org contactPhone for MVP)
     prisma.organization
-      .findUnique({ where: { id: orgId }, select: { contactPhone: true } })
+      .findUnique({ where: { id: orgId }, select: { contactPhone: true, contactEmail: true, email: true } })
       .then((org) => {
-        if (!org?.contactPhone) return;
+        const phone = org?.contactPhone;
+        const email = org?.contactEmail || org?.email;
 
         if (
           newStatus === "COMPLETED" &&
           NOTIFICATION_SETTINGS.notifyOperatorOnCompletion
         ) {
-          sendJobCompletionNotification(
-            org.contactPhone,
-            refNumber,
-            vendor?.companyName ?? "the vendor"
-          ).then((result) => {
-            if (!result.success) {
-              console.error(`[job PATCH] Completion SMS failed:`, result.error);
-            }
-          });
+          if (phone) {
+            sendJobCompletionNotification(phone, refNumber, vendorName).then((r) => {
+              if (!r.success) console.error(`[job PATCH] Completion SMS failed:`, r.error);
+            });
+          }
+          if (email && NOTIFICATION_SETTINGS.emailEnabled) {
+            sendJobCompletionEmail(email, refNumber, vendorName).then((r) => {
+              if (!r.success) console.error(`[job PATCH] Completion email failed:`, r.error);
+            });
+          }
         } else if (
           (newStatus === "ACCEPTED" || newStatus === "IN_PROGRESS") &&
           NOTIFICATION_SETTINGS.notifyOperatorOnStatusChange
         ) {
-          sendOperatorStatusUpdate(
-            org.contactPhone,
-            refNumber,
-            newStatus,
-            vendor?.companyName
-          ).then((result) => {
-            if (!result.success) {
-              console.error(`[job PATCH] Status SMS failed:`, result.error);
-            }
-          });
+          if (phone) {
+            sendOperatorStatusUpdate(phone, refNumber, newStatus, vendor?.companyName).then((r) => {
+              if (!r.success) console.error(`[job PATCH] Status SMS failed:`, r.error);
+            });
+          }
+          if (email && NOTIFICATION_SETTINGS.emailEnabled) {
+            sendOperatorStatusEmail(email, refNumber, newStatus, vendor?.companyName).then((r) => {
+              if (!r.success) console.error(`[job PATCH] Status email failed:`, r.error);
+            });
+          }
         }
       })
       .catch((err) => {
-        console.error(`[job PATCH] Could not look up org for SMS:`, err);
+        console.error(`[job PATCH] Could not look up org for notifications:`, err);
       });
   }
 
