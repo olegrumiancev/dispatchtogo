@@ -100,7 +100,8 @@ export async function triageServiceRequest(
 
   if (!request) return null;
 
-  const systemPrompt = `You are a service request triage assistant for a tourism property management platform in Cornwall & SDG, Ontario, Canada.
+  //const systemPrompt = `You are a service request triage assistant for a tourism property management platform in Cornwall & SDG, Ontario, Canada.
+  const systemPrompt = `You are a service request triage assistant for a tourism property management platform.
 
 Your job is to analyse incoming maintenance/service requests and provide:
 1. The best matching vendor category from the available list

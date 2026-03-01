@@ -128,7 +128,7 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
 
             {/* Confidence */}
             <Badge variant={confColor}>
-              {confLabel} ({Math.round(triage.confidence * 100)}%)
+              {confLabel} ({Math.round(triage.confidence)}%)
             </Badge>
 
             {/* Licensed trade warning */}
@@ -156,7 +156,7 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
               {retriaging ? "Running…" : "Re-triage"}
             </button>
           )}
-          {(triage.clarifyingQuestions.length > 0 || triage.suggestedVendorCategories.length > 0) && (
+          {(triage.clarifyingQuestions?.length > 0 || triage.suggestedVendorCategories?.length > 0) && (
             <button
               onClick={() => setExpanded((e) => !e)}
               className="text-purple-500 hover:text-purple-700"
@@ -188,7 +188,7 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
           )}
 
           {/* Clarifying questions */}
-          {triage.clarifyingQuestions.length > 0 && (
+          {triage.clarifyingQuestions?.length > 0 && (
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
                 Clarifying questions
