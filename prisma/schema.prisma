@@ -16,26 +16,31 @@ datasource db {
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
-  id             String    @id @default(cuid())
-  email          String    @unique
-  passwordHash   String
-  name           String?
-  role           String    @default("OPERATOR")
-  organizationId String?
-  vendorId       String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                       String    @id @default(cuid())
+  email                    String    @unique
+  passwordHash             String
+  name                     String?
+  role                     String    @default("OPERATOR")
+  organizationId           String?
+  vendorId                 String?
+  emailVerified            Boolean   @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  vendor         Vendor?       @relation(fields: [vendorId], references: [id])
-  jobNotes       JobNote[]
-  notifications  Notification[]
-  chatMessages   ChatMessage[]
-  auditLogs      AuditLog[]
+  organization        Organization?      @relation(fields: [organizationId], references: [id])
+  vendor              Vendor?            @relation(fields: [vendorId], references: [id])
+  jobNotes            JobNote[]
+  notifications       Notification[]
+  chatMessages        ChatMessage[]
+  auditLogs           AuditLog[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([email])
   @@index([organizationId])
   @@index([vendorId])
+  @@index([emailVerificationToken])
 }
 
 model Organization {
@@ -320,4 +325,18 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([userId])
   @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
