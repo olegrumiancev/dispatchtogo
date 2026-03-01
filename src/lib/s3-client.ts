@@ -10,6 +10,7 @@
 import {
   S3Client,
   PutObjectCommand,
+  GetObjectCommand,
   DeleteObjectCommand,
   HeadBucketCommand,
 } from "@aws-sdk/client-s3";
@@ -79,11 +80,28 @@ export async function uploadFile(
     })
   );
 
-  // Return public URL
-  if (S3_PUBLIC_URL) {
-    return `${S3_PUBLIC_URL}/${key}`;
-  }
-  return `${S3_ENDPOINT}/${S3_BUCKET}/${key}`;
+  // Return a proxy URL so browsers don't hit CF Access directly
+  return `/api/photos/${key}`;
+}
+
+/**
+ * Fetch a file from S3/MinIO.
+ * Returns the body stream, content-type, and content-length.
+ */
+export async function getFile(
+  key: string
+): Promise<{ body: Uint8Array; contentType?: string; contentLength?: number } | null> {
+  const client = getClient();
+  const resp = await client.send(
+    new GetObjectCommand({ Bucket: S3_BUCKET, Key: key })
+  );
+  if (!resp.Body) return null;
+  const bytes = await resp.Body.transformToByteArray();
+  return {
+    body: bytes,
+    contentType: resp.ContentType ?? undefined,
+    contentLength: resp.ContentLength ?? undefined,
+  };
 }
 
 /**
