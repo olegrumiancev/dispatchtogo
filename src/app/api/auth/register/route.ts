@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const allowedCategories = new Set(SERVICE_CATEGORIES.map((c) => c.value));
+      const allowedCategories = new Set<string>(SERVICE_CATEGORIES.map((c) => c.value));
       const parsedCategories: string[] = Array.isArray(categories)
         ? categories
             .filter((c) => typeof c === "string")

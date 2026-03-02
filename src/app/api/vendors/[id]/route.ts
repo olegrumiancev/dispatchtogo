@@ -98,7 +98,7 @@ export async function PATCH(
     if (!Array.isArray(categories)) {
       return NextResponse.json({ error: "categories must be an array" }, { status: 400 });
     }
-    const allowedCategories = new Set(SERVICE_CATEGORIES.map((c) => c.value));
+    const allowedCategories = new Set<string>(SERVICE_CATEGORIES.map((c) => c.value));
     validatedCategories = Array.from(
       new Set(
         categories
