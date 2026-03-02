@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { SERVICE_CATEGORIES } from "@/lib/constants";
 import { Save, Loader2 } from "lucide-react";
 
 interface VendorProfileFormProps {
@@ -13,16 +15,20 @@ interface VendorProfileFormProps {
     phone: string;
     address: string;
     serviceRadiusKm: number;
+    categories: string[];
   };
+  onSaved?: () => void;
 }
 
-export default function VendorProfileForm({ vendor }: VendorProfileFormProps) {
+export default function VendorProfileForm({ vendor, onSaved }: VendorProfileFormProps) {
+  const router = useRouter();
   const [form, setForm] = useState({
     companyName: vendor.companyName,
     contactName: vendor.contactName,
     phone: vendor.phone,
     address: vendor.address,
     serviceRadiusKm: String(vendor.serviceRadiusKm),
+    categories: vendor.categories,
   });
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -34,8 +40,26 @@ export default function VendorProfileForm({ vendor }: VendorProfileFormProps) {
     setErrorMsg("");
   }
 
+  function toggleCategory(category: string) {
+    setForm((prev) => {
+      const exists = prev.categories.includes(category);
+      return {
+        ...prev,
+        categories: exists
+          ? prev.categories.filter((c) => c !== category)
+          : [...prev.categories, category],
+      };
+    });
+    setSuccessMsg("");
+    setErrorMsg("");
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (form.categories.length === 0) {
+      setErrorMsg("Please select at least one service category.");
+      return;
+    }
     setSaving(true);
     setSuccessMsg("");
     setErrorMsg("");
@@ -49,6 +73,7 @@ export default function VendorProfileForm({ vendor }: VendorProfileFormProps) {
           phone: form.phone,
           address: form.address,
           serviceRadiusKm: parseInt(form.serviceRadiusKm, 10) || 50,
+          categories: form.categories,
         }),
       });
       if (!res.ok) {
@@ -56,6 +81,8 @@ export default function VendorProfileForm({ vendor }: VendorProfileFormProps) {
         throw new Error(data.error ?? "Failed to save");
       }
       setSuccessMsg("Profile updated successfully.");
+      onSaved?.();
+      router.refresh();
     } catch (err: any) {
       setErrorMsg(err.message ?? "An error occurred.");
     } finally {
@@ -140,6 +167,33 @@ export default function VendorProfileForm({ vendor }: VendorProfileFormProps) {
             className={inputClass}
             placeholder="Street address, city, province..."
           />
+        </div>
+
+        <div className="sm:col-span-2">
+          <p className={labelClass}>Service Categories</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {SERVICE_CATEGORIES.map((category) => {
+              const checked = form.categories.includes(category.value);
+              return (
+                <label
+                  key={category.value}
+                  className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors ${
+                    checked
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-gray-200 hover:border-gray-300 text-gray-700"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleCategory(category.value)}
+                    className="rounded border-gray-300"
+                  />
+                  <span>{category.label}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
       </div>
 

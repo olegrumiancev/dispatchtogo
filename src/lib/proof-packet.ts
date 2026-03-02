@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { getFile } from "@/lib/s3-client";
 
 export interface ProofPacketData {
   referenceNumber: string;
@@ -67,7 +68,68 @@ function currency(n: number | null | undefined): string {
   return `$${n.toFixed(2)}`;
 }
 
-export function generateProofPacketPdf(data: ProofPacketData): Buffer {
+/** Read pixel dimensions from a raw JPEG or PNG buffer without any extra package. */
+function getImageDimensions(bytes: Uint8Array, format: string): { width: number; height: number } | null {
+  try {
+    if (format === "PNG") {
+      // IHDR chunk: width at bytes 16-19, height at 20-23 (big-endian uint32)
+      if (bytes.length < 24) return null;
+      const w = (bytes[16] << 24 | bytes[17] << 16 | bytes[18] << 8 | bytes[19]) >>> 0;
+      const h = (bytes[20] << 24 | bytes[21] << 16 | bytes[22] << 8 | bytes[23]) >>> 0;
+      return { width: w, height: h };
+    } else {
+      // JPEG: scan for SOF markers (0xC0–0xCF, excluding 0xC4/0xC8/0xCC)
+      let i = 2; // skip SOI
+      while (i < bytes.length - 8) {
+        if (bytes[i] !== 0xFF) { i++; continue; }
+        const marker = bytes[i + 1];
+        if (marker >= 0xC0 && marker <= 0xCF &&
+            marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC) {
+          const h = (bytes[i + 5] << 8) | bytes[i + 6];
+          const w = (bytes[i + 7] << 8) | bytes[i + 8];
+          return { width: w, height: h };
+        }
+        const segLen = (bytes[i + 2] << 8) | bytes[i + 3];
+        i += 2 + segLen;
+      }
+      return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+async function fetchImageAsBase64(url: string): Promise<{ data: string; format: string; width: number; height: number } | null> {
+  try {
+    let bytes: Uint8Array;
+    let contentType = "image/jpeg";
+
+    // Photos are stored as /api/photos/<key> — fetch directly from S3 on the server
+    const proxyMatch = url.match(/^\/api\/photos\/(.+)$/);
+    if (proxyMatch) {
+      const file = await getFile(proxyMatch[1]);
+      if (!file) return null;
+      bytes = file.body;
+      contentType = file.contentType ?? "image/jpeg";
+    } else {
+      // Absolute URL fallback
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      contentType = res.headers.get("content-type") ?? "image/jpeg";
+      bytes = new Uint8Array(await res.arrayBuffer());
+    }
+
+    const format = contentType.includes("png") ? "PNG" : "JPEG";
+    const mime = format === "PNG" ? "image/png" : "image/jpeg";
+    const base64 = Buffer.from(bytes).toString("base64");
+    const dims = getImageDimensions(bytes, format) ?? { width: 4, height: 3 }; // fallback 4:3
+    return { data: `data:${mime};base64,${base64}`, format, width: dims.width, height: dims.height };
+  } catch {
+    return null;
+  }
+}
+
+export async function generateProofPacketPdf(data: ProofPacketData): Promise<Buffer> {
   const doc = new jsPDF({ unit: "mm", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 15;
@@ -183,11 +245,55 @@ export function generateProofPacketPdf(data: ProofPacketData): Buffer {
     y += 4;
   }
 
-  // Photos (list URLs since we can't embed images server-side easily)
+  // Photos – fetch and embed
   if (data.photos.length > 0) {
     heading("Photos");
-    for (const p of data.photos) {
-      row(`${p.type}:`, `${p.url} (${fmt(p.takenAt)})`);
+    const colWidth = (contentWidth - 5) / 2; // two columns with 5 mm gap
+    const maxImgHeight = 120; // cap so a tall portrait doesn't consume the whole page
+
+    for (let i = 0; i < data.photos.length; i += 2) {
+      const left = data.photos[i];
+      const right = data.photos[i + 1] ?? null;
+
+      // Fetch both in parallel
+      const [imgLeft, imgRight] = await Promise.all([
+        fetchImageAsBase64(left.url),
+        right ? fetchImageAsBase64(right.url) : Promise.resolve(null),
+      ]);
+
+      // Compute rendered height for each image preserving aspect ratio, capped
+      const heightLeft  = imgLeft  ? Math.min(colWidth * (imgLeft.height  / imgLeft.width),  maxImgHeight) : colWidth * 0.75;
+      const heightRight = imgRight ? Math.min(colWidth * (imgRight.height / imgRight.width), maxImgHeight) : colWidth * 0.75;
+      const rowHeight = right ? Math.max(heightLeft, heightRight) : heightLeft;
+
+      checkPage(rowHeight + 14);
+
+      // Labels above images
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "bold");
+      doc.text(`${left.type} \u2013 ${fmt(left.takenAt)}`, margin, y);
+      if (right) doc.text(`${right.type} \u2013 ${fmt(right.takenAt)}`, margin + colWidth + 5, y);
+      y += 4;
+
+      if (imgLeft) {
+        doc.addImage(imgLeft.data, imgLeft.format, margin, y, colWidth, heightLeft);
+      } else {
+        doc.setFontSize(7);
+        doc.setFont("helvetica", "italic");
+        doc.text("(image unavailable)", margin + 2, y + heightLeft / 2);
+      }
+
+      if (right) {
+        if (imgRight) {
+          doc.addImage(imgRight.data, imgRight.format, margin + colWidth + 5, y, colWidth, heightRight);
+        } else {
+          doc.setFontSize(7);
+          doc.setFont("helvetica", "italic");
+          doc.text("(image unavailable)", margin + colWidth + 7, y + heightRight / 2);
+        }
+      }
+
+      y += rowHeight + 6;
     }
   }
 

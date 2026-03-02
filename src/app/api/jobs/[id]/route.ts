@@ -77,7 +77,7 @@ export async function PATCH(
   const user = session.user as any;
   const body = await request.json();
 
-  const { action, vendorNotes, totalLabourHours, totalMaterialsCost, totalCost } = body;
+  const { action, vendorNotes, totalLabourHours, totalMaterialsCost, totalCost, declineReason } = body;
 
   const job = await prisma.job.findUnique({
     where: { id },
@@ -147,8 +147,8 @@ export async function PATCH(
         break;
       case "decline":
         jobData.status = "DECLINED";
+        if (declineReason) jobData.declineReason = String(declineReason).slice(0, 500);
         requestData.status = "READY_TO_DISPATCH";
-        // Clear the job association so the request can be re-dispatched
         // We keep the Job record for audit purposes (status=DECLINED)
         break;
       default:

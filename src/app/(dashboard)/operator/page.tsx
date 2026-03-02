@@ -95,6 +95,12 @@ export default async function OperatorDashboard() {
       take: 10,
       include: {
         property: { select: { name: true } },
+        job: {
+          include: {
+            notes: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+          },
+        },
+        requestViews: { where: { userId: user.id }, select: { viewedAt: true } },
       },
     }),
   ]);
@@ -110,6 +116,20 @@ export default async function OperatorDashboard() {
     const hours = avgMs / (1000 * 60 * 60);
     avgResolutionHours = `${hours.toFixed(1)}h`;
   }
+
+  // Compute new-activity flag for recent requests
+  const recentRequestsWithActivity = recentRequests.map((req) => {
+    const job = req.job;
+    const viewedAt = req.requestViews[0]?.viewedAt;
+    const latestActivity = (
+      [job?.enRouteAt, job?.arrivedAt, job?.completedAt, job?.notes[0]?.createdAt] as (Date | null | undefined)[]
+    ).reduce<Date | null>((max, d) => {
+      if (!d) return max;
+      return !max || d > max ? d : max;
+    }, null);
+    const hasNewActivity = !!latestActivity && (!viewedAt || latestActivity > viewedAt);
+    return { ...req, hasNewActivity };
+  });
 
   return (
     <div className="space-y-6">
@@ -231,15 +251,23 @@ export default async function OperatorDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {recentRequests.map((req) => (
-                  <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                {recentRequestsWithActivity.map((req) => (
+                  <tr key={req.id} className={`hover:bg-gray-50 transition-colors ${req.hasNewActivity ? "bg-amber-50 hover:bg-amber-100" : ""}`}>
                     <td className="px-6 py-4">
-                      <Link
-                        href={`/operator/requests/${req.id}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-700"
-                      >
-                        {req.referenceNumber}
-                      </Link>
+                      <div className="flex items-center gap-1.5">
+                        {req.hasNewActivity && (
+                          <span
+                            title="New vendor activity"
+                            className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0"
+                          />
+                        )}
+                        <Link
+                          href={`/operator/requests/${req.id}`}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          {req.referenceNumber}
+                        </Link>
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-700 max-w-[160px] truncate">
                       {req.property.name}

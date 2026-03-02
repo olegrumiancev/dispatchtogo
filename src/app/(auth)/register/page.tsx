@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { SERVICE_CATEGORIES } from "@/lib/constants";
 import { Truck, AlertCircle, Mail } from "lucide-react";
 
 type Role = "OPERATOR" | "VENDOR" | "";
@@ -13,6 +14,7 @@ export default function RegisterPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
+  const [registeredCategories, setRegisteredCategories] = useState<string[]>([]);
 
   const [form, setForm] = useState({
     name: "",
@@ -23,10 +25,23 @@ export default function RegisterPage() {
     organizationName: "",
     companyName: "",
     phone: "",
+    categories: [] as string[],
   });
 
   const set = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  const toggleCategory = (category: string) => {
+    setForm((prev) => {
+      const exists = prev.categories.includes(category);
+      return {
+        ...prev,
+        categories: exists
+          ? prev.categories.filter((c) => c !== category)
+          : [...prev.categories, category],
+      };
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +53,10 @@ export default function RegisterPage() {
     }
     if (!form.role) {
       setError("Please select a role.");
+      return;
+    }
+    if (form.role === "VENDOR" && form.categories.length === 0) {
+      setError("Please select at least one service category.");
       return;
     }
 
@@ -54,6 +73,7 @@ export default function RegisterPage() {
           organizationName: form.role === "OPERATOR" ? form.organizationName : undefined,
           companyName: form.role === "VENDOR" ? form.companyName : undefined,
           phone: form.role === "VENDOR" ? form.phone : undefined,
+          categories: form.role === "VENDOR" ? form.categories : undefined,
         }),
       });
 
@@ -63,6 +83,14 @@ export default function RegisterPage() {
         setError(data.error || "Registration failed. Please try again.");
       } else {
         setRegisteredEmail(form.email);
+        if (form.role === "VENDOR") {
+          setRegisteredCategories(
+            form.categories
+              .map((value) => SERVICE_CATEGORIES.find((c) => c.value === value)?.label ?? value)
+          );
+        } else {
+          setRegisteredCategories([]);
+        }
         setSuccess(true);
       }
     } catch {
@@ -88,6 +116,12 @@ export default function RegisterPage() {
           <p className="text-sm font-medium text-gray-900 mb-6">
             {registeredEmail}
           </p>
+          {registeredCategories.length > 0 && (
+            <div className="text-left mb-6 rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-xs font-semibold text-gray-600 mb-1">Selected service categories</p>
+              <p className="text-sm text-gray-800">{registeredCategories.join(", ")}</p>
+            </div>
+          )}
           <p className="text-sm text-gray-500 mb-6">
             Click the link in the email to verify your account, then you can sign in.
           </p>
@@ -220,6 +254,33 @@ export default function RegisterPage() {
                 onChange={(e) => set("phone", e.target.value)}
                 required
               />
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700">Service Categories</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {SERVICE_CATEGORIES.map((category) => {
+                    const checked = form.categories.includes(category.value);
+                    return (
+                      <label
+                        key={category.value}
+                        className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm cursor-pointer transition-colors ${
+                          checked
+                            ? "border-blue-500 bg-blue-50 text-blue-700"
+                            : "border-gray-200 hover:border-gray-300 text-gray-700"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleCategory(category.value)}
+                          className="rounded border-gray-300"
+                        />
+                        <span>{category.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 

@@ -20,6 +20,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const AI_MAX_RETRIES = Math.max(1, parseInt(process.env.AI_TRIAGE_MAX_RETRIES ?? "3", 10));
+
 interface Property {
   id: string;
   name: string;
@@ -62,6 +65,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const [classifying, setClassifying] = useState(false);
   const [classification, setClassification] = useState<ClassificationResult | null>(null);
   const [classifyError, setClassifyError] = useState<string | null>(null);
+  const [classifyStatus, setClassifyStatus] = useState<string | null>(null);
 
   // Editable overrides (operator can change these)
   const [editCategory, setEditCategory] = useState("");
@@ -126,44 +130,68 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const handleClassify = async () => {
     setClassifying(true);
     setClassifyError(null);
+    setClassifyStatus(null);
 
-    try {
-      const res = await fetch("/api/triage/classify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          description: description.trim(),
-          propertyId: propertyId || undefined,
-        }),
-      });
+    let lastError = "Classification failed. You can still submit manually.";
 
-      if (!res.ok) {
-        const data = await res.json();
-        setClassifyError(data.error ?? "Classification failed. You can still submit manually.");
-        setClassification(null);
-        setStep("review");
-        setEditCategory("");
-        setEditUrgency("MEDIUM");
-        setEditing(true);
-        return;
+    for (let attempt = 1; attempt <= AI_MAX_RETRIES; attempt++) {
+      if (attempt === 1) {
+        setClassifyStatus("Classifying your request\u2026");
+      } else {
+        setClassifyStatus(
+          `AI returned unexpected data \u2014 retrying\u2026 (attempt ${attempt} of ${AI_MAX_RETRIES})`
+        );
+        await sleep(1000);
       }
 
-      const result: ClassificationResult = await res.json();
-      setClassification(result);
-      setEditCategory(result.category);
-      setEditUrgency(result.urgency);
-      setEditing(false);
-      setStep("review");
-    } catch {
-      setClassifyError("Network error during classification. You can still submit manually.");
-      setClassification(null);
-      setStep("review");
-      setEditCategory("");
-      setEditUrgency("MEDIUM");
-      setEditing(true);
-    } finally {
-      setClassifying(false);
+      try {
+        const res = await fetch("/api/triage/classify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description: description.trim(),
+            propertyId: propertyId || undefined,
+          }),
+        });
+
+        // Don't retry client errors — they won't be fixed by retrying
+        if (res.status >= 400 && res.status < 500) {
+          const data = await res.json().catch(() => ({}));
+          lastError = data.error ?? "Classification failed. You can still submit manually.";
+          break;
+        }
+
+        if (!res.ok) {
+          // 5xx or network-level bad response — retry
+          const data = await res.json().catch(() => ({}));
+          lastError = data.error ?? "Classification failed. You can still submit manually.";
+          continue;
+        }
+
+        const result: ClassificationResult = await res.json();
+        setClassifyStatus(null);
+        setClassifying(false);
+        setClassification(result);
+        setEditCategory(result.category);
+        setEditUrgency(result.urgency);
+        setEditing(false);
+        setStep("review");
+        return;
+      } catch {
+        lastError = "Network error during classification. You can still submit manually.";
+        // Network error — retry unless this was the last attempt
+      }
     }
+
+    // All attempts exhausted — fall back to manual mode
+    setClassifyStatus(null);
+    setClassifyError(lastError);
+    setClassification(null);
+    setStep("review");
+    setEditCategory("");
+    setEditUrgency("MEDIUM");
+    setEditing(true);
+    setClassifying(false);
   };
 
   const handleReclassify = () => {
@@ -336,6 +364,17 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
           Review &amp; Submit
         </div>
       </div>
+
+      {/* AI retry status — shown while classify attempts are in-flight */}
+      {classifyStatus && (
+        <div className="rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700 flex items-center gap-2">
+          <svg className="w-4 h-4 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+          </svg>
+          {classifyStatus}
+        </div>
+      )}
 
       {/* Errors */}
       {(classifyError || submitError) && (

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const VALID_AVAILABILITY_STATUSES = ["AVAILABLE", "BUSY", "OFF_DUTY"] as const;
+import { SERVICE_CATEGORIES } from "@/lib/constants";
 
 // GET /api/vendors/[id] — fetch vendor profile (own only)
 export async function GET(
@@ -63,7 +64,7 @@ export async function PATCH(
   }
 
   // Only allow specific fields to be updated
-  const { companyName, contactName, phone, address, serviceRadiusKm, availabilityStatus, availabilityNote } = body;
+  const { companyName, contactName, phone, address, serviceRadiusKm, availabilityStatus, availabilityNote, categories } = body;
 
   const updateData: Record<string, any> = {};
   if (companyName !== undefined) updateData.companyName = String(companyName).trim();
@@ -74,6 +75,7 @@ export async function PATCH(
     const radius = parseInt(serviceRadiusKm, 10);
     if (!isNaN(radius) && radius > 0) updateData.serviceRadiusKm = radius;
   }
+
   if (availabilityStatus !== undefined) {
     if (!VALID_AVAILABILITY_STATUSES.includes(availabilityStatus)) {
       return NextResponse.json(
@@ -91,13 +93,46 @@ export async function PATCH(
     updateData.availabilityNote = availabilityNote ? String(availabilityNote).trim() : null;
   }
 
-  if (Object.keys(updateData).length === 0) {
+  let validatedCategories: string[] | undefined;
+  if (categories !== undefined) {
+    if (!Array.isArray(categories)) {
+      return NextResponse.json({ error: "categories must be an array" }, { status: 400 });
+    }
+    const allowedCategories = new Set(SERVICE_CATEGORIES.map((c) => c.value));
+    validatedCategories = Array.from(
+      new Set(
+        categories
+          .filter((c) => typeof c === "string")
+          .map((c) => c.trim())
+          .filter((c) => c.length > 0 && allowedCategories.has(c))
+      )
+    );
+
+    if (validatedCategories.length === 0) {
+      return NextResponse.json(
+        { error: "At least one valid category is required" },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (Object.keys(updateData).length === 0 && validatedCategories === undefined) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
-  const updated = await prisma.vendor.update({
-    where: { id },
-    data: updateData,
+  const updated = await prisma.$transaction(async (tx) => {
+    if (validatedCategories !== undefined) {
+      await tx.vendorSkill.deleteMany({ where: { vendorId: id } });
+      await tx.vendorSkill.createMany({
+        data: validatedCategories.map((category) => ({ vendorId: id, category })),
+      });
+    }
+
+    return tx.vendor.update({
+      where: { id },
+      data: updateData,
+      include: { skills: true },
+    });
   });
 
   return NextResponse.json(updated);

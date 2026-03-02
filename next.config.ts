@@ -4,6 +4,11 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["@prisma/client"],
+  env: {
+    // Expose AI_TRIAGE_MAX_RETRIES to both server and client bundles at build time.
+    // Override in .env.local (or the environment) to change the default of 3.
+    AI_TRIAGE_MAX_RETRIES: process.env.AI_TRIAGE_MAX_RETRIES ?? "3",
+  },
 };
 
 export default withSentryConfig(nextConfig, {

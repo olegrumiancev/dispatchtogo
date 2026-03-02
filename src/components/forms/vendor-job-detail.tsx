@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Modal } from "@/components/ui/modal";
 import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
 import {
   MapPin,
@@ -18,6 +19,7 @@ import {
   X,
   Loader2,
   RotateCcw,
+  ChevronDown,
   Pause,
   Play,
 } from "lucide-react";
@@ -48,6 +50,13 @@ interface JobNote {
   };
 }
 
+interface JobPhoto {
+  id: string;
+  url: string;
+  type: string;
+  thumbnailUrl?: string | null;
+}
+
 interface ServiceRequest {
   id: string;
   referenceNumber: string;
@@ -57,7 +66,7 @@ interface ServiceRequest {
   status: string;
   rejectionReason: string | null;
   property: Property;
-  photos: Array<{ id: string; url: string; thumbnailUrl: string | null; type: string }>;
+  photos: JobPhoto[];
 }
 
 interface Job {
@@ -76,7 +85,7 @@ interface Job {
   pausedAt: string | null;
   notes: JobNote[];
   materials: JobMaterial[];
-  photos: Array<{ id: string; url: string; thumbnailUrl: string | null; type: string }>;
+  photos: JobPhoto[];
   serviceRequest: ServiceRequest;
 }
 
@@ -109,13 +118,25 @@ interface NewMaterial {
   unitCost: number;
 }
 
+type DeclineKey = "capacity" | "wont_service" | "other";
+
+const DECLINE_OPTIONS: { key: DeclineKey; label: string; value: string | null }[] = [
+  { key: "capacity",     label: "Over capacity",         value: "Over capacity — currently unavailable to take on new jobs" },
+  { key: "wont_service", label: "Won't service",          value: "Unable to service this request" },
+  { key: "other",        label: "Other (provide reason)", value: null },
+];
+
 export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const router = useRouter();
   const sr = job.serviceRequest;
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
+
+  // Decline flow
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineKey, setDeclineKey] = useState<DeclineKey | null>(null);
+  const [otherDeclineReason, setOtherDeclineReason] = useState("");
 
   // Pause modal state
   const [showPauseModal, setShowPauseModal] = useState(false);
@@ -135,22 +156,39 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<JobPhoto[]>(job.photos);
+  const [pendingPhotos, setPendingPhotos] = useState<Record<"BEFORE" | "AFTER", File[]>>({
+    BEFORE: [],
+    AFTER: [],
+  });
 
   const canModifyPhotos = !["COMPLETED", "VERIFIED", "CANCELLED"].includes(sr.status);
 
-  const beforePhotos = job.photos.filter((p) => p.type === "BEFORE");
-  const afterPhotos  = job.photos.filter((p) => p.type === "AFTER");
+  const beforePhotos = photos.filter((p) => p.type === "BEFORE");
+  const afterPhotos  = photos.filter((p) => p.type === "AFTER");
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, photoType: "BEFORE" | "AFTER") => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    const selectedFiles = Array.from(files);
+    setPendingPhotos((prev) => ({
+      ...prev,
+      [photoType]: [...prev[photoType], ...selectedFiles],
+    }));
     e.target.value = "";
+  };
+
+  const handleUploadPendingPhotos = async (photoType: "BEFORE" | "AFTER") => {
+    const filesToUpload = pendingPhotos[photoType];
+    if (filesToUpload.length === 0) return;
+
     setPhotoError(null);
     setPhotoUploading((prev) => ({ ...prev, [photoType]: true }));
     let uploadedAny = false;
     let firstError: string | null = null;
+    const failedFiles: File[] = [];
     try {
-      for (const file of Array.from(files)) {
+      for (const file of filesToUpload) {
         try {
           const fd = new FormData();
           fd.append("file", file);
@@ -169,13 +207,28 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
             const d = await saveRes.json().catch(() => ({}));
             throw new Error(d.error ?? "Failed to save photo");
           }
+          const createdPhoto = await saveRes.json();
           uploadedAny = true;
+          setPhotos((prev) => [
+            ...prev,
+            {
+              id: createdPhoto.id,
+              url: createdPhoto.url,
+              type: createdPhoto.type,
+              thumbnailUrl: createdPhoto.thumbnailUrl ?? null,
+            },
+          ]);
         } catch (fileErr: any) {
+          failedFiles.push(file);
           if (!firstError) firstError = fileErr.message ?? "Photo upload failed";
         }
       }
     } finally {
       if (uploadedAny) router.refresh();
+      setPendingPhotos((prev) => ({
+        ...prev,
+        [photoType]: failedFiles,
+      }));
       if (firstError) setPhotoError(firstError);
       setPhotoUploading((prev) => ({ ...prev, [photoType]: false }));
     }
@@ -190,6 +243,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         const d = await res.json().catch(() => ({}));
         throw new Error(d.error ?? "Failed to delete photo");
       }
+      setPhotos((prev) => prev.filter((photo) => photo.id !== photoId));
       router.refresh();
     } catch (err: any) {
       setPhotoError(err.message ?? "Delete failed");
@@ -198,17 +252,22 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     }
   };
 
-  const handleStatusAction = async (action: JobStatusAction | "decline") => {
+  const handleStatusAction = async (
+    action: JobStatusAction | "decline",
+    declineReason?: string
+  ) => {
     setActionLoading(true);
     setActionError(null);
     try {
+      const body: Record<string, string> = { action };
+      if (declineReason) body.declineReason = declineReason;
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setActionError(data.error ?? "Action failed.");
         return;
       }
@@ -221,8 +280,24 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
       setActionError("Network error. Please try again.");
     } finally {
       setActionLoading(false);
-      setShowDeclineConfirm(false);
+      setShowDeclineModal(false);
     }
+  };
+
+  const handleDeclineConfirm = () => {
+    if (!declineKey) return;
+    const reason =
+      declineKey === "other"
+        ? otherDeclineReason.trim()
+        : (DECLINE_OPTIONS.find((o) => o.key === declineKey)?.value ?? "");
+    if (!reason) return;
+    handleStatusAction("decline", reason);
+  };
+
+  const resetDeclineModal = () => {
+    setShowDeclineModal(false);
+    setDeclineKey(null);
+    setOtherDeclineReason("");
   };
 
   const handlePause = async () => {
@@ -434,41 +509,17 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 {/* Decline — only available when job is freshly dispatched */}
-                {sr.status === "DISPATCHED" && !showDeclineConfirm && (
+                {sr.status === "DISPATCHED" && (
                   <Button
                     variant="danger"
                     loading={actionLoading}
-                    onClick={() => setShowDeclineConfirm(true)}
-                    className="w-full sm:w-auto justify-center min-h-[44px]"
+                    onClick={() => setShowDeclineModal(true)}
+                    className="w-full sm:w-auto justify-center min-h-[44px] gap-2"
                   >
+                    <X className="w-4 h-4" />
                     Decline Job
+                    <ChevronDown className="w-3.5 h-3.5 opacity-70" />
                   </Button>
-                )}
-                {/* Inline decline confirmation */}
-                {sr.status === "DISPATCHED" && showDeclineConfirm && (
-                  <div className="w-full rounded-md border border-red-200 bg-red-50 px-4 py-3 space-y-2">
-                    <p className="text-sm font-medium text-red-800">
-                      Decline this job? It will be returned to the dispatch queue and assigned to another vendor.
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        loading={actionLoading}
-                        onClick={() => handleStatusAction("decline")}
-                      >
-                        Yes, Decline
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={actionLoading}
-                        onClick={() => setShowDeclineConfirm(false)}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
                 )}
                 {/* If accepted and not yet en route */}
                 {sr.status === "ACCEPTED" && !job.enRouteAt && (
@@ -688,7 +739,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           {(["BEFORE", "AFTER"] as const).map((type) => {
             const photos = type === "BEFORE" ? beforePhotos : afterPhotos;
             const uploading = !!photoUploading[type];
-            const inputId = `photo-upload-${type.toLowerCase()}`;
+            const queuedCount = pendingPhotos[type].length;
             return (
               <div key={type}>
                 <div className="flex items-center justify-between mb-2">
@@ -696,31 +747,43 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                     {type === "BEFORE" ? "Before" : "After"}
                   </p>
                   {canModifyPhotos && (
-                    <label
-                      htmlFor={inputId}
-                      className={`inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer px-2.5 py-1.5 rounded-md border transition-colors ${
-                        uploading
-                          ? "opacity-50 cursor-not-allowed border-gray-200 text-gray-400"
-                          : "border-blue-200 text-blue-600 hover:bg-blue-50"
-                      }`}
-                    >
-                      {uploading ? (
-                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</>
-                      ) : (
-                        <><Camera className="w-3.5 h-3.5" /> Add Photo</>
-                      )}
-                      <input
-                        id={inputId}
-                        type="file"
-                        accept="image/*"
-                        multiple
-                        disabled={uploading}
-                        className="sr-only"
-                        onChange={(e) => handlePhotoUpload(e, type)}
-                      />
-                    </label>
+                    <div className="flex items-center gap-2">
+                      <label
+                        className={`inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer px-2.5 py-1.5 rounded-md border transition-colors ${
+                          uploading
+                            ? "opacity-50 cursor-not-allowed border-gray-200 text-gray-400"
+                            : "border-blue-200 text-blue-600 hover:bg-blue-50"
+                        }`}
+                      >
+                        <><Camera className="w-3.5 h-3.5" /> Select Photos</>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={uploading}
+                          className="sr-only"
+                          onClick={(e) => {
+                            e.currentTarget.value = "";
+                          }}
+                          onChange={(e) => handlePhotoUpload(e, type)}
+                        />
+                      </label>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        loading={uploading}
+                        disabled={uploading || queuedCount === 0}
+                        onClick={() => handleUploadPendingPhotos(type)}
+                      >
+                        Upload {queuedCount > 0 ? `(${queuedCount})` : ""}
+                      </Button>
+                    </div>
                   )}
                 </div>
+                {canModifyPhotos && queuedCount > 0 && (
+                  <p className="text-xs text-gray-500 mb-2">{queuedCount} photo(s) queued for upload</p>
+                )}
                 {photos.length > 0 ? (
                   <div className="grid grid-cols-3 gap-3">
                     {photos.map((photo) => (
@@ -889,6 +952,79 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           </div>
         </CardContent>
       </Card>
+
+      {/* ─── Decline reason modal ──────────────────────────────────────────── */}
+      <Modal
+        isOpen={showDeclineModal}
+        onClose={resetDeclineModal}
+        title="Decline Job"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            This job will be returned to the dispatch queue and assigned to another vendor.
+            Please select a reason:
+          </p>
+
+          <div className="flex flex-col gap-2">
+            {DECLINE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => { setDeclineKey(opt.key); setOtherDeclineReason(""); }}
+                className={`text-left px-4 py-3 rounded-lg border transition-colors ${
+                  declineKey === opt.key
+                    ? "border-red-400 bg-red-50 text-red-900 font-medium"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                <span className="text-sm">{opt.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {declineKey === "other" && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-gray-600">
+                Describe the reason
+              </label>
+              <textarea
+                rows={3}
+                placeholder="Provide details about why you're declining this job…"
+                value={otherDeclineReason}
+                onChange={(e) => setOtherDeclineReason(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              />
+            </div>
+          )}
+
+          {actionError && (
+            <p className="text-xs text-red-600">{actionError}</p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <Button
+              variant="danger"
+              loading={actionLoading}
+              disabled={
+                !declineKey ||
+                (declineKey === "other" && !otherDeclineReason.trim())
+              }
+              onClick={handleDeclineConfirm}
+              className="flex-1 justify-center"
+            >
+              Confirm Decline
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={actionLoading}
+              onClick={resetDeclineModal}
+              className="flex-1 justify-center"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

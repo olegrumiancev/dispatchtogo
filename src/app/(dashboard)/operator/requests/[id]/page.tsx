@@ -11,6 +11,7 @@ import { CompletionReviewActions } from "@/components/forms/completion-review-ac
 import { TriageSection } from "@/components/forms/triage-section";
 import { AddPhotosButton } from "@/components/forms/add-photos-button";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
+import { MarkViewed } from "@/components/forms/mark-viewed";
 import type { AiTriageData } from "@/components/ui/ai-triage-badge";
 
 function getUrgencyColor(urgency: string) {
@@ -122,6 +123,7 @@ export default async function RequestDetailPage({
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
+      <MarkViewed requestId={req.id} />
       {/* Back */}
       <Link
         href="/operator/requests"

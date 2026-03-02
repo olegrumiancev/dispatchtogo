@@ -7,15 +7,12 @@ import { SERVICE_CATEGORIES, VENDOR_AVAILABILITY_STATUSES } from "@/lib/constant
 import { Building2, MapPin, Phone, Mail, Star } from "lucide-react";
 import VendorProfileForm from "@/components/forms/vendor-profile-form";
 import VendorCredentialsForm from "@/components/forms/vendor-credentials-form";
+import VendorCompanyProfileCard from "@/components/forms/vendor-company-profile-card";
 import { VendorAvailabilityToggle } from "@/components/forms/vendor-availability-toggle";
 
 export const metadata = {
   title: "My Profile | DispatchToGo",
 };
-
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
 
 function getAvailabilityConfig(status: string) {
   return VENDOR_AVAILABILITY_STATUSES.find((s) => s.value === status) ?? VENDOR_AVAILABILITY_STATUSES[0];
@@ -52,6 +49,7 @@ export default async function VendorProfilePage() {
     phone: vendor.phone,
     address: vendor.address ?? "",
     serviceRadiusKm: vendor.serviceRadiusKm ?? 0,
+    categories: vendor.skills.map((s) => s.category),
   };
 
   const availConfig = getAvailabilityConfig(vendor.availabilityStatus);
@@ -112,82 +110,18 @@ export default async function VendorProfilePage() {
         </Card>
       </div>
 
-      {/* Company info card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Company Information</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="flex items-start gap-3">
-              <Building2 className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500">Company Name</p>
-                <p className="text-sm font-medium text-gray-900">{vendor.companyName}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Star className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500">Contact Name</p>
-                <p className="text-sm font-medium text-gray-900">{vendor.contactName}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Mail className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500">Email</p>
-                <p className="text-sm text-gray-900">{vendor.email}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Phone className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500">Phone</p>
-                <p className="text-sm text-gray-900">{vendor.phone}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500">Address</p>
-                <p className="text-sm text-gray-900">{vendor.address ?? "—"}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              <div>
-                <p className="text-xs text-gray-500">Service Radius</p>
-                <p className="text-sm text-gray-900">{vendor.serviceRadiusKm} km</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Skills */}
-          {vendor.skills.length > 0 && (
-            <div className="pt-2 border-t border-gray-100">
-              <p className="text-xs text-gray-500 mb-2">Skills / Categories</p>
-              <div className="flex flex-wrap gap-1.5">
-                {vendor.skills.map((skill) => (
-                  <Badge key={skill.id} variant="bg-blue-100 text-blue-700">
-                    {getCategoryLabel(skill.category)}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Edit Profile Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Edit Profile</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <VendorProfileForm vendor={vendorForForm} />
-        </CardContent>
-      </Card>
+      <VendorCompanyProfileCard
+        vendorDisplay={{
+          companyName: vendor.companyName,
+          contactName: vendor.contactName,
+          email: vendor.email,
+          phone: vendor.phone,
+          address: vendor.address,
+          serviceRadiusKm: vendor.serviceRadiusKm,
+          skills: vendor.skills,
+        }}
+        vendorForm={vendorForForm}
+      />
 
       {/* Credentials */}
       <Card>

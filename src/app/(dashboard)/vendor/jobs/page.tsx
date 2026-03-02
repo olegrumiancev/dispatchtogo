@@ -39,7 +39,8 @@ export default async function VendorJobsPage({
   const vendorId: string = user.vendorId!;
 
   const sp = await searchParams;
-  const tab = sp.tab === "mine" ? "mine" : sp.tab === "completed" ? "completed" : "available";
+  const requestedTab =
+    sp.tab === "mine" ? "mine" : sp.tab === "completed" ? "completed" : sp.tab === "available" ? "available" : null;
 
   // Available jobs: ServiceRequests with status DISPATCHED that have a Job for this vendor
   // where the job has NOT been accepted yet
@@ -110,6 +111,14 @@ export default async function VendorJobsPage({
     body: n.body,
     createdAt: n.createdAt.toISOString(),
   }));
+
+  const tab = requestedTab
+    ? requestedTab
+    : availableJobs.length > 0
+    ? "available"
+    : activeJobs.length > 0
+    ? "mine"
+    : "available";
 
   return (
     <div className="space-y-6">

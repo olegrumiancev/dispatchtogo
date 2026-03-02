@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { SERVICE_CATEGORIES } from "@/lib/constants";
 import { sendEmail } from "@/lib/email";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, role, organizationName, companyName, phone } = body;
+    const { name, email, password, role, organizationName, companyName, phone, categories } = body;
 
     if (!email || !password || !role) {
       return NextResponse.json(
@@ -92,12 +93,31 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const allowedCategories = new Set(SERVICE_CATEGORIES.map((c) => c.value));
+      const parsedCategories: string[] = Array.isArray(categories)
+        ? categories
+            .filter((c) => typeof c === "string")
+            .map((c) => c.trim())
+            .filter((c) => c.length > 0 && allowedCategories.has(c))
+        : [];
+
+      const uniqueCategories = Array.from(new Set(parsedCategories));
+      if (uniqueCategories.length === 0) {
+        return NextResponse.json(
+          { error: "At least one valid category is required for VENDOR role" },
+          { status: 400 }
+        );
+      }
+
       const vendor = await prisma.vendor.create({
         data: {
           companyName,
           contactName: name ?? companyName,
           email: normalizedEmail,
           phone: phone ?? "",
+          skills: {
+            create: uniqueCategories.map((category) => ({ category })),
+          },
         },
       });
 

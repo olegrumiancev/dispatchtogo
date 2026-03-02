@@ -19,11 +19,11 @@ export default async function ProofPacketsPage() {
   const user = session.user as any;
   if (user.role !== "OPERATOR") redirect("/");
 
-  // Only show completed requests for this operator's org
+  // Only show completed/verified requests for this operator's org
   const completedRequests = (await prisma.serviceRequest.findMany({
     where: {
       organizationId: user.organizationId,
-      status: "COMPLETED",
+      status: { in: ["COMPLETED", "VERIFIED"] },
     },
     include: {
       property: { select: { name: true, address: true } },
@@ -95,16 +95,18 @@ export default async function ProofPacketsPage() {
                         View
                       </Button>
                     </Link>
-                    <a
-                      href={`/api/proof-packets/${req.id}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Button variant="secondary" size="sm">
-                        <Download className="w-4 h-4" />
-                        Proof Packet
-                      </Button>
-                    </a>
+                    {req.job && (
+                      <a
+                        href={`/api/proof-packets/${req.job.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Button variant="secondary" size="sm">
+                          <Download className="w-4 h-4" />
+                          Proof Packet
+                        </Button>
+                      </a>
+                    )}
                   </div>
                 </div>
               </CardContent>

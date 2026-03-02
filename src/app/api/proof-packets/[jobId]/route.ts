@@ -133,7 +133,7 @@ export async function GET(
   // Generate PDF
   let pdfBuffer: Buffer;
   try {
-    pdfBuffer = generateProofPacketPdf(pdfData);
+    pdfBuffer = await generateProofPacketPdf(pdfData);
   } catch (err) {
     console.error("[proof-packet] PDF generation error:", err);
     return NextResponse.json({ error: "Failed to generate PDF" }, { status: 500 });

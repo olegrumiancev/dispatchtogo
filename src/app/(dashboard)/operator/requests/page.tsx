@@ -108,14 +108,30 @@ export default async function RequestsPage({
         job: {
           include: {
             vendor: { select: { companyName: true } },
+            notes: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
           },
         },
+        requestViews: { where: { userId: user.id }, select: { viewedAt: true } },
         _count: { select: { photos: true } },
       },
     }),
   ]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  // Compute new-activity flag per request
+  const requestsWithActivity = requests.map((req) => {
+    const job = req.job;
+    const viewedAt = req.requestViews[0]?.viewedAt;
+    const latestActivity = (
+      [job?.enRouteAt, job?.arrivedAt, job?.completedAt, job?.notes[0]?.createdAt] as (Date | null | undefined)[]
+    ).reduce<Date | null>((max, d) => {
+      if (!d) return max;
+      return !max || d > max ? d : max;
+    }, null);
+    const hasNewActivity = !!latestActivity && (!viewedAt || latestActivity > viewedAt);
+    return { ...req, hasNewActivity };
+  });
 
   // Resolve property name for filter pill if filtering by property
   const propertyName = propertyFilter
@@ -313,7 +329,7 @@ export default async function RequestsPage({
       {/* Table */}
       <Card>
         <div className="overflow-x-auto">
-          {requests.length === 0 ? (
+          {requestsWithActivity.length === 0 ? (
             <div className="px-6 py-12 text-center text-sm text-gray-400">
               No requests found.{" "}
               {statusFilter || urgencyFilter || searchFilter ? (
@@ -354,10 +370,16 @@ export default async function RequestsPage({
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {requests.map((req) => (
-                  <tr key={req.id} className="hover:bg-gray-50 transition-colors">
+                {requestsWithActivity.map((req) => (
+                  <tr key={req.id} className={`hover:bg-gray-50 transition-colors ${req.hasNewActivity ? "bg-amber-50 hover:bg-amber-100" : ""}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1.5">
+                        {req.hasNewActivity && (
+                          <span
+                            title="New vendor activity"
+                            className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0"
+                          />
+                        )}
                         <Link
                           href={`/operator/requests/${req.id}`}
                           className="text-sm font-medium text-blue-600 hover:text-blue-700"
