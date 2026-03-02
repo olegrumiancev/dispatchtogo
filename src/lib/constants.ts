@@ -31,6 +31,7 @@ export const REQUEST_STATUSES = [
   { value: "IN_PROGRESS", label: "In Progress", color: "bg-cyan-100 text-cyan-800" },
   { value: "COMPLETED", label: "Completed", color: "bg-emerald-100 text-emerald-800" },
   { value: "VERIFIED", label: "Verified", color: "bg-green-200 text-green-900" },
+  { value: "DISPUTED", label: "Disputed", color: "bg-rose-100 text-rose-800" },
   { value: "CANCELLED", label: "Cancelled", color: "bg-gray-200 text-gray-600" },
 ] as const;
 

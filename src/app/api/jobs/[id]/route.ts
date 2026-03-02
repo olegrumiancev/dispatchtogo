@@ -127,6 +127,12 @@ export async function PATCH(
         requestData.resolvedAt = new Date();
         newStatus = "COMPLETED";
         break;
+      case "decline":
+        jobData.status = "DECLINED";
+        requestData.status = "READY_TO_DISPATCH";
+        // Clear the job association so the request can be re-dispatched
+        // We keep the Job record for audit purposes (status=DECLINED)
+        break;
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
@@ -277,6 +283,18 @@ export async function POST(
     const { url, photoType, latitude, longitude } = body;
     if (!url) {
       return NextResponse.json({ error: "url is required for photo type" }, { status: 400 });
+    }
+
+    const LOCKED_STATUSES = ["COMPLETED", "VERIFIED", "CANCELLED"];
+    const sr = await prisma.serviceRequest.findUnique({
+      where: { id: job.serviceRequestId },
+      select: { status: true },
+    });
+    if (sr && LOCKED_STATUSES.includes(sr.status)) {
+      return NextResponse.json(
+        { error: "Photos cannot be added after the job is complete" },
+        { status: 409 }
+      );
     }
 
     const photo = await prisma.jobPhoto.create({

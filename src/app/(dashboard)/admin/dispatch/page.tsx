@@ -31,12 +31,15 @@ export default async function DispatchBoardPage() {
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
 
-  const [unassignedRequests, activeJobs, availableVendors] = await Promise.all([
-    // Requests ready to be dispatched (no job yet, status READY_TO_DISPATCH or SUBMITTED)
+  const [unassignedRequests, activeJobs, availableVendors, disputedRequests] = await Promise.all([
+    // Requests ready to be dispatched (no job yet, or job was declined)
     prisma.serviceRequest.findMany({
       where: {
         status: { in: ["READY_TO_DISPATCH", "SUBMITTED"] },
-        job: null, // no job assigned yet
+        OR: [
+          { job: null },
+          { job: { status: "DECLINED" } },
+        ],
       },
       include: {
         property: { select: { name: true, address: true } },
@@ -49,10 +52,11 @@ export default async function DispatchBoardPage() {
       ],
     }),
 
-    // Active jobs: not yet completed
+    // Active jobs: not yet completed and not declined
     prisma.job.findMany({
       where: {
         completedAt: null,
+        status: { not: "DECLINED" },
       },
       include: {
         serviceRequest: {
@@ -73,6 +77,17 @@ export default async function DispatchBoardPage() {
       },
       orderBy: { companyName: "asc" },
     }),
+
+    // Disputed requests requiring admin mediation
+    prisma.serviceRequest.findMany({
+      where: { status: "DISPUTED" },
+      include: {
+        property: { select: { name: true } },
+        organization: { select: { name: true } },
+        job: { include: { vendor: { select: { companyName: true, phone: true, email: true } } } },
+      },
+      orderBy: { updatedAt: "desc" },
+    }),
   ]);
 
   // Serialize for client components
@@ -92,6 +107,59 @@ export default async function DispatchBoardPage() {
           Live
         </div>
       </div>
+
+      {/* Disputed requests — admin action required */}
+      {disputedRequests.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-rose-500" />
+            <h2 className="text-lg font-semibold text-rose-700">Disputed — Admin Action Required</h2>
+            <span className="bg-rose-100 text-rose-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+              {disputedRequests.length}
+            </span>
+          </div>
+          <div className="space-y-3">
+            {disputedRequests.map((req) => (
+              <Card key={req.id} className="border-rose-300 bg-rose-50">
+                <CardContent className="py-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-gray-900">{req.referenceNumber}</span>
+                        <Badge variant={getUrgencyColor(req.urgency)}>{req.urgency}</Badge>
+                        <Badge variant="bg-rose-100 text-rose-800">Disputed</Badge>
+                      </div>
+                      <div className="flex items-center gap-1 text-sm text-gray-700">
+                        <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                        {req.property.name}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {req.organization.name}
+                        {req.job?.vendor && ` · Vendor: ${req.job.vendor.companyName}`}
+                      </div>
+                      {(req as any).rejectionReason && (
+                        <div className="mt-2">
+                          <p className="text-xs font-medium text-rose-600 uppercase tracking-wider mb-1">Rejection Reason</p>
+                          <p className="text-xs text-rose-900 bg-white rounded border border-rose-200 px-2 py-1.5 max-w-md">
+                            {(req as any).rejectionReason}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <AssignModal
+                        requestRef={req.referenceNumber}
+                        requestId={req.id}
+                        vendors={vendorsForModal}
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Unassigned / Ready to dispatch */}

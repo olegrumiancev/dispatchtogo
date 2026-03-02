@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
 import { ArrowLeft, MapPin, Calendar, User, Wrench, CheckCircle, Phone, FileText, Package, Download } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
-import { VerifyCompletionButton } from "@/components/forms/verify-completion-button";
+import { CompletionReviewActions } from "@/components/forms/completion-review-actions";
 import { TriageSection } from "@/components/forms/triage-section";
 import { AddPhotosButton } from "@/components/forms/add-photos-button";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
@@ -39,6 +39,7 @@ const STATUS_PROGRESSION = [
   "IN_PROGRESS",
   "COMPLETED",
   "VERIFIED",
+  "DISPUTED",
 ] as const;
 
 interface TimelineProps {
@@ -157,7 +158,7 @@ export default async function RequestDetailPage({
             </a>
           )}
           {req.status === "COMPLETED" && (
-            <VerifyCompletionButton requestId={req.id} />
+            <CompletionReviewActions requestId={req.id} />
           )}
         </div>
       </div>
@@ -211,6 +212,37 @@ export default async function RequestDetailPage({
           </div>
         </CardContent>
       </Card>
+
+      {/* Disputed / rejection info banner */}
+      {req.status === "DISPUTED" && (
+        <div className="rounded-xl border-2 border-rose-300 bg-rose-50 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-rose-700 font-semibold">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86l-8 13.85A2 2 0 004.07 21h15.86a2 2 0 001.78-2.29L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+            Under Dispute — Awaiting Admin Review
+          </div>
+          {(req as any).rejectionReason && (
+            <div>
+              <p className="text-xs font-medium text-rose-600 uppercase tracking-wider mb-1">Rejection Reason</p>
+              <p className="text-sm text-rose-900 bg-white rounded-lg border border-rose-200 p-3">{(req as any).rejectionReason}</p>
+            </div>
+          )}
+          <p className="text-xs text-rose-600">An administrator has been notified and will mediate. You will hear back shortly.</p>
+        </div>
+      )}
+
+      {/* Rejection reason banner (send_back or redispatch) */}
+      {(req.status === "IN_PROGRESS" || req.status === "READY_TO_DISPATCH") && (req as any).rejectionReason && (
+        <div className="rounded-xl border-2 border-amber-300 bg-amber-50 p-4 space-y-2">
+          <div className="flex items-center gap-2 text-amber-700 font-semibold">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86l-8 13.85A2 2 0 004.07 21h15.86a2 2 0 001.78-2.29L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+            Work Rejected — {req.status === "IN_PROGRESS" ? "Sent Back for Rework" : "Re-Dispatching to New Vendor"}
+          </div>
+          <div>
+            <p className="text-xs font-medium text-amber-600 uppercase tracking-wider mb-1">Rejection Reason</p>
+            <p className="text-sm text-amber-900 bg-white rounded-lg border border-amber-200 p-3">{(req as any).rejectionReason}</p>
+          </div>
+        </div>
+      )}
 
       {/* Request details */}
       <Card>

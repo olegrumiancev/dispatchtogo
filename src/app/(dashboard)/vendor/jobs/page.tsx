@@ -4,10 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
-import { MapPin, Clock } from "lucide-react";
+import { MapPin, Clock, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import { VendorJobActions } from "@/components/forms/vendor-job-actions";
+import { VendorNotificationBanner } from "@/components/forms/vendor-notification-banner";
+import type { VendorNotif } from "@/components/forms/vendor-notification-banner";
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
@@ -41,7 +43,7 @@ export default async function VendorJobsPage({
 
   // Available jobs: ServiceRequests with status DISPATCHED that have a Job for this vendor
   // where the job has NOT been accepted yet
-  const [availableJobs, activeJobs, completedJobs] = await Promise.all([
+  const [availableJobs, activeJobs, completedJobs, unreadNotifications] = await Promise.all([
     prisma.job.findMany({
       where: {
         vendorId,
@@ -93,10 +95,29 @@ export default async function VendorJobsPage({
       orderBy: { completedAt: "desc" },
       take: 10,
     }),
+
+    // Unread notifications for this vendor user (recent 10)
+    prisma.notification.findMany({
+      where: { userId: user.id, read: false },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
   ]);
+
+  const notifProps: VendorNotif[] = unreadNotifications.map((n) => ({
+    id: n.id,
+    title: n.title,
+    body: n.body,
+    createdAt: n.createdAt.toISOString(),
+  }));
 
   return (
     <div className="space-y-6">
+      {/* Rejection / important notifications */}
+      {notifProps.length > 0 && (
+        <VendorNotificationBanner notifications={notifProps} />
+      )}
+
       <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
 
       {/* Tabs */}
@@ -215,10 +236,21 @@ export default async function VendorJobsPage({
             </Card>
           ) : (
             activeJobs.map((job) => {
-              const sr = job.serviceRequest;
+              const sr = job.serviceRequest as any;
+              const hasRejection = !!sr.rejectionReason;
               return (
-                <Card key={job.id}>
+                <Card key={job.id} className={hasRejection ? "border-amber-300" : ""}>
                   <CardContent className="py-5">
+                    {/* Rejection reason banner */}
+                    {hasRejection && (
+                      <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                        <RotateCcw className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-amber-800">Work sent back for rework</p>
+                          <p className="text-xs text-amber-700 mt-0.5 line-clamp-2">{sr.rejectionReason}</p>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">

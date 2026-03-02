@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  sendRejectionSms,
+  sendVendorRejectionSms,
+} from "@/lib/sms";
+import {
+  sendVendorRejectionEmail,
+  sendAdminRejectionEmail,
+} from "@/lib/email";
 
 // Valid status transitions map
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -11,7 +19,8 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   DISPATCHED: ["ACCEPTED", "READY_TO_DISPATCH", "CANCELLED"],
   ACCEPTED: ["IN_PROGRESS", "READY_TO_DISPATCH", "CANCELLED"],
   IN_PROGRESS: ["COMPLETED", "CANCELLED"],
-  COMPLETED: ["VERIFIED"],
+  COMPLETED: ["VERIFIED", "IN_PROGRESS", "READY_TO_DISPATCH", "DISPUTED"],
+  DISPUTED: [],
   VERIFIED: [],
   CANCELLED: [],
 };
@@ -79,9 +88,178 @@ export async function PATCH(
   const user = session.user as any;
   const body = await request.json();
 
-  const { status, urgency, description, aiTriageSummary, aiUrgencyScore } = body;
+  const { action, rejectionType, rejectionReason, status, urgency, description, aiTriageSummary, aiUrgencyScore } = body;
 
-  // Only ADMIN can do status transitions and triage updates
+  // ── Operator: verify completion ──────────────────────────────────────────
+  if (action === "verify_completion") {
+    if (user.role !== "OPERATOR") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const current = await prisma.serviceRequest.findFirst({
+      where: { id, organizationId: user.organizationId },
+    });
+    if (!current) {
+      return NextResponse.json({ error: "Service request not found" }, { status: 404 });
+    }
+    if (current.status !== "COMPLETED") {
+      return NextResponse.json(
+        { error: `Cannot verify: request is ${current.status}, expected COMPLETED` },
+        { status: 422 }
+      );
+    }
+
+    const updated = await prisma.serviceRequest.update({
+      where: { id },
+      data: { status: "VERIFIED", resolvedAt: new Date() },
+      include: {
+        property: true,
+        photos: true,
+        job: {
+          include: {
+            vendor: true,
+            notes: { include: { author: { select: { id: true, name: true, email: true, role: true } } }, orderBy: { createdAt: "asc" } },
+            photos: true,
+            materials: true,
+            proofPacket: true,
+          },
+        },
+        invoice: true,
+      },
+    });
+
+    return NextResponse.json(updated);
+  }
+
+  // ── Operator: reject completion ──────────────────────────────────────────
+  if (action === "reject_completion") {
+    if (user.role !== "OPERATOR") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!rejectionReason || !rejectionReason.trim()) {
+      return NextResponse.json({ error: "A rejection reason is required" }, { status: 400 });
+    }
+    const VALID_REJECTION_TYPES = ["send_back", "redispatch", "dispute"] as const;
+    if (!VALID_REJECTION_TYPES.includes(rejectionType)) {
+      return NextResponse.json({ error: "Invalid rejection type" }, { status: 400 });
+    }
+
+    const current = await prisma.serviceRequest.findFirst({
+      where: { id, organizationId: user.organizationId },
+      include: {
+        property: true,
+        job: { include: { vendor: true } },
+      },
+    });
+    if (!current) {
+      return NextResponse.json({ error: "Service request not found" }, { status: 404 });
+    }
+    if (current.status !== "COMPLETED") {
+      return NextResponse.json(
+        { error: `Cannot reject: request is ${current.status}, expected COMPLETED` },
+        { status: 422 }
+      );
+    }
+
+    // Determine new status based on rejection type
+    const newStatus =
+      rejectionType === "send_back"
+        ? "IN_PROGRESS"
+        : rejectionType === "redispatch"
+        ? "READY_TO_DISPATCH"
+        : "DISPUTED"; // dispute
+
+    // Update service request
+    const updated = await prisma.serviceRequest.update({
+      where: { id },
+      data: {
+        status: newStatus,
+        rejectionReason: rejectionReason.trim(),
+      },
+      include: {
+        property: true,
+        photos: true,
+        job: {
+          include: {
+            vendor: true,
+            notes: { include: { author: { select: { id: true, name: true, email: true, role: true } } }, orderBy: { createdAt: "asc" } },
+            photos: true,
+            materials: true,
+            proofPacket: true,
+          },
+        },
+        invoice: true,
+      },
+    });
+
+    // Job record updates based on rejection type
+    if (current.job) {
+      if (rejectionType === "send_back") {
+        // Clear completedAt so the job re-appears in the vendor's "My Jobs" (active) tab
+        await prisma.job.update({
+          where: { id: current.job.id },
+          data: { completedAt: null },
+        });
+      } else if (rejectionType === "redispatch") {
+        // Mark job as REJECTED so vendor sees why they were removed
+        await prisma.job.update({
+          where: { id: current.job.id },
+          data: { status: "REJECTED" },
+        });
+      }
+    }
+
+    // Create in-app notification for the vendor's user account
+    const vendor = current.job?.vendor ?? null;
+    const refNum = (current as any).referenceNumber ?? id;
+
+    if (current.job) {
+      const vendorUser = await prisma.user.findFirst({
+        where: { vendorId: current.job.vendorId },
+        select: { id: true },
+      });
+      if (vendorUser) {
+        const notifTitle =
+          rejectionType === "send_back"
+            ? `Work sent back for rework – ${refNum}`
+            : rejectionType === "redispatch"
+            ? `Assignment removed – ${refNum}`
+            : `Job escalated to admin – ${refNum}`;
+        const notifBody =
+          rejectionType === "send_back"
+            ? `The operator requires rework on job ${refNum}. Reason: ${rejectionReason.trim()}`
+            : rejectionType === "redispatch"
+            ? `Your assignment on job ${refNum} has been removed and will be re-dispatched. Reason: ${rejectionReason.trim()}`
+            : `Job ${refNum} has been escalated to an administrator for review. Reason: ${rejectionReason.trim()}`;
+        await prisma.notification.create({
+          data: { userId: vendorUser.id, title: notifTitle, body: notifBody },
+        });
+      }
+    }
+
+    // Fire SMS/email notifications (non-blocking)
+
+    if (vendor) {
+      // SMS to vendor
+      sendVendorRejectionSms(vendor.phone, vendor.companyName, refNum, rejectionReason.trim(), rejectionType)
+        .catch((e) => console.error("[notify] vendor SMS rejection failed", e));
+
+      // Email to vendor
+      sendVendorRejectionEmail(vendor.email, vendor.companyName, refNum, rejectionReason.trim(), rejectionType, current.property as any)
+        .catch((e) => console.error("[notify] vendor email rejection failed", e));
+    }
+
+    // Email to all admins
+    const admins = await prisma.user.findMany({ where: { role: "ADMIN" }, select: { email: true, name: true } });
+    for (const admin of admins) {
+      sendAdminRejectionEmail(admin.email, admin.name ?? "Admin", refNum, rejectionReason.trim(), rejectionType, vendor?.companyName ?? "Unknown vendor")
+        .catch((e) => console.error("[notify] admin email rejection failed", e));
+    }
+
+    return NextResponse.json(updated);
+  }
+
+  // ── Admin: status transitions and triage updates ─────────────────────────
   if (user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }

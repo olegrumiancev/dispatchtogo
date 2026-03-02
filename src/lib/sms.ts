@@ -82,3 +82,29 @@ export async function sendJobCompletionNotification(
   const body = `DispatchToGo: Job ${refNumber} has been completed by ${vendorName}. Log in to review the proof packet.`;
   return sendSMS(operatorPhone, body);
 }
+
+// Map of rejection type → human-readable label for SMS messages
+const REJECTION_TYPE_LABELS: Record<string, string> = {
+  send_back: "sent back for rework",
+  redispatch: "re-dispatched to a new vendor (your assignment has been removed)",
+  dispute: "escalated to an admin for review",
+};
+
+export async function sendVendorRejectionSms(
+  vendorPhone: string,
+  vendorCompanyName: string,
+  refNumber: string,
+  reason: string,
+  rejectionType: string
+): Promise<SMSResult> {
+  const label = REJECTION_TYPE_LABELS[rejectionType] ?? "rejected";
+  const body = [
+    `DispatchToGo: Work on job ${refNumber} has been ${label}.`,
+    `Reason: ${reason.length > 120 ? reason.slice(0, 117) + "..." : reason}`,
+    `Please log in for details.`,
+  ].join("\n");
+  return sendSMS(vendorPhone, body);
+}
+
+// Kept for callers that send from the operator side
+export { sendVendorRejectionSms as sendRejectionSms };

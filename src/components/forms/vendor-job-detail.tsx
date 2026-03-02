@@ -9,13 +9,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
 import {
   MapPin,
-  Phone,
   Navigation,
   CheckCircle,
   Camera,
   Plus,
   Trash2,
   ArrowLeft,
+  X,
+  Loader2,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -23,14 +25,6 @@ import { formatDate, formatCurrency } from "@/lib/utils";
 interface Property {
   name: string;
   address: string | null;
-}
-
-interface PropertyContact {
-  id: string;
-  name: string;
-  phone: string | null;
-  email: string | null;
-  role: string | null;
 }
 
 interface JobMaterial {
@@ -59,7 +53,8 @@ interface ServiceRequest {
   category: string;
   urgency: string;
   status: string;
-  property: Property & { contacts: PropertyContact[] };
+  rejectionReason: string | null;
+  property: Property;
   photos: Array<{ id: string; url: string; thumbnailUrl: string | null; type: string }>;
 }
 
@@ -132,10 +127,10 @@ interface NewMaterial {
 export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const router = useRouter();
   const sr = job.serviceRequest;
-  const primaryContact = sr.property.contacts[0] ?? null;
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
 
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
@@ -145,12 +140,78 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const [savingMaterials, setSavingMaterials] = useState(false);
   const [materialError, setMaterialError] = useState<string | null>(null);
 
+  const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+
+  const canModifyPhotos = !["COMPLETED", "VERIFIED", "CANCELLED"].includes(sr.status);
+
+  const beforePhotos = job.photos.filter((p) => p.type === "BEFORE");
+  const afterPhotos  = job.photos.filter((p) => p.type === "AFTER");
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, photoType: "BEFORE" | "AFTER") => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    e.target.value = "";
+    setPhotoError(null);
+    setPhotoUploading((prev) => ({ ...prev, [photoType]: true }));
+    let uploadedAny = false;
+    let firstError: string | null = null;
+    try {
+      for (const file of Array.from(files)) {
+        try {
+          const fd = new FormData();
+          fd.append("file", file);
+          const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
+          if (!uploadRes.ok) {
+            const d = await uploadRes.json().catch(() => ({}));
+            throw new Error(d.error ?? "Upload failed");
+          }
+          const { url } = await uploadRes.json();
+          const saveRes = await fetch(`/api/jobs/${job.id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "photo", url, photoType }),
+          });
+          if (!saveRes.ok) {
+            const d = await saveRes.json().catch(() => ({}));
+            throw new Error(d.error ?? "Failed to save photo");
+          }
+          uploadedAny = true;
+        } catch (fileErr: any) {
+          if (!firstError) firstError = fileErr.message ?? "Photo upload failed";
+        }
+      }
+    } finally {
+      if (uploadedAny) router.refresh();
+      if (firstError) setPhotoError(firstError);
+      setPhotoUploading((prev) => ({ ...prev, [photoType]: false }));
+    }
+  };
+
+  const handlePhotoDelete = async (photoId: string) => {
+    setDeletingPhotoId(photoId);
+    setPhotoError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/photos/${photoId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "Failed to delete photo");
+      }
+      router.refresh();
+    } catch (err: any) {
+      setPhotoError(err.message ?? "Delete failed");
+    } finally {
+      setDeletingPhotoId(null);
+    }
+  };
+
   const actionConfig = getActionForStatus(sr.status);
 
   // If en route but not yet arrived, show "Arrive"
   const showArriveAction = sr.status === "ACCEPTED" && job.enRouteAt;
 
-  const handleStatusAction = async (action: JobStatusAction) => {
+  const handleStatusAction = async (action: JobStatusAction | "decline") => {
     setActionLoading(true);
     setActionError(null);
     try {
@@ -164,11 +225,16 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         setActionError(data.error ?? "Action failed.");
         return;
       }
-      router.refresh();
+      if (action === "decline") {
+        router.push("/vendor/jobs");
+      } else {
+        router.refresh();
+      }
     } catch {
       setActionError("Network error. Please try again.");
     } finally {
       setActionLoading(false);
+      setShowDeclineConfirm(false);
     }
   };
 
@@ -270,6 +336,17 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </div>
       </div>
 
+      {/* Rejection reason banner (work sent back for rework) */}
+      {sr.rejectionReason && sr.status === "IN_PROGRESS" && (
+        <div className="flex items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+          <RotateCcw className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-amber-800">Work sent back for rework</p>
+            <p className="text-sm text-amber-700 mt-0.5">{sr.rejectionReason}</p>
+          </div>
+        </div>
+      )}
+
       {/* Status action button */}
       {sr.status !== "COMPLETED" && sr.status !== "VERIFIED" && sr.status !== "CANCELLED" && (
         <Card>
@@ -280,6 +357,43 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                 {actionError && <p className="text-xs text-red-600 mt-0.5">{actionError}</p>}
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
+                {/* Decline — only available when job is freshly dispatched */}
+                {sr.status === "DISPATCHED" && !showDeclineConfirm && (
+                  <Button
+                    variant="danger"
+                    loading={actionLoading}
+                    onClick={() => setShowDeclineConfirm(true)}
+                    className="w-full sm:w-auto justify-center min-h-[44px]"
+                  >
+                    Decline Job
+                  </Button>
+                )}
+                {/* Inline decline confirmation */}
+                {sr.status === "DISPATCHED" && showDeclineConfirm && (
+                  <div className="w-full rounded-md border border-red-200 bg-red-50 px-4 py-3 space-y-2">
+                    <p className="text-sm font-medium text-red-800">
+                      Decline this job? It will be returned to the dispatch queue and assigned to another vendor.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        loading={actionLoading}
+                        onClick={() => handleStatusAction("decline")}
+                      >
+                        Yes, Decline
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={actionLoading}
+                        onClick={() => setShowDeclineConfirm(false)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {/* If accepted and not yet en route */}
                 {sr.status === "ACCEPTED" && !job.enRouteAt && (
                   <Button
@@ -350,28 +464,6 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
             </div>
           </div>
 
-          {primaryContact && (
-            <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-gray-400 flex-shrink-0" />
-              <div>
-                <p className="text-sm text-gray-700">
-                  {primaryContact.name}
-                  {primaryContact.role && (
-                    <span className="text-gray-400 ml-1">({primaryContact.role})</span>
-                  )}
-                </p>
-                {primaryContact.phone && (
-                  <a
-                    href={`tel:${primaryContact.phone}`}
-                    className="text-sm text-blue-600 hover:text-blue-700"
-                  >
-                    {primaryContact.phone}
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
           <div>
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Description</p>
             <p className="text-sm text-gray-700 mt-1">{sr.description}</p>
@@ -417,42 +509,89 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
       {/* Photos */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Before / After Photos</CardTitle>
-          </div>
+          <CardTitle>Before / After Photos</CardTitle>
         </CardHeader>
-        <CardContent>
-          {/* Existing job photos */}
-          {job.photos.length > 0 && (
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              {job.photos.map((photo) => (
-                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer">
-                  <div className="aspect-square rounded-md overflow-hidden bg-gray-100">
-                    <img
-                      src={photo.thumbnailUrl ?? photo.url}
-                      alt={photo.type}
-                      className="w-full h-full object-cover hover:opacity-90 transition-opacity"
-                    />
-                  </div>
-                  <p className="text-xs text-gray-400 mt-1 capitalize">{photo.type.toLowerCase()}</p>
-                </a>
-              ))}
-            </div>
+        <CardContent className="space-y-5">
+          {photoError && (
+            <p className="text-xs text-red-600">{photoError}</p>
           )}
-
-          {/* Upload new photos */}
-          <div className="grid grid-cols-2 gap-4">
-            {(["Before", "After"] as const).map((type) => (
+          {(["BEFORE", "AFTER"] as const).map((type) => {
+            const photos = type === "BEFORE" ? beforePhotos : afterPhotos;
+            const uploading = !!photoUploading[type];
+            const inputId = `photo-upload-${type.toLowerCase()}`;
+            return (
               <div key={type}>
-                <p className="text-xs font-medium text-gray-500 mb-2">{type}</p>
-                <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
-                  <Camera className="w-8 h-8 text-gray-400 mb-1" />
-                  <span className="text-xs text-gray-500">Tap to capture</span>
-                  <input type="file" accept="image/*" capture="environment" className="sr-only" />
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {type === "BEFORE" ? "Before" : "After"}
+                  </p>
+                  {canModifyPhotos && (
+                    <label
+                      htmlFor={inputId}
+                      className={`inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer px-2.5 py-1.5 rounded-md border transition-colors ${
+                        uploading
+                          ? "opacity-50 cursor-not-allowed border-gray-200 text-gray-400"
+                          : "border-blue-200 text-blue-600 hover:bg-blue-50"
+                      }`}
+                    >
+                      {uploading ? (
+                        <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Uploading…</>
+                      ) : (
+                        <><Camera className="w-3.5 h-3.5" /> Add Photo</>
+                      )}
+                      <input
+                        id={inputId}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={uploading}
+                        className="sr-only"
+                        onChange={(e) => handlePhotoUpload(e, type)}
+                      />
+                    </label>
+                  )}
+                </div>
+                {photos.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-3">
+                    {photos.map((photo) => (
+                      <div key={photo.id} className="relative group">
+                        <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                          <div className="aspect-square rounded-md overflow-hidden bg-gray-100">
+                            <img
+                              src={photo.url}
+                              alt={`${type} photo`}
+                              className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                            />
+                          </div>
+                        </a>
+                        {canModifyPhotos && (
+                          <button
+                            type="button"
+                            onClick={() => handlePhotoDelete(photo.id)}
+                            disabled={deletingPhotoId === photo.id}
+                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 disabled:opacity-50"
+                            title="Delete photo"
+                          >
+                            {deletingPhotoId === photo.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <X className="w-3 h-3" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-20 border-2 border-dashed border-gray-200 rounded-lg">
+                    <p className="text-xs text-gray-400">
+                      {canModifyPhotos ? "No photos yet — tap Add Photo" : "No photos"}
+                    </p>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </CardContent>
       </Card>
 
