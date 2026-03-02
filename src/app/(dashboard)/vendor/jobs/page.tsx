@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
-import { MapPin, Clock, RotateCcw } from "lucide-react";
+import { MapPin, Clock, RotateCcw, PauseCircle } from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import { VendorJobActions } from "@/components/forms/vendor-job-actions";
@@ -238,9 +238,26 @@ export default async function VendorJobsPage({
             activeJobs.map((job) => {
               const sr = job.serviceRequest as any;
               const hasRejection = !!sr.rejectionReason;
+              const isPaused = !!(job as any).isPaused;
+              const borderClass = hasRejection ? "border-amber-300" : isPaused ? "border-orange-300" : "";
               return (
-                <Card key={job.id} className={hasRejection ? "border-amber-300" : ""}>
+                <Card key={job.id} className={borderClass}>
                   <CardContent className="py-5">
+                    {/* Paused banner */}
+                    {isPaused && (
+                      <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mb-3">
+                        <PauseCircle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-orange-800">Paused — Will Return</p>
+                          {(job as any).pauseReason && (
+                            <p className="text-xs text-orange-700 mt-0.5 line-clamp-2">{(job as any).pauseReason}</p>
+                          )}
+                          {(job as any).estimatedReturnDate && (
+                            <p className="text-xs text-orange-600 mt-0.5">Expected return: {formatDate((job as any).estimatedReturnDate)}</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     {/* Rejection reason banner */}
                     {hasRejection && (
                       <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
@@ -263,6 +280,11 @@ export default async function VendorJobsPage({
                           <Badge variant={getUrgencyColor(sr.urgency)}>
                             {sr.urgency}
                           </Badge>
+                          {isPaused && (
+                            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
+                              Paused
+                            </span>
+                          )}
                         </div>
 
                         <div className="flex items-center gap-1 text-sm text-gray-700">

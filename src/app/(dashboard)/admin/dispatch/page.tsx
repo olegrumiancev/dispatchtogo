@@ -95,6 +95,8 @@ export default async function DispatchBoardPage() {
     id: v.id,
     companyName: v.companyName,
     phone: v.phone,
+    availabilityStatus: v.availabilityStatus,
+    availabilityNote: v.availabilityNote,
     skills: v.skills.map((s) => ({ category: s.category })),
   }));
 
@@ -243,8 +245,10 @@ export default async function DispatchBoardPage() {
           ) : (
             activeJobs.map((job) => {
               const sr = job.serviceRequest;
+              const isPaused = (job as any).isPaused;
+              const pauseReason = (job as any).pauseReason;
               return (
-                <Card key={job.id}>
+                <Card key={job.id} className={isPaused ? "border-amber-300" : ""}>
                   <CardContent className="py-4 space-y-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1">
@@ -252,9 +256,15 @@ export default async function DispatchBoardPage() {
                           <span className="text-sm font-semibold text-gray-900">
                             {sr.referenceNumber}
                           </span>
-                          <Badge variant={getStatusColor(sr.status)}>
-                            {getStatusLabel(sr.status)}
-                          </Badge>
+                          {isPaused ? (
+                            <Badge variant="bg-amber-100 text-amber-800">
+                              Paused — Will Return
+                            </Badge>
+                          ) : (
+                            <Badge variant={getStatusColor(sr.status)}>
+                              {getStatusLabel(sr.status)}
+                            </Badge>
+                          )}
                           <Badge variant={getUrgencyColor(sr.urgency)}>
                             {sr.urgency}
                           </Badge>
@@ -277,6 +287,11 @@ export default async function DispatchBoardPage() {
                         <div className="text-xs text-gray-500">
                           {getCategoryLabel(sr.category)}
                         </div>
+                        {isPaused && pauseReason && (
+                          <div className="text-xs text-amber-700 italic bg-amber-50 rounded px-2 py-1 mt-1">
+                            {pauseReason}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </CardContent>

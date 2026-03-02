@@ -87,12 +87,14 @@ model Vendor {
   email           String   @unique
   phone           String
   address         String?
-  serviceArea     String?
-  serviceRadiusKm Int?
-  specialties     String[] @default([])
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  serviceArea          String?
+  serviceRadiusKm      Int?
+  specialties          String[] @default([])
+  isActive             Boolean  @default(true)
+  availabilityStatus   String   @default("AVAILABLE")
+  availabilityNote     String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
   user             User[]
   skills           VendorSkill[]
@@ -192,6 +194,10 @@ model Job {
   totalCost          Float?
   vendorNotes        String?
   completionSummary  String?
+  isPaused           Boolean   @default(false)
+  pauseReason        String?
+  estimatedReturnDate DateTime?
+  pausedAt           DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

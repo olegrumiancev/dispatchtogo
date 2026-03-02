@@ -4,13 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Send } from "lucide-react";
-import { SERVICE_CATEGORIES } from "@/lib/constants";
+import { SERVICE_CATEGORIES, VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
 
 interface Vendor {
   id: string;
   companyName: string;
   phone: string;
+  availabilityStatus: string;
+  availabilityNote: string | null;
   skills: Array<{ category: string }>;
 }
 
@@ -22,6 +25,10 @@ interface AssignModalProps {
 
 function getCategoryLabel(category: string) {
   return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+}
+
+function getAvailabilityConfig(status: string) {
+  return VENDOR_AVAILABILITY_STATUSES.find((s) => s.value === status) ?? VENDOR_AVAILABILITY_STATUSES[0];
 }
 
 export default function AssignModal({ requestRef, requestId, vendors }: AssignModalProps) {
@@ -58,6 +65,12 @@ export default function AssignModal({ requestRef, requestId, vendors }: AssignMo
     }
   };
 
+  // Sort vendors: AVAILABLE first, then BUSY, then OFF_DUTY
+  const sortOrder: Record<string, number> = { AVAILABLE: 0, BUSY: 1, OFF_DUTY: 2 };
+  const sortedVendors = [...vendors].sort(
+    (a, b) => (sortOrder[a.availabilityStatus] ?? 9) - (sortOrder[b.availabilityStatus] ?? 9)
+  );
+
   return (
     <>
       <Button variant="primary" size="sm" onClick={() => setOpen(true)}>
@@ -79,37 +92,54 @@ export default function AssignModal({ requestRef, requestId, vendors }: AssignMo
             </div>
           )}
 
-          {vendors.length === 0 ? (
+          {sortedVendors.length === 0 ? (
             <p className="text-sm text-gray-500 text-center py-4">No active vendors available.</p>
           ) : (
             <div className="space-y-2 max-h-72 overflow-y-auto">
-              {vendors.map((vendor) => (
-                <label
-                  key={vendor.id}
-                  className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selectedVendor === vendor.id
-                      ? "border-blue-500 bg-blue-50"
-                      : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="vendor"
-                    value={vendor.id}
-                    checked={selectedVendor === vendor.id}
-                    onChange={() => setSelectedVendor(vendor.id)}
-                    className="text-blue-600"
-                  />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{vendor.companyName}</p>
-                    <p className="text-xs text-gray-500">
-                      {vendor.skills.map((s) => getCategoryLabel(s.category)).join(", ")}
-                      {vendor.skills.length > 0 && " · "}
-                      {vendor.phone}
-                    </p>
-                  </div>
-                </label>
-              ))}
+              {sortedVendors.map((vendor) => {
+                const availConfig = getAvailabilityConfig(vendor.availabilityStatus);
+                const isUnavailable = vendor.availabilityStatus !== "AVAILABLE";
+
+                return (
+                  <label
+                    key={vendor.id}
+                    className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                      selectedVendor === vendor.id
+                        ? "border-blue-500 bg-blue-50"
+                        : isUnavailable
+                        ? "border-gray-200 bg-gray-50 opacity-70"
+                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="vendor"
+                      value={vendor.id}
+                      checked={selectedVendor === vendor.id}
+                      onChange={() => setSelectedVendor(vendor.id)}
+                      className="text-blue-600"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium text-gray-900">{vendor.companyName}</p>
+                        <Badge variant={availConfig.color} className="text-[10px] px-1.5 py-0">
+                          {availConfig.label}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        {vendor.skills.map((s) => getCategoryLabel(s.category)).join(", ")}
+                        {vendor.skills.length > 0 && " · "}
+                        {vendor.phone}
+                      </p>
+                      {isUnavailable && vendor.availabilityNote && (
+                        <p className="text-xs text-gray-400 italic mt-0.5 truncate">
+                          {vendor.availabilityNote}
+                        </p>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           )}
 

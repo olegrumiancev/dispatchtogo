@@ -18,6 +18,8 @@ import {
   X,
   Loader2,
   RotateCcw,
+  Pause,
+  Play,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -68,6 +70,10 @@ interface Job {
   totalLabourHours: number | null;
   totalMaterialsCost: number | null;
   totalCost: number | null;
+  isPaused: boolean;
+  pauseReason: string | null;
+  estimatedReturnDate: string | null;
+  pausedAt: string | null;
   notes: JobNote[];
   materials: JobMaterial[];
   photos: Array<{ id: string; url: string; thumbnailUrl: string | null; type: string }>;
@@ -79,27 +85,6 @@ interface VendorJobDetailProps {
 }
 
 type JobStatusAction = "accept" | "enroute" | "arrive" | "complete";
-
-interface StatusActionConfig {
-  label: string;
-  action: JobStatusAction | null;
-  description: string;
-  icon: React.ElementType;
-}
-
-function getActionForStatus(status: string): StatusActionConfig | null {
-  switch (status) {
-    case "DISPATCHED":
-      return { label: "Accept Job", action: "accept", description: "New job dispatched. Accept to begin.", icon: CheckCircle };
-    case "ACCEPTED":
-      return { label: "En Route", action: "enroute", description: "Job accepted. Tap when en route.", icon: Navigation };
-    case "IN_PROGRESS":
-      // Check if we have enRouteAt to show "Arrive" or we already arrived
-      return { label: "Mark Complete", action: "complete", description: "You are on site. Tap when job is complete.", icon: CheckCircle };
-    default:
-      return null;
-  }
-}
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
@@ -131,6 +116,13 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [showDeclineConfirm, setShowDeclineConfirm] = useState(false);
+
+  // Pause modal state
+  const [showPauseModal, setShowPauseModal] = useState(false);
+  const [pauseReason, setPauseReason] = useState("");
+  const [estimatedReturnDate, setEstimatedReturnDate] = useState("");
+  const [pauseLoading, setPauseLoading] = useState(false);
+  const [pauseError, setPauseError] = useState<string | null>(null);
 
   const [noteText, setNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
@@ -206,11 +198,6 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     }
   };
 
-  const actionConfig = getActionForStatus(sr.status);
-
-  // If en route but not yet arrived, show "Arrive"
-  const showArriveAction = sr.status === "ACCEPTED" && job.enRouteAt;
-
   const handleStatusAction = async (action: JobStatusAction | "decline") => {
     setActionLoading(true);
     setActionError(null);
@@ -235,6 +222,57 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     } finally {
       setActionLoading(false);
       setShowDeclineConfirm(false);
+    }
+  };
+
+  const handlePause = async () => {
+    setPauseLoading(true);
+    setPauseError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "pause",
+          pauseReason: pauseReason.trim() || null,
+          estimatedReturnDate: estimatedReturnDate || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setPauseError(data.error ?? "Failed to pause job.");
+        return;
+      }
+      setShowPauseModal(false);
+      setPauseReason("");
+      setEstimatedReturnDate("");
+      router.refresh();
+    } catch {
+      setPauseError("Network error. Please try again.");
+    } finally {
+      setPauseLoading(false);
+    }
+  };
+
+  const handleResume = async () => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resume" }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setActionError(data.error ?? "Failed to resume.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -314,6 +352,11 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   );
   const newMaterialsTotal = newMaterials.reduce((sum, m) => sum + m.qty * m.unitCost, 0);
 
+  // Tomorrow's date for the min on the return date picker
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split("T")[0];
+
   return (
     <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
       <Link
@@ -330,11 +373,44 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         <div className="flex items-center gap-2 mt-2 flex-wrap">
           <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
           <Badge variant="bg-gray-100 text-gray-700">{getCategoryLabel(sr.category)}</Badge>
-          <Badge variant={getStatusColor(sr.status)}>
-            {getStatusLabel(sr.status)}
-          </Badge>
+          {job.isPaused ? (
+            <Badge variant="bg-amber-100 text-amber-800">Paused — Will Return</Badge>
+          ) : (
+            <Badge variant={getStatusColor(sr.status)}>
+              {getStatusLabel(sr.status)}
+            </Badge>
+          )}
         </div>
       </div>
+
+      {/* Paused banner */}
+      {job.isPaused && (
+        <div className="flex items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+          <Pause className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">Job paused — you need to return</p>
+            {job.pauseReason && (
+              <p className="text-sm text-amber-700 mt-0.5">{job.pauseReason}</p>
+            )}
+            {job.estimatedReturnDate && (
+              <p className="text-xs text-amber-600 mt-1">
+                Expected return: {new Date(job.estimatedReturnDate).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" })}
+              </p>
+            )}
+            <div className="mt-3">
+              <Button
+                variant="primary"
+                size="sm"
+                loading={actionLoading}
+                onClick={handleResume}
+              >
+                <Play className="w-4 h-4" />
+                Resume Work
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Rejection reason banner (work sent back for rework) */}
       {sr.rejectionReason && sr.status === "IN_PROGRESS" && (
@@ -348,7 +424,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
       )}
 
       {/* Status action button */}
-      {sr.status !== "COMPLETED" && sr.status !== "VERIFIED" && sr.status !== "CANCELLED" && (
+      {sr.status !== "COMPLETED" && sr.status !== "VERIFIED" && sr.status !== "CANCELLED" && !job.isPaused && (
         <Card>
           <CardContent className="py-5">
             <div className="flex flex-col gap-3">
@@ -430,22 +506,115 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                     Accept Job
                   </Button>
                 )}
-                {/* If in progress, show complete */}
+                {/* If in progress, show complete + pause */}
                 {sr.status === "IN_PROGRESS" && (
-                  <Button
-                    variant="primary"
-                    loading={actionLoading}
-                    onClick={() => handleStatusAction("complete")}
-                    className="w-full sm:w-auto justify-center min-h-[44px]"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Mark Complete
-                  </Button>
+                  <>
+                    <Button
+                      variant="primary"
+                      loading={actionLoading}
+                      onClick={() => handleStatusAction("complete")}
+                      className="w-full sm:w-auto justify-center min-h-[44px]"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Mark Complete
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPauseReason("");
+                        setEstimatedReturnDate("");
+                        setPauseError(null);
+                        setShowPauseModal(true);
+                      }}
+                      disabled={actionLoading}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[44px] border border-amber-300 text-amber-700 text-sm font-medium rounded-md hover:bg-amber-50 transition-colors disabled:opacity-50 w-full sm:w-auto"
+                    >
+                      <Pause className="w-4 h-4" />
+                      Pause — Will Return
+                    </button>
+                  </>
                 )}
               </div>
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Pause modal */}
+      {showPauseModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPauseModal(false); }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md space-y-5 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Pause Job</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Need to order parts, wait for delivery, or come back another day? Pause the job and resume when ready.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowPauseModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 -mt-1 -mr-1"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Why are you pausing? <span className="text-gray-400 text-xs font-normal">(recommended)</span>
+              </label>
+              <Textarea
+                value={pauseReason}
+                onChange={(e) => setPauseReason(e.target.value)}
+                placeholder="e.g., Need to order a replacement valve — parts arriving tomorrow"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                When do you expect to return?
+              </label>
+              <input
+                type="date"
+                value={estimatedReturnDate}
+                min={tomorrowStr}
+                onChange={(e) => setEstimatedReturnDate(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {pauseError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {pauseError}
+              </p>
+            )}
+
+            <div className="flex justify-end gap-3 pt-1">
+              <button
+                onClick={() => setShowPauseModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePause}
+                disabled={pauseLoading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {pauseLoading ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Pausing…</>
+                ) : (
+                  <><Pause className="w-3.5 h-3.5" /> Pause Job</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Job info */}
@@ -470,13 +639,14 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           </div>
 
           {/* Timeline */}
-          {(job.acceptedAt || job.enRouteAt || job.arrivedAt || job.completedAt) && (
+          {(job.acceptedAt || job.enRouteAt || job.arrivedAt || job.completedAt || job.pausedAt) && (
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Timeline</p>
               <div className="space-y-1 text-xs text-gray-600">
                 {job.acceptedAt && <div><span className="font-medium">Accepted:</span> {formatDate(job.acceptedAt)}</div>}
                 {job.enRouteAt && <div><span className="font-medium">En Route:</span> {formatDate(job.enRouteAt)}</div>}
                 {job.arrivedAt && <div><span className="font-medium">Arrived:</span> {formatDate(job.arrivedAt)}</div>}
+                {job.pausedAt && job.isPaused && <div><span className="font-medium text-amber-700">Paused:</span> {formatDate(job.pausedAt)}</div>}
                 {job.completedAt && <div><span className="font-medium">Completed:</span> {formatDate(job.completedAt)}</div>}
               </div>
             </div>

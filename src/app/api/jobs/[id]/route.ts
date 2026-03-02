@@ -123,9 +123,27 @@ export async function PATCH(
         break;
       case "complete":
         jobData.completedAt = new Date();
+        jobData.isPaused = false;
+        jobData.pauseReason = null;
+        jobData.pausedAt = null;
+        jobData.estimatedReturnDate = null;
         requestData.status = "COMPLETED";
         requestData.resolvedAt = new Date();
         newStatus = "COMPLETED";
+        break;
+      case "pause":
+        jobData.isPaused = true;
+        jobData.pauseReason = body.pauseReason ?? null;
+        jobData.pausedAt = new Date();
+        if (body.estimatedReturnDate) {
+          jobData.estimatedReturnDate = new Date(body.estimatedReturnDate);
+        }
+        break;
+      case "resume":
+        jobData.isPaused = false;
+        jobData.pauseReason = null;
+        jobData.pausedAt = null;
+        jobData.estimatedReturnDate = null;
         break;
       case "decline":
         jobData.status = "DECLINED";

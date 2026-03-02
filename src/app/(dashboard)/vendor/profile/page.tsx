@@ -3,10 +3,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { SERVICE_CATEGORIES } from "@/lib/constants";
+import { SERVICE_CATEGORIES, VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
 import { Building2, MapPin, Phone, Mail, Star } from "lucide-react";
 import VendorProfileForm from "@/components/forms/vendor-profile-form";
 import VendorCredentialsForm from "@/components/forms/vendor-credentials-form";
+import { VendorAvailabilityToggle } from "@/components/forms/vendor-availability-toggle";
 
 export const metadata = {
   title: "My Profile | DispatchToGo",
@@ -14,6 +15,10 @@ export const metadata = {
 
 function getCategoryLabel(category: string) {
   return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+}
+
+function getAvailabilityConfig(status: string) {
+  return VENDOR_AVAILABILITY_STATUSES.find((s) => s.value === status) ?? VENDOR_AVAILABILITY_STATUSES[0];
 }
 
 export default async function VendorProfilePage() {
@@ -49,15 +54,39 @@ export default async function VendorProfilePage() {
     serviceRadiusKm: vendor.serviceRadiusKm ?? 0,
   };
 
+  const availConfig = getAvailabilityConfig(vendor.availabilityStatus);
+
   return (
     <div className="space-y-6 max-w-4xl">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">My Profile</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Manage your company information and credentials.
+          Manage your company information, availability, and credentials.
         </p>
       </div>
+
+      {/* Availability — top of page, most important */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>My Availability</CardTitle>
+            <Badge variant={availConfig.color}>
+              {availConfig.label}
+            </Badge>
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Set your current availability. When you are not &ldquo;Available&rdquo;, new jobs will not be auto-dispatched to you.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <VendorAvailabilityToggle
+            vendorId={vendor.id}
+            currentStatus={vendor.availabilityStatus}
+            currentNote={vendor.availabilityNote}
+          />
+        </CardContent>
+      </Card>
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">

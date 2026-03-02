@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+const VALID_AVAILABILITY_STATUSES = ["AVAILABLE", "BUSY", "OFF_DUTY"] as const;
+
 // GET /api/vendors/[id] — fetch vendor profile (own only)
 export async function GET(
   _req: NextRequest,
@@ -61,7 +63,7 @@ export async function PATCH(
   }
 
   // Only allow specific fields to be updated
-  const { companyName, contactName, phone, address, serviceRadiusKm } = body;
+  const { companyName, contactName, phone, address, serviceRadiusKm, availabilityStatus, availabilityNote } = body;
 
   const updateData: Record<string, any> = {};
   if (companyName !== undefined) updateData.companyName = String(companyName).trim();
@@ -71,6 +73,22 @@ export async function PATCH(
   if (serviceRadiusKm !== undefined) {
     const radius = parseInt(serviceRadiusKm, 10);
     if (!isNaN(radius) && radius > 0) updateData.serviceRadiusKm = radius;
+  }
+  if (availabilityStatus !== undefined) {
+    if (!VALID_AVAILABILITY_STATUSES.includes(availabilityStatus)) {
+      return NextResponse.json(
+        { error: `Invalid availability status. Must be one of: ${VALID_AVAILABILITY_STATUSES.join(", ")}` },
+        { status: 400 }
+      );
+    }
+    updateData.availabilityStatus = availabilityStatus;
+    // Clear note if going back to AVAILABLE
+    if (availabilityStatus === "AVAILABLE") {
+      updateData.availabilityNote = null;
+    }
+  }
+  if (availabilityNote !== undefined) {
+    updateData.availabilityNote = availabilityNote ? String(availabilityNote).trim() : null;
   }
 
   if (Object.keys(updateData).length === 0) {

@@ -346,6 +346,29 @@ export default async function RequestDetailPage({
             <CardTitle>Assigned Vendor</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Pause banner — visible to operator when vendor has paused */}
+            {req.job.isPaused && (
+              <div className="flex items-start gap-3 rounded-lg border-2 border-amber-300 bg-amber-50 px-4 py-3">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">Vendor paused this job — will return</p>
+                  {req.job.pauseReason && (
+                    <p className="text-sm text-amber-700 mt-0.5">{req.job.pauseReason}</p>
+                  )}
+                  {req.job.estimatedReturnDate && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Expected return: {new Date(req.job.estimatedReturnDate).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" })}
+                    </p>
+                  )}
+                  {req.job.pausedAt && (
+                    <p className="text-xs text-amber-500 mt-0.5">
+                      Paused on {formatDate(req.job.pausedAt)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">

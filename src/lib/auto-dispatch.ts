@@ -20,8 +20,11 @@ function categoriesMatch(a: string, b: string): boolean {
  * 1. Operator explicitly chose a vendor in the form → use that vendor
  * 2. Preferred vendor for this property + category
  * 3. Preferred vendor for this org + category (property = null)
- * 4. Any active vendor with matching skill (load-balanced by fewest active jobs)
+ * 4. Any active + AVAILABLE vendor with matching skill (load-balanced by fewest active jobs)
  * 5. No match → READY_TO_DISPATCH for manual admin assignment
+ *
+ * NOTE: Only vendors with availabilityStatus === "AVAILABLE" are considered
+ * for auto-dispatch. BUSY and OFF_DUTY vendors are skipped.
  */
 export async function autoDispatch(
   serviceRequestId: string,
@@ -41,7 +44,11 @@ export async function autoDispatch(
     // ── Step 1: Operator explicitly chose a vendor ──────────────────────
     if (preferredVendorId) {
       const vendor = await prisma.vendor.findFirst({
-        where: { id: preferredVendorId, isActive: true },
+        where: {
+          id: preferredVendorId,
+          isActive: true,
+          availabilityStatus: "AVAILABLE",
+        },
       });
       if (vendor) {
         chosenVendorId = vendor.id;
@@ -55,7 +62,10 @@ export async function autoDispatch(
         include: { vendor: true },
       });
       const match = prefs.find(
-        (p) => categoriesMatch(p.category, requestCategory) && p.vendor.isActive
+        (p) =>
+          categoriesMatch(p.category, requestCategory) &&
+          p.vendor.isActive &&
+          p.vendor.availabilityStatus === "AVAILABLE"
       );
       if (match) {
         chosenVendorId = match.vendorId;
@@ -69,7 +79,10 @@ export async function autoDispatch(
         include: { vendor: true },
       });
       const match = prefs.find(
-        (p) => categoriesMatch(p.category, requestCategory) && p.vendor.isActive
+        (p) =>
+          categoriesMatch(p.category, requestCategory) &&
+          p.vendor.isActive &&
+          p.vendor.availabilityStatus === "AVAILABLE"
       );
       if (match) {
         chosenVendorId = match.vendorId;
@@ -79,7 +92,10 @@ export async function autoDispatch(
     // ── Step 4: Skill-based match with load balancing ───────────────────
     if (!chosenVendorId) {
       const allActiveVendors = await prisma.vendor.findMany({
-        where: { isActive: true },
+        where: {
+          isActive: true,
+          availabilityStatus: "AVAILABLE",
+        },
         include: {
           skills: true,
           _count: {
