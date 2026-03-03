@@ -71,6 +71,8 @@ function LoginForm() {
           setError("Your account is pending admin approval. You'll receive an email once approved.");
         } else if (result.error === "ACCOUNT_REJECTED") {
           setError("Your account registration was not approved. Please contact support if you believe this is an error.");
+        } else if (result.error === "ACCOUNT_DISABLED") {
+          setError("Your account has been disabled. Please contact an administrator for assistance.");
         } else {
           setError("Invalid email or password. Please try again.");
         }

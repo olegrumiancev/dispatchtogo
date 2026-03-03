@@ -42,6 +42,11 @@ export const authOptions: NextAuthOptions = {
           throw new Error("EMAIL_NOT_VERIFIED");
         }
 
+        // Check if account is disabled
+        if (user.isDisabled) {
+          throw new Error("ACCOUNT_DISABLED");
+        }
+
         // Check admin approval (admins skip this check)
         if (user.role !== "ADMIN" && !user.isApproved) {
           if (user.rejectedAt) {

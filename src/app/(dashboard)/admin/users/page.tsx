@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
-import { Users, Shield, Building2, Wrench, Clock, AlertTriangle } from "lucide-react";
-import { UserApprovalActions } from "./user-approval-actions";
+import { Users, Shield, Building2, Wrench, Clock, AlertTriangle, Ban } from "lucide-react";
+import { UserActions } from "./user-actions";
 
 export const metadata = {
   title: "User Management | DispatchToGo Admin",
@@ -46,7 +46,7 @@ export default async function AdminUsersPage() {
     (u) => u.role !== "ADMIN" && u.emailVerified && !u.isApproved && !u.rejectedAt
   ).length;
 
-  const rejectedCount = users.filter((u) => u.rejectedAt !== null).length;
+  const disabledCount = users.filter((u) => u.isDisabled).length;
 
   return (
     <div className="space-y-6">
@@ -74,7 +74,7 @@ export default async function AdminUsersPage() {
       )}
 
       {/* Role summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
         {(["ADMIN", "OPERATOR", "VENDOR"] as const).map((role) => {
           const cfg = ROLE_CONFIG[role];
           const Icon = cfg.icon;
@@ -101,6 +101,19 @@ export default async function AdminUsersPage() {
               <div>
                 <p className="text-xl font-bold text-gray-900">{pendingCount}</p>
                 <p className="text-xs text-gray-500">Pending</p>
+              </div>
+            </div>
+          </Card>
+        )}
+        {disabledCount > 0 && (
+          <Card>
+            <div className="flex items-center gap-3 px-4 py-4">
+              <div className="p-2 rounded-lg bg-gray-200 text-gray-600">
+                <Ban className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-xl font-bold text-gray-900">{disabledCount}</p>
+                <p className="text-xs text-gray-500">Disabled</p>
               </div>
             </div>
           </Card>
@@ -148,14 +161,16 @@ export default async function AdminUsersPage() {
                   const isPending = u.role !== "ADMIN" && u.emailVerified && !u.isApproved && !u.rejectedAt;
                   const isRejected = u.rejectedAt !== null;
                   const isUnverified = !u.emailVerified;
-                  const needsAction = u.role !== "ADMIN" && (!u.isApproved || isRejected);
+                  const isUserDisabled = u.isDisabled;
 
                   return (
                     <tr
                       key={u.id}
                       className={`hover:bg-gray-50 transition-colors ${
                         isPending ? "bg-amber-50 hover:bg-amber-100" : ""
-                      } ${isRejected ? "bg-red-50/50 hover:bg-red-50" : ""}`}
+                      } ${isRejected ? "bg-red-50/50 hover:bg-red-50" : ""} ${
+                        isUserDisabled ? "opacity-60" : ""
+                      }`}
                     >
                       <td className="px-6 py-4">
                         <p className="text-sm font-medium text-gray-900">
@@ -178,6 +193,11 @@ export default async function AdminUsersPage() {
                       <td className="px-6 py-4">
                         {u.role === "ADMIN" ? (
                           <Badge variant="bg-emerald-100 text-emerald-700">Active</Badge>
+                        ) : isUserDisabled ? (
+                          <Badge variant="bg-gray-200 text-gray-600">
+                            <Ban className="w-3 h-3 mr-0.5" />
+                            Disabled
+                          </Badge>
                         ) : isUnverified ? (
                           <Badge variant="bg-gray-200 text-gray-600">Unverified</Badge>
                         ) : isPending ? (
@@ -209,17 +229,16 @@ export default async function AdminUsersPage() {
                         {formatDate(u.createdAt)}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        {needsAction && u.emailVerified ? (
-                          <UserApprovalActions
-                            userId={u.id}
-                            userName={u.name ?? ""}
-                            userEmail={u.email}
-                            isApproved={u.isApproved}
-                            isRejected={isRejected}
-                          />
-                        ) : u.role !== "ADMIN" && u.isApproved ? (
-                          <span className="text-xs text-gray-400">Approved</span>
-                        ) : null}
+                        <UserActions
+                          userId={u.id}
+                          userName={u.name ?? ""}
+                          userEmail={u.email}
+                          isApproved={u.isApproved}
+                          isRejected={isRejected}
+                          isDisabled={isUserDisabled}
+                          isPending={isPending}
+                          isAdmin={u.role === "ADMIN"}
+                        />
                       </td>
                     </tr>
                   );
