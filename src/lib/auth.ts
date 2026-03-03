@@ -42,6 +42,14 @@ export const authOptions: NextAuthOptions = {
           throw new Error("EMAIL_NOT_VERIFIED");
         }
 
+        // Check admin approval (admins skip this check)
+        if (user.role !== "ADMIN" && !user.isApproved) {
+          if (user.rejectedAt) {
+            throw new Error("ACCOUNT_REJECTED");
+          }
+          throw new Error("ACCOUNT_PENDING_APPROVAL");
+        }
+
         return {
           id: user.id,
           email: user.email,

@@ -123,7 +123,7 @@ export default function RegisterPage() {
             </div>
           )}
           <p className="text-sm text-gray-500 mb-6">
-            Click the link in the email to verify your account, then you can sign in.
+            Click the link in the email to verify your account. After verification, an admin will review and approve your registration. You&apos;ll receive an email once approved.
           </p>
           <Link
             href="/login"

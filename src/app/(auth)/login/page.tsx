@@ -34,7 +34,11 @@ function LoginForm() {
 
   useEffect(() => {
     if (searchParams.get("verified") === "true") {
-      setInfo("Email verified successfully! You can now sign in.");
+      if (searchParams.get("pending") === "true") {
+        setInfo("Email verified successfully! Your account is now pending admin approval. You'll receive an email once approved.");
+      } else {
+        setInfo("Email verified successfully! You can now sign in.");
+      }
     }
     if (searchParams.get("error") === "invalid-verification") {
       setError("Invalid or expired verification link.");
@@ -63,6 +67,10 @@ function LoginForm() {
         if (result.error === "EMAIL_NOT_VERIFIED") {
           setError("Please verify your email before signing in.");
           setShowResendVerification(true);
+        } else if (result.error === "ACCOUNT_PENDING_APPROVAL") {
+          setError("Your account is pending admin approval. You'll receive an email once approved.");
+        } else if (result.error === "ACCOUNT_REJECTED") {
+          setError("Your account registration was not approved. Please contact support if you believe this is an error.");
         } else {
           setError("Invalid email or password. Please try again.");
         }
