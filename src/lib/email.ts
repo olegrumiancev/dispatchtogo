@@ -1,19 +1,31 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
+import type { Transporter } from "nodemailer";
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const SMTP_HOST = process.env.SMTP_HOST || "";
+const SMTP_PORT = parseInt(process.env.SMTP_PORT || "465", 10);
+const SMTP_USER = process.env.SMTP_USER || "";
+const SMTP_PASS = process.env.SMTP_PASS || "";
 const EMAIL_FROM = process.env.EMAIL_FROM || "DispatchToGo <noreply@dispatchtogo.com>";
 
-let _client: Resend | null = null;
+let _transporter: Transporter | null = null;
 
-function getClient(): Resend | null {
-  if (!RESEND_API_KEY) return null;
-  if (_client) return _client;
-  _client = new Resend(RESEND_API_KEY);
-  return _client;
+function getTransporter(): Transporter | null {
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
+  if (_transporter) return _transporter;
+  _transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+    },
+  });
+  return _transporter;
 }
 
 export function isEmailConfigured(): boolean {
-  return RESEND_API_KEY.length > 0;
+  return SMTP_HOST.length > 0 && SMTP_USER.length > 0 && SMTP_PASS.length > 0;
 }
 
 type EmailResult =
@@ -26,25 +38,21 @@ export async function sendEmail(
   html: string,
   text?: string
 ): Promise<EmailResult> {
-  const client = getClient();
-  if (!client) {
-    console.warn("[email] Resend not configured \u2013 skipping email");
-    return { success: false, error: "Resend not configured" };
+  const transporter = getTransporter();
+  if (!transporter) {
+    console.warn("[email] SMTP not configured \u2013 skipping email");
+    return { success: false, error: "SMTP not configured" };
   }
 
   try {
-    const { data, error } = await client.emails.send({
+    const info = await transporter.sendMail({
       from: EMAIL_FROM,
       to,
       subject,
       html,
       text: text || html.replace(/<[^>]*>/g, ""),
     });
-    if (error) {
-      console.error("[email] Send failed:", error.message);
-      return { success: false, error: error.message };
-    }
-    return { success: true, messageId: data?.id ?? "" };
+    return { success: true, messageId: info.messageId ?? "" };
   } catch (err: any) {
     console.error("[email] Send failed:", err?.message ?? err);
     return { success: false, error: err?.message ?? "Unknown error" };
@@ -53,17 +61,10 @@ export async function sendEmail(
 
 export async function checkEmailHealth(): Promise<string | null> {
   if (!isEmailConfigured()) return "not configured";
-  const client = getClient();
-  if (!client) return "client creation failed";
+  const transporter = getTransporter();
+  if (!transporter) return "transporter creation failed";
   try {
-    // Validate key with a real delivery to Resend's test sink (does not count toward quota)
-    const { error } = await client.emails.send({
-      from: "DispatchToGo <onboarding@resend.dev>",
-      to: "delivered@resend.dev",
-      subject: "health",
-      text: "ping",
-    });
-    if (error) return error.message;
+    await transporter.verify();
     return null;
   } catch (err: any) {
     return `${err.code || "Error"}: ${err.message || String(err)}`;
@@ -174,7 +175,7 @@ export async function sendWelcomeEmail(
   return sendEmail(email, subject, html);
 }
 
-// ── Rejection notification helpers ───────────────────────────────────────────
+// \u2500\u2500 Rejection notification helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 const REJECTION_TYPE_LABELS: Record<string, string> = {
   send_back: "Sent back for rework",
@@ -198,19 +199,19 @@ export async function sendVendorRejectionEmail(
 ): Promise<EmailResult> {
   const typeLabel = REJECTION_TYPE_LABELS[rejectionType] ?? "Rejected";
   const message = REJECTION_TYPE_VENDOR_MSGS[rejectionType] ?? "Your completed work has been rejected.";
-  const subject = `Work Rejected on Job ${refNumber} – ${typeLabel}`;
+  const subject = `Work Rejected on Job ${refNumber} \u2013 ${typeLabel}`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:#dc2626;color:#fff;padding:20px;border-radius:8px 8px 0 0">
         <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
       </div>
       <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Work Rejected – ${typeLabel}</h2>
+        <h2 style="margin:0 0 16px">Work Rejected \u2013 ${typeLabel}</h2>
         <p>Hi ${vendorCompanyName},</p>
         <p>${message}</p>
         <table style="width:100%;border-collapse:collapse;margin:16px 0">
           <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;width:140px">Reference</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${refNumber}</td></tr>
-          ${property ? `<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Property</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${property.name ?? ""}${property.address ? ` – ${property.address}` : ""}</td></tr>` : ""}
+          ${property ? `<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Property</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${property.name ?? ""}${property.address ? ` \u2013 ${property.address}` : ""}</td></tr>` : ""}
           <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Outcome</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${typeLabel}</td></tr>
         </table>
         <p style="margin:0 0 8px"><strong>Operator's reason:</strong></p>
@@ -230,15 +231,15 @@ export async function sendAdminRejectionEmail(
   vendorName: string
 ): Promise<EmailResult> {
   const typeLabel = REJECTION_TYPE_LABELS[rejectionType] ?? "Rejected";
-  const subject = `Completion Rejected – Job ${refNumber} (${typeLabel})`;
+  const subject = `Completion Rejected \u2013 Job ${refNumber} (${typeLabel})`;
   const isDispute = rejectionType === "dispute";
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:${isDispute ? "#7c3aed" : "#1e40af"};color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo${isDispute ? " – Dispute" : ""}</h1>
+        <h1 style="margin:0;font-size:20px">DispatchToGo${isDispute ? " \u2013 Dispute" : ""}</h1>
       </div>
       <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Completion Rejected – ${typeLabel}</h2>
+        <h2 style="margin:0 0 16px">Completion Rejected \u2013 ${typeLabel}</h2>
         <p>Hi ${adminName},</p>
         <p>An operator has rejected completed work on job <strong>${refNumber}</strong> assigned to <strong>${vendorName}</strong>.</p>
         <table style="width:100%;border-collapse:collapse;margin:16px 0">
@@ -248,7 +249,7 @@ export async function sendAdminRejectionEmail(
         </table>
         <p style="margin:0 0 8px"><strong>Reason given:</strong></p>
         <p style="background:#f9fafb;padding:12px;border-radius:6px">${reason}</p>
-        ${isDispute ? `<p style="color:#7c3aed;font-weight:bold">⚠ This job has been escalated and requires admin mediation.</p>` : ""}
+        ${isDispute ? `<p style="color:#7c3aed;font-weight:bold">\u26A0 This job has been escalated and requires admin mediation.</p>` : ""}
         <a href="https://dispatchtogo.com/admin/dispatch" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View in Admin Panel</a>
       </div>
     </div>`;
