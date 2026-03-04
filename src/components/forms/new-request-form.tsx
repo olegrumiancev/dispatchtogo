@@ -17,6 +17,7 @@ import {
   Check,
   RotateCcw,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -78,10 +79,27 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const [selectedVendorId, setSelectedVendorId] = useState("");
   const [loadingVendors, setLoadingVendors] = useState(false);
 
+  // Billing usage
+  const [usage, setUsage] = useState<{
+    completedRequests: number;
+    includedRequests: number;
+    ratePerRequest: number;
+    isOverLimit: boolean;
+    amountCad: number;
+  } | null>(null);
+
   // Submit
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+
+  // ─── Fetch billing usage on mount ─────────────────────────────────────────
+  useEffect(() => {
+    fetch("/api/requests/usage")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => { if (data) setUsage(data); })
+      .catch(() => {});
+  }, []);
 
   // ─── Fetch available vendors when category changes on step 2 ────────────
   useEffect(() => {
@@ -364,6 +382,22 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
           Review &amp; Submit
         </div>
       </div>
+
+      {/* Billing overage banner — shown when org is in pay-as-you-go territory */}
+      {usage?.isOverLimit && (
+        <div className="rounded-md bg-amber-50 border border-amber-300 px-4 py-3 flex items-start gap-3">
+          <TrendingUp className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-800">
+              Pay-as-you-go — {usage.completedRequests} of {usage.includedRequests} included requests used this month
+            </p>
+            <p className="text-amber-700 mt-0.5">
+              This request will be billed at <strong>${usage.ratePerRequest.toFixed(2)} CAD</strong> upon completion.
+              Charges are invoiced at the end of the month.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* AI retry status — shown while classify attempts are in-flight */}
       {classifyStatus && (
@@ -710,6 +744,22 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
               )}
             </CardContent>
           </Card>
+
+          {/* Overage cost notice on review step */}
+          {usage?.isOverLimit && (
+            <div className="rounded-md bg-amber-50 border border-amber-300 px-4 py-3 flex items-start gap-3">
+              <TrendingUp className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-semibold text-amber-800">Billable request</p>
+                <p className="text-amber-700 mt-0.5">
+                  You have used <strong>{usage.completedRequests}</strong> of your{" "}
+                  <strong>{usage.includedRequests}</strong> included requests this month.
+                  Submitting this request will add <strong>${usage.ratePerRequest.toFixed(2)} CAD</strong> to your
+                  end-of-month invoice upon completion.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Submit / Back buttons */}
           <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">

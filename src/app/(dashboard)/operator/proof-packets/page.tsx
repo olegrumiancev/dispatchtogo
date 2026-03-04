@@ -8,34 +8,52 @@ import { Button } from "@/components/ui/button";
 import { REQUEST_STATUSES, URGENCY_LEVELS } from "@/lib/constants";
 import { ShieldCheck, Download, ExternalLink } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+
+const PAGE_SIZE = 25;
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
 }
 
-export default async function ProofPacketsPage() {
+export default async function ProofPacketsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session) redirect("/login");
   const user = session.user as any;
   if (user.role !== "OPERATOR") redirect("/");
 
-  // Only show completed/verified requests for this operator's org
-  const completedRequests = (await prisma.serviceRequest.findMany({
-    where: {
-      organizationId: user.organizationId,
-      status: { in: ["COMPLETED", "VERIFIED"] },
-    },
-    include: {
-      property: { select: { name: true, address: true } },
-      job: {
-        include: {
-          vendor: { select: { companyName: true, phone: true } },
-          photos: { select: { id: true, url: true, createdAt: true } },
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+
+  const where = {
+    organizationId: user.organizationId as string,
+    status: { in: ["COMPLETED", "VERIFIED"] as const },
+  };
+
+  const [total, completedRequests] = await Promise.all([
+    prisma.serviceRequest.count({ where }),
+    prisma.serviceRequest.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        property: { select: { name: true, address: true } },
+        job: {
+          include: {
+            vendor: { select: { companyName: true, phone: true } },
+            photos: { select: { id: true, url: true, createdAt: true } },
+          },
         },
       },
-    },
-    orderBy: { updatedAt: "desc" },
-  })) as any[];
+    }) as any,
+  ]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -47,11 +65,11 @@ export default async function ProofPacketsPage() {
           </p>
         </div>
         <span className="text-sm text-gray-500">
-          {completedRequests.length} completed
+          {total} completed
         </span>
       </div>
 
-      {completedRequests.length === 0 ? (
+      {total === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
             <ShieldCheck className="w-12 h-12 text-gray-200 mx-auto mb-3" />
@@ -114,6 +132,13 @@ export default async function ProofPacketsPage() {
           ))}
         </div>
       )}
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        basePath="/operator/proof-packets"
+        total={total}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 }

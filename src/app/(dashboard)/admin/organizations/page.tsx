@@ -5,10 +5,15 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { Building2 } from "lucide-react";
+import { BILLING_PLANS } from "@/lib/constants";
+import { ChangePlanButton } from "./change-plan-button";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 export const metadata = {
   title: "Organizations | DispatchToGo Admin",
 };
+
+const PAGE_SIZE = 25;
 
 const ORG_TYPE_LABELS: Record<string, string> = {
   HOTEL: "Hotel",
@@ -26,25 +31,47 @@ const ORG_TYPE_COLORS: Record<string, string> = {
   OTHER: "bg-gray-100 text-gray-600",
 };
 
-export default async function AdminOrganizationsPage() {
+export default async function AdminOrganizationsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session) redirect("/login");
 
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
 
-  const organizations = await prisma.organization.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: {
-        select: {
-          properties: true,
-          users: true,
-          serviceRequests: true,
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+
+  const [total, organizations] = await Promise.all([
+    prisma.organization.count(),
+    prisma.organization.findMany({
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        contactEmail: true,
+        contactPhone: true,
+        address: true,
+        plan: true,
+        createdAt: true,
+        _count: {
+          select: {
+            properties: true,
+            users: true,
+            serviceRequests: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="space-y-6">
@@ -53,7 +80,7 @@ export default async function AdminOrganizationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Organizations</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {organizations.length} organization{organizations.length !== 1 ? "s" : ""}
+            {total} organization{total !== 1 ? "s" : ""}
           </p>
         </div>
       </div>
@@ -75,6 +102,9 @@ export default async function AdminOrganizationsPage() {
                   </th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Type
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Plan
                   </th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
                     Contact Email
@@ -115,6 +145,16 @@ export default async function AdminOrganizationsPage() {
                       >
                         {ORG_TYPE_LABELS[org.type] ?? org.type}
                       </Badge>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          className={org.plan === "VALUE" ? "bg-purple-100 text-purple-800" : "bg-gray-100 text-gray-700"}
+                        >
+                          {BILLING_PLANS[org.plan]?.label ?? org.plan}
+                        </Badge>
+                        <ChangePlanButton orgId={org.id} currentPlan={org.plan} />
+                      </div>
                     </td>
                     <td className="px-6 py-4 hidden sm:table-cell">
                       <a
@@ -173,6 +213,13 @@ export default async function AdminOrganizationsPage() {
           )}
         </div>
       </Card>
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        basePath="/admin/organizations"
+        total={total}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 }

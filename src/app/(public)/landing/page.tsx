@@ -70,7 +70,7 @@ function Hero() {
               href="/register"
               className="inline-flex items-center gap-2 bg-blue-600 text-white text-lg font-semibold px-8 py-4 rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
             >
-              Start Free Trial
+              Get Started Free
               <ArrowRight className="w-5 h-5" />
             </Link>
             <Link
@@ -81,7 +81,7 @@ function Hero() {
             </Link>
           </div>
           <p className="mt-4 text-sm text-gray-500">
-            30-day free trial &middot; No credit card required
+            Free tier included &middot; 15 requests/month &middot; No credit card to start
           </p>
         </div>
       </div>
@@ -242,16 +242,16 @@ function CTA() {
             href="/register"
             className="inline-flex items-center gap-2 bg-white text-blue-600 text-lg font-semibold px-8 py-4 rounded-xl hover:bg-blue-50 transition-colors"
           >
-            Start Your Free Trial
+            Get Started Free
             <ArrowRight className="w-5 h-5" />
           </Link>
         </div>
         <div className="mt-6 flex items-center justify-center gap-6 text-blue-100 text-sm">
           <span className="flex items-center gap-1.5">
-            <Clock className="w-4 h-4" /> 30-day free trial
+            <Shield className="w-4 h-4" /> 15 requests/month free
           </span>
           <span className="flex items-center gap-1.5">
-            <Shield className="w-4 h-4" /> No credit card required
+            <Clock className="w-4 h-4" /> $0.25 CAD per additional completion
           </span>
         </div>
       </div>

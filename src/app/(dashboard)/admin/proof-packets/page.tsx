@@ -5,36 +5,54 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Download, Package } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 export const metadata = {
   title: "Proof Packets | DispatchToGo Admin",
 };
 
-export default async function AdminProofPacketsPage() {
+const PAGE_SIZE = 25;
+
+export default async function AdminProofPacketsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session) redirect("/login");
 
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
 
-  // Fetch all completed/verified service requests across all organizations
-  const requests = await prisma.serviceRequest.findMany({
-    where: {
-      status: { in: ["COMPLETED", "VERIFIED"] },
-      job: { isNot: null },
-    },
-    orderBy: { updatedAt: "desc" },
-    include: {
-      organization: { select: { name: true } },
-      property: true,
-      job: {
-        include: {
-          vendor: { select: { companyName: true } },
-          proofPacket: true,
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+
+  const where = {
+    status: { in: ["COMPLETED", "VERIFIED"] as const },
+    job: { isNot: null as any },
+  };
+
+  const [total, requests] = await Promise.all([
+    prisma.serviceRequest.count({ where }),
+    prisma.serviceRequest.findMany({
+      where,
+      orderBy: { updatedAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        organization: { select: { name: true } },
+        property: true,
+        job: {
+          include: {
+            vendor: { select: { companyName: true } },
+            proofPacket: true,
+          },
         },
       },
-    },
-  });
+    }),
+  ]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -49,13 +67,13 @@ export default async function AdminProofPacketsPage() {
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <Package className="w-4 h-4" />
           <span>
-            {requests.length} completed job{requests.length !== 1 ? "s" : ""}
+            {total} completed job{total !== 1 ? "s" : ""}
           </span>
         </div>
       </div>
 
       {/* Content */}
-      {requests.length === 0 ? (
+      {total === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-16 text-center">
             <FileText className="w-12 h-12 text-gray-300 mb-4" />
@@ -158,6 +176,13 @@ export default async function AdminProofPacketsPage() {
           </CardContent>
         </Card>
       )}
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        basePath="/admin/proof-packets"
+        total={total}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 }

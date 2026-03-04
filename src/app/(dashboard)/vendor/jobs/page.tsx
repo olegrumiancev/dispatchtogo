@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
@@ -27,10 +28,12 @@ function getCategoryLabel(category: string) {
   return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
 }
 
+const PAGE_SIZE = 25;
+
 export default async function VendorJobsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string }>;
 }) {
   const session = await auth();
   if (!session) redirect("/login");
@@ -41,10 +44,12 @@ export default async function VendorJobsPage({
   const sp = await searchParams;
   const requestedTab =
     sp.tab === "mine" ? "mine" : sp.tab === "completed" ? "completed" : sp.tab === "available" ? "available" : null;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10));
+  const skip = (page - 1) * PAGE_SIZE;
 
   // Available jobs: ServiceRequests with status DISPATCHED that have a Job for this vendor
   // where the job has NOT been accepted yet
-  const [availableJobs, activeJobs, completedJobs, unreadNotifications] = await Promise.all([
+  const [availableJobs, activeJobs, completedTotal, completedJobs, unreadNotifications] = await Promise.all([
     prisma.job.findMany({
       where: {
         vendorId,
@@ -80,7 +85,10 @@ export default async function VendorJobsPage({
       orderBy: { acceptedAt: "desc" },
     }),
 
-    // Completed jobs: last 10
+    // Completed jobs: paginated
+    prisma.job.count({
+      where: { vendorId, completedAt: { not: null } },
+    }),
     prisma.job.findMany({
       where: {
         vendorId,
@@ -94,7 +102,8 @@ export default async function VendorJobsPage({
         },
       },
       orderBy: { completedAt: "desc" },
-      take: 10,
+      skip,
+      take: PAGE_SIZE,
     }),
 
     // Unread notifications for this vendor user (recent 10)
@@ -168,7 +177,7 @@ export default async function VendorJobsPage({
           >
             Completed
             <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-0.5 rounded-full">
-              {completedJobs.length}
+              {completedTotal}
             </span>
           </Link>
         </nav>
@@ -330,7 +339,7 @@ export default async function VendorJobsPage({
       {/* Completed jobs */}
       {tab === "completed" && (
         <div className="space-y-4">
-          {completedJobs.length === 0 ? (
+          {completedTotal === 0 ? (
             <Card>
               <CardContent className="text-center py-12 text-gray-400">
                 <p className="text-sm">No completed jobs yet.</p>
@@ -380,6 +389,14 @@ export default async function VendorJobsPage({
               );
             })
           )}
+          <PaginationControls
+            page={page}
+            totalPages={Math.ceil(completedTotal / PAGE_SIZE)}
+            basePath="/vendor/jobs"
+            extraParams={{ tab: "completed" }}
+            total={completedTotal}
+            pageSize={PAGE_SIZE}
+          />
         </div>
       )}
     </div>

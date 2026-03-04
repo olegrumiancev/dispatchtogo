@@ -50,15 +50,19 @@ model User {
 }
 
 model Organization {
-  id           String   @id @default(cuid())
-  name         String
-  type         String   @default("OPERATOR")
-  contactEmail String?
-  contactPhone String?
-  phone        String?
-  email        String?
-  address      String?
-  createdAt    DateTime @default(now())
+  id               String   @id @default(cuid())
+  name             String
+  type             String   @default("OPERATOR")
+  contactEmail     String?
+  contactPhone     String?
+  phone            String?
+  email            String?
+  address          String?
+  plan             String   @default("FREE")
+  stripeCustomerId String?
+  billingEmail     String?
+  planUpdatedAt    DateTime?
+  createdAt        DateTime @default(now())
 
   users            User[]
   properties       Property[]
@@ -66,8 +70,35 @@ model Organization {
   invoices         Invoice[]
   jobs             Job[]
   preferredVendors PreferredVendor[]
+  platformBills    PlatformBill[]
 
   @@index([type])
+  @@index([plan])
+}
+
+model PlatformBill {
+  id                String    @id @default(cuid())
+  organizationId    String
+  periodStart       DateTime
+  periodEnd         DateTime
+  includedRequests  Int
+  completedRequests Int
+  billableRequests  Int
+  ratePerRequest    Float
+  amountCad         Float
+  status            String    @default("DRAFT")
+  stripeInvoiceId   String?
+  stripeInvoiceUrl  String?
+  sentAt            DateTime?
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, periodStart])
+  @@index([organizationId])
+  @@index([status])
+  @@index([periodStart])
 }
 
 model Property {

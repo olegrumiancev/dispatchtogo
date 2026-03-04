@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Eye, Building2, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { AddPropertyDialog } from "@/components/forms/add-property-dialog";
 import { PropertyActions } from "@/components/forms/property-actions";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 const ACTIVE_STATUSES = [
   "SUBMITTED",
@@ -19,6 +20,8 @@ const ACTIVE_STATUSES = [
   "IN_PROGRESS",
 ] as const;
 
+const PAGE_SIZE = 25;
+
 export const metadata = {
   title: "Properties | DispatchToGo",
 };
@@ -26,6 +29,7 @@ export const metadata = {
 interface SearchParams {
   sortBy?: string;
   sortDir?: string;
+  page?: string;
 }
 
 export default async function PropertiesPage({
@@ -42,6 +46,7 @@ export default async function PropertiesPage({
   const sp = await searchParams;
   const sortBy = sp.sortBy ?? "name";
   const sortDir = sp.sortDir === "desc" ? "desc" : "asc";
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const orderByMap: Record<string, any> = {
     name:        { name: sortDir },
@@ -59,22 +64,26 @@ export default async function PropertiesPage({
     return `/operator/properties?${new URLSearchParams(p).toString()}`;
   }
 
-  const properties = await prisma.property.findMany({
-    where: { organizationId: orgId },
-    orderBy,
-    include: {
-      _count: {
-        select: { serviceRequests: true },
+  const [total, activeCount, properties] = await Promise.all([
+    prisma.property.count({ where: { organizationId: orgId } }),
+    prisma.property.count({ where: { organizationId: orgId, isActive: true } }),
+    prisma.property.findMany({
+      where: { organizationId: orgId },
+      orderBy,
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        _count: { select: { serviceRequests: true } },
+        serviceRequests: {
+          where: { status: { in: [...ACTIVE_STATUSES] } },
+          select: { id: true },
+        },
       },
-      serviceRequests: {
-        where: { status: { in: [...ACTIVE_STATUSES] } },
-        select: { id: true },
-      },
-    },
-  });
+    }),
+  ]);
 
-  const activeCount = properties.filter((p) => p.isActive).length;
-  const inactiveCount = properties.length - activeCount;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const inactiveCount = total - activeCount;
 
   return (
     <div className="space-y-6">
@@ -83,7 +92,7 @@ export default async function PropertiesPage({
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Properties</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {properties.length} propert{properties.length !== 1 ? "ies" : "y"} &mdash;{" "}
+            {total} propert{total !== 1 ? "ies" : "y"} &mdash;{" "}
             {activeCount} active{inactiveCount > 0 ? `, ${inactiveCount} inactive` : ""}
           </p>
         </div>
@@ -193,6 +202,14 @@ export default async function PropertiesPage({
           )}
         </div>
       </Card>
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        basePath="/operator/properties"
+        extraParams={{ sortBy, sortDir }}
+        total={total}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 }

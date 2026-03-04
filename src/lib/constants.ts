@@ -58,3 +58,23 @@ export const INVOICE_STATUSES = [
   { value: "OVERDUE", label: "Overdue", color: "bg-red-100 text-red-800" },
   { value: "CANCELLED", label: "Cancelled", color: "bg-gray-200 text-gray-600" },
 ] as const;
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+/** Job statuses that count as a billable completed request */
+export const BILLED_JOB_STATUSES = ["COMPLETED", "VERIFIED"] as const;
+
+export const BILLING_PLANS: Record<
+  string,
+  { label: string; includedRequests: number; ratePerRequest: number }
+> = {
+  FREE: { label: "Free", includedRequests: 15, ratePerRequest: 0.25 },
+  VALUE: { label: "Value", includedRequests: 100, ratePerRequest: 0.25 },
+};
+
+export const PLATFORM_BILL_STATUSES = [
+  { value: "DRAFT", label: "Draft", color: "bg-gray-100 text-gray-800" },
+  { value: "SENT", label: "Sent", color: "bg-blue-100 text-blue-800" },
+  { value: "PAID", label: "Paid", color: "bg-green-100 text-green-800" },
+  { value: "VOID", label: "Void", color: "bg-gray-200 text-gray-500" },
+] as const;

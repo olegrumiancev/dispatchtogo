@@ -7,10 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { INVOICE_STATUSES } from "@/lib/constants";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { DollarSign, FileText } from "lucide-react";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 
 export const metadata = {
   title: "Invoices | DispatchToGo",
 };
+
+const PAGE_SIZE = 25;
 
 function getInvoiceStatusColor(status: string) {
   return INVOICE_STATUSES.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-800";
@@ -20,31 +23,48 @@ function getInvoiceStatusLabel(status: string) {
   return INVOICE_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
-export default async function InvoicesPage() {
+export default async function InvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session) redirect("/login");
 
   const user = session.user as any;
   const orgId: string = user.organizationId!;
 
-  const invoices = await prisma.invoice.findMany({
-    where: { organizationId: orgId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      serviceRequest: {
-        select: { referenceNumber: true, id: true },
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+
+  const where = { organizationId: orgId };
+
+  const [total, outstandingAgg, paidAgg, invoices] = await Promise.all([
+    prisma.invoice.count({ where }),
+    // Outstanding = SENT + OVERDUE
+    prisma.invoice.aggregate({
+      where: { ...where, status: { in: ["SENT", "OVERDUE"] } },
+      _sum: { amount: true },
+    }),
+    // Paid
+    prisma.invoice.aggregate({
+      where: { ...where, status: "PAID" },
+      _sum: { amount: true },
+    }),
+    prisma.invoice.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        serviceRequest: { select: { referenceNumber: true, id: true } },
       },
-    },
-  });
+    }),
+  ]);
 
-  // Total outstanding = Sent + Overdue
-  const outstanding = invoices
-    .filter((inv) => inv.status === "SENT" || inv.status === "OVERDUE")
-    .reduce((sum, inv) => sum + inv.amount, 0);
-
-  const totalPaid = invoices
-    .filter((inv) => inv.status === "PAID")
-    .reduce((sum, inv) => sum + inv.amount, 0);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const outstanding = outstandingAgg._sum.amount ?? 0;
+  const totalPaid = paidAgg._sum.amount ?? 0;
 
   return (
     <div className="space-y-6">
@@ -52,7 +72,7 @@ export default async function InvoicesPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Invoices</h1>
         <p className="text-sm text-gray-500 mt-1">
-          {invoices.length} invoice{invoices.length !== 1 ? "s" : ""}
+          {total} invoice{total !== 1 ? "s" : ""}
         </p>
       </div>
 
@@ -88,7 +108,7 @@ export default async function InvoicesPage() {
               <FileText className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <p className="text-xl font-bold text-gray-900">{invoices.length}</p>
+              <p className="text-xl font-bold text-gray-900">{total}</p>
               <p className="text-xs text-gray-500">Total Invoices</p>
             </div>
           </CardContent>
@@ -98,7 +118,7 @@ export default async function InvoicesPage() {
       {/* Table */}
       <Card>
         <div className="overflow-x-auto">
-          {invoices.length === 0 ? (
+          {total === 0 ? (
             <div className="px-6 py-16 text-center">
               <FileText className="w-10 h-10 text-gray-300 mx-auto mb-3" />
               <p className="text-sm text-gray-400">No invoices yet.</p>
@@ -167,6 +187,13 @@ export default async function InvoicesPage() {
           )}
         </div>
       </Card>
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        basePath="/operator/invoices"
+        total={total}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 }

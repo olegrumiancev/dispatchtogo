@@ -5,6 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SERVICE_CATEGORIES, VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
 import { Phone, Mail, Building2, CheckCircle, XCircle, Clock, Moon } from "lucide-react";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+
+const PAGE_SIZE = 24;
 
 function getCategoryLabel(category: string) {
   return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
@@ -20,38 +23,51 @@ const AVAILABILITY_ICONS: Record<string, React.ReactNode> = {
   OFF_DUTY: <Moon className="w-3 h-3 mr-1" />,
 };
 
-export default async function AdminVendorsPage() {
+export default async function AdminVendorsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session) redirect("/login");
 
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
 
-  const vendors = await prisma.vendor.findMany({
-    include: {
-      skills: true,
-      _count: {
-        select: {
-          jobs: true,
-        },
-      },
-    },
-    orderBy: { companyName: "asc" },
-  });
+  const sp = await searchParams;
+  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
-  // Count active jobs (not completed) per vendor for the load indicator
-  const activeJobCounts = await prisma.job.groupBy({
-    by: ["vendorId"],
-    where: { completedAt: null },
-    _count: { id: true },
-  });
+  const [total, vendors] = await Promise.all([
+    prisma.vendor.count(),
+    prisma.vendor.findMany({
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      include: {
+        skills: true,
+        _count: { select: { jobs: true } },
+      },
+      orderBy: { companyName: "asc" },
+    }),
+  ]);
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  // Active job counts only for this page's vendor IDs
+  const vendorIds = vendors.map((v) => v.id);
+  const activeJobCounts = vendorIds.length > 0
+    ? await prisma.job.groupBy({
+        by: ["vendorId"],
+        where: { completedAt: null, vendorId: { in: vendorIds } },
+        _count: { id: true },
+      })
+    : [];
   const activeJobMap = new Map(activeJobCounts.map((j) => [j.vendorId, j._count.id]));
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Vendor Management</h1>
-        <span className="text-sm text-gray-500">{vendors.length} vendors</span>
+        <span className="text-sm text-gray-500">{total} vendors</span>
       </div>
 
       {vendors.length === 0 ? (
@@ -140,6 +156,13 @@ export default async function AdminVendorsPage() {
           })}
         </div>
       )}
+      <PaginationControls
+        page={page}
+        totalPages={totalPages}
+        basePath="/admin/vendors"
+        total={total}
+        pageSize={PAGE_SIZE}
+      />
     </div>
   );
 }

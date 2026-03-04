@@ -24,6 +24,7 @@ import {
   ShieldCheck,
   UserCog,
   Heart,
+  CreditCard,
 } from "lucide-react";
 
 interface NavItem {
@@ -39,6 +40,7 @@ const OPERATOR_NAV: NavItem[] = [
   { href: "/operator/vendors", label: "Preferred Vendors", icon: Heart },
   { href: "/operator/invoices", label: "Invoices", icon: FileText },
   { href: "/operator/proof-packets", label: "Proof Packets", icon: ShieldCheck },
+  { href: "/operator/billing", label: "Billing", icon: CreditCard },
 ];
 
 const VENDOR_NAV: NavItem[] = [
@@ -53,6 +55,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/organizations", label: "Organizations", icon: Building },
   { href: "/admin/users", label: "Users", icon: UserCog },
   { href: "/admin/reports", label: "Reports", icon: BarChart3 },
+  { href: "/admin/billing", label: "Billing", icon: CreditCard },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/proof-packets", label: "Proof Packets", icon: ShieldCheck },
 ];
