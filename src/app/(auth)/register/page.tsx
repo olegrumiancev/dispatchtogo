@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SERVICE_CATEGORIES } from "@/lib/constants";
-import { Truck, AlertCircle, Mail } from "lucide-react";
+import { Truck, AlertCircle, Mail, Globe } from "lucide-react";
 
 type Role = "OPERATOR" | "VENDOR" | "";
 
@@ -140,9 +140,11 @@ export default function RegisterPage() {
     <div className="w-full max-w-md">
       {/* Branding */}
       <div className="flex flex-col items-center mb-8">
-        <div className="w-14 h-14 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg mb-4">
-          <Truck className="w-8 h-8 text-white" />
-        </div>
+        <Link href="/">
+          <div className="w-14 h-14 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg mb-4">
+            <Truck className="w-8 h-8 text-white" />
+          </div>
+        </Link>
         <h1 className="text-3xl font-bold text-white">DispatchToGo</h1>
         <p className="text-slate-400 text-sm mt-1">Create your account</p>
       </div>
@@ -302,6 +304,12 @@ export default function RegisterPage() {
             className="text-blue-600 hover:text-blue-700 font-medium"
           >
             Sign in
+          </Link>
+        </p>
+
+        <p className="text-center">
+          <Link href="/" className="text-center mt-3 text-blue-600 text-xs inline-flex items-center gap-1">
+            <Globe className="w-3 h-3" /> Dispatch To Go
           </Link>
         </p>
       </div>

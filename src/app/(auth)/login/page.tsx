@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Truck, AlertCircle, CheckCircle, Mail } from "lucide-react";
+import { Truck, AlertCircle, CheckCircle, Mail, Globe } from "lucide-react";
 
 function getDashboardUrl(role: string): string {
   switch (role) {
@@ -113,9 +113,11 @@ function LoginForm() {
     <div className="w-full max-w-md">
       {/* Branding */}
       <div className="flex flex-col items-center mb-8">
-        <div className="w-14 h-14 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg mb-4">
-          <Truck className="w-8 h-8 text-white" />
-        </div>
+        <Link href="/">
+          <div className="w-14 h-14 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg mb-4">
+            <Truck className="w-8 h-8 text-white" />
+          </div>
+        </Link>
         <h1 className="text-3xl font-bold text-white">DispatchToGo</h1>
         <p className="text-slate-400 text-sm mt-1">Field service management</p>
       </div>
@@ -203,6 +205,13 @@ function LoginForm() {
             Register here
           </Link>
         </p>
+        
+        <p className="text-center">
+          <Link href="/" className="text-center mt-3 text-blue-600 text-xs inline-flex items-center gap-1">
+            <Globe className="w-3 h-3" /> Dispatch To Go
+          </Link>
+        </p>
+        
       </div>
     </div>
   );
