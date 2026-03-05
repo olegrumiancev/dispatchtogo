@@ -11,12 +11,12 @@ import { Truck, AlertCircle, CheckCircle, Mail, Globe } from "lucide-react";
 function getDashboardUrl(role: string): string {
   switch (role) {
     case "ADMIN":
-      return "/app/admin";
+      return "/admin";
     case "VENDOR":
-      return "/app/vendor/jobs";
+      return "/vendor/jobs";
     case "OPERATOR":
     default:
-      return "/app/operator";
+      return "/operator";
   }
 }
 
@@ -207,7 +207,7 @@ function LoginForm() {
 
         <div className="text-center mt-4">
           <Link
-            href="/app/forgot-password"
+            href="/forgot-password"
             className="text-sm text-gray-500 hover:text-blue-600 transition-colors"
           >
             Forgot your password?
@@ -217,7 +217,7 @@ function LoginForm() {
         <p className="text-center text-sm text-gray-500 mt-4">
           Don&apos;t have an account?{" "}
           <Link
-            href="/app/register"
+            href="/register"
             className="text-blue-600 hover:text-blue-700 font-medium"
           >
             Register here

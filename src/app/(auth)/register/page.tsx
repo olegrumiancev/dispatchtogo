@@ -132,7 +132,7 @@ export default function RegisterPage() {
             Click the link in the email to verify your account. After verification, an admin will review and approve your registration. You&apos;ll receive an email once approved.
           </p>
           <Link
-            href="/app/login"
+            href="/login"
             className="text-blue-600 hover:text-blue-700 font-medium text-sm"
           >
             Go to Sign In
@@ -333,7 +333,7 @@ export default function RegisterPage() {
         <p className="text-center text-sm text-gray-500 mt-6">
           Already have an account?{" "}
           <Link
-            href="/app/login"
+            href="/login"
             className="text-blue-600 hover:text-blue-700 font-medium"
           >
             Sign in

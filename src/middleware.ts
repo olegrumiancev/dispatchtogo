@@ -6,8 +6,21 @@ import type { NextRequest } from "next/server";
  * Hostnames that identify the app subdomain.
  * Requests to these hosts that land on marketing pages
  * are redirected to /app/login.
+ *
+ * Set APP_HOST env var to override (e.g. "app.dispatchtogo.test" for local dev).
+ * Defaults to the production hostname.
  */
-const APP_HOSTS = ["app.dispatchtogo.com"];
+const APP_HOSTS = [
+  process.env.APP_HOST ?? "app.dispatchtogo.com",
+];
+
+/**
+ * Base URL for the app subdomain, used to redirect /app/* paths
+ * that arrive on the www/marketing host.
+ * Set APP_BASE_URL in .env.local for local dev.
+ */
+const APP_BASE_URL =
+  process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
 
 /**
  * Paths that belong to the marketing site.
@@ -31,7 +44,13 @@ const authMiddleware = withAuth({
 
 export default async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const host = request.headers.get("host") ?? "";
+  // Strip port so "app.dispatchtogo.com:3000" matches the same as "app.dispatchtogo.com"
+  const host = (request.headers.get("host") ?? "").split(":")[0];
+
+  // On the www/marketing host, redirect all /app/* paths to the app subdomain
+  if (!APP_HOSTS.includes(host) && pathname.startsWith("/app/")) {
+    return NextResponse.redirect(`${APP_BASE_URL}${pathname}`);
+  }
 
   // On the app subdomain, redirect marketing pages to /app/login
   if (APP_HOSTS.includes(host) && isMarketingPath(pathname)) {
@@ -61,8 +80,6 @@ export const config = {
      */
     "/",
     "/pricing/:path*",
-    "/app/operator/:path*",
-    "/app/vendor/:path*",
-    "/app/admin/:path*",
+    "/app/:path*",
   ],
 };
