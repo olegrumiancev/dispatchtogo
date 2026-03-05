@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      const resetUrl = `${process.env.NEXTAUTH_URL || "https://dispatchtogo.com"}/reset-password?token=${token}`;
+      const resetUrl = `${process.env.NEXTAUTH_URL || "https://dispatchtogo.com"}/app/reset-password?token=${token}`;
 
       await sendEmail(
         user.email,

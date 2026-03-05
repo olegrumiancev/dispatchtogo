@@ -35,31 +35,31 @@ interface NavItem {
 }
 
 const OPERATOR_NAV: NavItem[] = [
-  { href: "/operator", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/operator/requests", label: "Service Requests", icon: ClipboardList },
-  { href: "/operator/properties", label: "Properties", icon: Building2 },
-  { href: "/operator/vendors", label: "Preferred Vendors", icon: Heart },
-  { href: "/operator/invoices", label: "Invoices", icon: FileText },
-  { href: "/operator/proof-packets", label: "Proof Packets", icon: ShieldCheck },
-  { href: "/operator/billing", label: "Billing", icon: CreditCard },
+  { href: "/app/operator", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/app/operator/requests", label: "Service Requests", icon: ClipboardList },
+  { href: "/app/operator/properties", label: "Properties", icon: Building2 },
+  { href: "/app/operator/vendors", label: "Preferred Vendors", icon: Heart },
+  { href: "/app/operator/invoices", label: "Invoices", icon: FileText },
+  { href: "/app/operator/proof-packets", label: "Proof Packets", icon: ShieldCheck },
+  { href: "/app/operator/billing", label: "Billing", icon: CreditCard },
 ];
 
 const VENDOR_NAV: NavItem[] = [
-  { href: "/vendor/jobs", label: "Available Jobs", icon: Briefcase },
-  { href: "/vendor/profile", label: "My Profile", icon: UserCircle },
+  { href: "/app/vendor/jobs", label: "Available Jobs", icon: Briefcase },
+  { href: "/app/vendor/profile", label: "My Profile", icon: UserCircle },
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/dispatch", label: "Dispatch Board", icon: Send },
-  { href: "/admin/vendors", label: "Vendors", icon: Users },
-  { href: "/admin/organizations", label: "Organizations", icon: Building },
-  { href: "/admin/users", label: "Users", icon: UserCog },
-  { href: "/admin/reports", label: "Reports", icon: BarChart3 },
-  { href: "/admin/billing", label: "Billing", icon: CreditCard },
-  { href: "/admin/notifications", label: "Notifications", icon: Bell },
-  { href: "/admin/proof-packets", label: "Proof Packets", icon: ShieldCheck },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/app/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/app/admin/dispatch", label: "Dispatch Board", icon: Send },
+  { href: "/app/admin/vendors", label: "Vendors", icon: Users },
+  { href: "/app/admin/organizations", label: "Organizations", icon: Building },
+  { href: "/app/admin/users", label: "Users", icon: UserCog },
+  { href: "/app/admin/reports", label: "Reports", icon: BarChart3 },
+  { href: "/app/admin/billing", label: "Billing", icon: CreditCard },
+  { href: "/app/admin/notifications", label: "Notifications", icon: Bell },
+  { href: "/app/admin/proof-packets", label: "Proof Packets", icon: ShieldCheck },
+  { href: "/app/admin/settings", label: "Settings", icon: Settings },
 ];
 
 interface SidebarProps {
@@ -79,7 +79,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
       : ADMIN_NAV;
 
   const isActive = (href: string) => {
-    if (href === "/operator" || href === "/vendor/jobs" || href === "/admin") {
+    if (href === "/app/operator" || href === "/app/vendor/jobs" || href === "/app/admin") {
       return pathname === href;
     }
     return pathname.startsWith(href);
@@ -125,7 +125,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
           <p className="px-3 text-xs text-slate-400 mb-2 truncate">{userName}</p>
         )}
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => signOut({ callbackUrl: "/app/login" })}
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
         >
           <LogOut className="w-5 h-5 flex-shrink-0" />

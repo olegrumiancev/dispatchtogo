@@ -65,7 +65,7 @@ export async function POST(
               <h2 style="margin:0 0 16px">Account Approved!</h2>
               <p>Hi ${targetUser.name || "there"},</p>
               <p>Great news — your ${roleName} account has been approved. You can now sign in and start using DispatchToGo.</p>
-              <a href="${appUrl}/login" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0;font-weight:bold">Sign In Now</a>
+              <a href="${appUrl}/app/login" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0;font-weight:bold">Sign In Now</a>
               <p style="color:#6b7280;font-size:13px;margin-top:24px">Welcome to the platform!</p>
             </div>
           </div>`,

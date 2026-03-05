@@ -11,12 +11,12 @@ import { Truck, AlertCircle, CheckCircle, Mail, Globe } from "lucide-react";
 function getDashboardUrl(role: string): string {
   switch (role) {
     case "ADMIN":
-      return "/admin";
+      return "/app/admin";
     case "VENDOR":
-      return "/vendor/jobs";
+      return "/app/vendor/jobs";
     case "OPERATOR":
     default:
-      return "/operator";
+      return "/app/operator";
   }
 }
 
@@ -95,8 +95,8 @@ function LoginForm() {
             destination = parsed.pathname + parsed.search + parsed.hash;
           }
         } catch {
-          // callbackUrl is already a relative path
-          if (callbackUrl.startsWith("/")) {
+          // callbackUrl is already a relative path; ensure it is not protocol-relative (e.g. "//evil.com")
+          if (callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
             destination = callbackUrl;
           }
         }
@@ -207,7 +207,7 @@ function LoginForm() {
 
         <div className="text-center mt-4">
           <Link
-            href="/forgot-password"
+            href="/app/forgot-password"
             className="text-sm text-gray-500 hover:text-blue-600 transition-colors"
           >
             Forgot your password?
@@ -217,7 +217,7 @@ function LoginForm() {
         <p className="text-center text-sm text-gray-500 mt-4">
           Don&apos;t have an account?{" "}
           <Link
-            href="/register"
+            href="/app/register"
             className="text-blue-600 hover:text-blue-700 font-medium"
           >
             Register here

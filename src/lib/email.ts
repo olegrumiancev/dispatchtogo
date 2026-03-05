@@ -101,7 +101,7 @@ export async function sendVendorDispatchEmail(
     appUrl?: string;
   }
 ): Promise<EmailResult> {
-  const appUrl = details.appUrl || "https://dispatchtogo.com";
+  const appUrl = details.appUrl || "https://app.dispatchtogo.com";
   const subject = `New Job Dispatched – ${details.refNumber}`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
@@ -120,7 +120,7 @@ export async function sendVendorDispatchEmail(
         </table>
         <p style="margin:0 0 8px"><strong>Description:</strong></p>
         <p style="background:#f9fafb;padding:12px;border-radius:6px">${details.description}</p>
-        <a href="${appUrl}/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View & Accept Job</a>
+        <a href="${appUrl}/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View & Accept Job</a>
         <p style="color:#6b7280;font-size:13px;margin-top:24px">Please log in to accept or decline this job.</p>
       </div>
     </div>`;
@@ -143,7 +143,7 @@ export async function sendOperatorStatusEmail(
       <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
         <h2 style="margin:0 0 16px">Job Status Update</h2>
         <p>Job <strong>${refNumber}</strong> has been updated to <strong>${status}</strong>${who}.</p>
-        <a href="https://dispatchtogo.com/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Details</a>
+        <a href="https://app.dispatchtogo.com/app/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Details</a>
       </div>
     </div>`;
   return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailOperatorStatusUpdate" });
@@ -164,7 +164,7 @@ export async function sendJobCompletionEmail(
         <h2 style="margin:0 0 16px">Job Completed</h2>
         <p>Job <strong>${refNumber}</strong> has been completed by <strong>${vendorName}</strong>.</p>
         <p>You can now review the proof of service packet and approve the work.</p>
-        <a href="https://dispatchtogo.com/operator/requests" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Review Proof Packet</a>
+        <a href="https://app.dispatchtogo.com/app/operator/requests" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Review Proof Packet</a>
       </div>
     </div>`;
   return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailJobCompletion" });
@@ -185,7 +185,7 @@ export async function sendWelcomeEmail(
         <h2 style="margin:0 0 16px">Welcome, ${name}!</h2>
         <p>Your ${role.toLowerCase()} account has been created on DispatchToGo.</p>
         <p>DispatchToGo is a managed vendor dispatch platform for tourism and hospitality operators in Cornwall &amp; SDG, Ontario.</p>
-        <a href="https://dispatchtogo.com/login" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Log In</a>
+        <a href="https://app.dispatchtogo.com/app/login" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Log In</a>
       </div>
     </div>`;
   return sendEmail(email, subject, html, undefined, { eventKey: "emailWelcome" });
@@ -232,7 +232,7 @@ export async function sendVendorRejectionEmail(
         </table>
         <p style="margin:0 0 8px"><strong>Operator's reason:</strong></p>
         <p style="background:#fef2f2;border-left:4px solid #dc2626;padding:12px;border-radius:0 6px 6px 0">${reason}</p>
-        <a href="https://dispatchtogo.com/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Job in App</a>
+        <a href="https://app.dispatchtogo.com/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Job in App</a>
       </div>
     </div>`;
   return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailVendorRejection" });
@@ -266,7 +266,7 @@ export async function sendAdminRejectionEmail(
         <p style="margin:0 0 8px"><strong>Reason given:</strong></p>
         <p style="background:#f9fafb;padding:12px;border-radius:6px">${reason}</p>
         ${isDispute ? `<p style="color:#7c3aed;font-weight:bold">⚠ This job has been escalated and requires admin mediation.</p>` : ""}
-        <a href="https://dispatchtogo.com/admin/dispatch" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View in Admin Panel</a>
+        <a href="https://app.dispatchtogo.com/app/admin/dispatch" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View in Admin Panel</a>
       </div>
     </div>`;
   return sendEmail(adminEmail, subject, html, undefined, { eventKey: "emailAdminRejection" });

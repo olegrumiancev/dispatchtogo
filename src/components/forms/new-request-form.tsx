@@ -93,7 +93,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
-  // ─── Fetch billing usage on mount ─────────────────────────────────────────
+  // ─── Fetch billing usage on mount ────────────────────────────────────────────
   useEffect(() => {
     fetch("/api/requests/usage")
       .then((res) => (res.ok ? res.json() : null))
@@ -101,7 +101,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       .catch(() => {});
   }, []);
 
-  // ─── Fetch available vendors when category changes on step 2 ────────────
+  // ─── Fetch available vendors when category changes on step 2 ────────────────────
   useEffect(() => {
     if (step !== "review" || !editCategory) {
       setAvailableVendors([]);
@@ -134,7 +134,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     };
   }, [step, editCategory, propertyId]);
 
-  // ─── Handlers ──────────────────────────────────────────────────────────────
+  // ─── Handlers ───────────────────────────────────────────────────────────────
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -283,7 +283,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       }
 
       const created = await res.json();
-      router.push(`/operator/requests/${created.id}`);
+      router.push(`/app/operator/requests/${created.id}`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -292,7 +292,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     }
   };
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
 
   const propertyOptions = properties.map((p) => ({
     value: p.id,
@@ -331,13 +331,13 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       : v.companyName,
   }));
 
-  // ─── Render ────────────────────────────────────────────────────────────────
+  // ─── Render ─────────────────────────────────────────────────────────────────────
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       {/* Back link */}
       <Link
-        href="/operator/requests"
+        href="/app/operator/requests"
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -417,7 +417,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
         </div>
       )}
 
-      {/* ─── Step 1: Describe ─────────────────────────────────────────────── */}
+      {/* ─── Step 1: Describe ────────────────────────────────────────────────── */}
       {step === "describe" && (
         <>
           <Card>
@@ -533,7 +533,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
 
           {/* Classify / Cancel buttons */}
           <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
-            <Link href="/operator/requests" className="sm:flex-none">
+            <Link href="/app/operator/requests" className="sm:flex-none">
               <Button
                 type="button"
                 variant="secondary"
@@ -557,7 +557,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
         </>
       )}
 
-      {/* ─── Step 2: Review & Submit ──────────────────────────────────────── */}
+      {/* ─── Step 2: Review & Submit ──────────────────────────────────────────────── */}
       {step === "review" && (
         <>
           {/* Summary of what they entered */}
