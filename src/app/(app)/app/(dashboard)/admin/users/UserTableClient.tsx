@@ -44,21 +44,11 @@ type SortField = "name" | "email" | "role" | "createdAt";
 type SortDir = "asc" | "desc";
 type TabKey = "active" | "pending" | "disabled";
 
-function sortUsers(users: SerializedUser[], field: SortField, dir: SortDir) {
-  return [...users].sort((a, b) => {
-    let aVal = a[field] ?? "";
-    let bVal = b[field] ?? "";
-    if (field === "createdAt") {
-      aVal = new Date(aVal as string).getTime() as any;
-      bVal = new Date(bVal as string).getTime() as any;
-    } else {
-      aVal = String(aVal).toLowerCase();
-      bVal = String(bVal).toLowerCase();
-    }
-    if (aVal < bVal) return dir === "asc" ? -1 : 1;
-    if (aVal > bVal) return dir === "asc" ? 1 : -1;
-    return 0;
-  });
+function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
+  if (sortField !== field) return <ChevronsUpDown className="w-3.5 h-3.5 inline ml-1 opacity-40" />;
+  return sortDir === "asc"
+    ? <ChevronUp className="w-3.5 h-3.5 inline ml-1 text-blue-600" />
+    : <ChevronDown className="w-3.5 h-3.5 inline ml-1 text-blue-600" />;
 }
 
 export function UserTableClient({ users }: { users: SerializedUser[] }) {
@@ -66,225 +56,344 @@ export function UserTableClient({ users }: { users: SerializedUser[] }) {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("createdAt");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const PAGE_SIZE = 25;
+
+  const getStatus = (u: SerializedUser) => {
+    const isPending = u.role !== "ADMIN" && u.emailVerified && !u.isApproved && !u.rejectedAt;
+    const isRejected = u.rejectedAt !== null;
+    const isUnverified = u.role !== "ADMIN" && !u.emailVerified;
+    return { isPending, isRejected, isUnverified };
+  };
+
+  const activeUsers = useMemo(
+    () => users.filter((u) => (u.isApproved || u.role === "ADMIN") && !u.isDisabled),
+    [users]
+  );
+
+  const pendingUsers = useMemo(
+    () => users.filter((u) => !u.isApproved && u.role !== "ADMIN" && !u.isDisabled),
+    [users]
+  );
+
+  const disabledUsers = useMemo(
+    () => users.filter((u) => u.isDisabled),
+    [users]
+  );
+
+  const tabUsers = tab === "active" ? activeUsers : tab === "pending" ? pendingUsers : disabledUsers;
 
   const filtered = useMemo(() => {
-    let list = users;
-
-    // Tab filter
-    if (tab === "active") {
-      list = list.filter((u) => u.isApproved && !u.isDisabled && !u.rejectedAt);
-    } else if (tab === "pending") {
-      list = list.filter((u) => !u.isApproved && !u.rejectedAt && !u.isDisabled && u.emailVerified);
-    } else if (tab === "disabled") {
-      list = list.filter((u) => u.isDisabled || u.rejectedAt);
-    }
-
-    // Search filter
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (u) =>
-          (u.name ?? "").toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.role.toLowerCase().includes(q) ||
-          (u.organization?.name ?? "").toLowerCase().includes(q) ||
-          (u.vendor?.companyName ?? "").toLowerCase().includes(q)
+    const q = search.trim().toLowerCase();
+    if (!q) return tabUsers;
+    return tabUsers.filter((u) => {
+      const org = u.organization?.name ?? u.vendor?.companyName ?? "";
+      return (
+        (u.name ?? "").toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.role.toLowerCase().includes(q) ||
+        org.toLowerCase().includes(q)
       );
-    }
+    });
+  }, [tabUsers, search]);
 
-    return sortUsers(list, sortField, sortDir);
-  }, [users, tab, search, sortField, sortDir]);
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) => {
+      let aVal: string;
+      let bVal: string;
+      if (sortField === "name") {
+        aVal = (a.name ?? "").toLowerCase();
+        bVal = (b.name ?? "").toLowerCase();
+      } else if (sortField === "email") {
+        aVal = a.email.toLowerCase();
+        bVal = b.email.toLowerCase();
+      } else if (sortField === "role") {
+        aVal = a.role;
+        bVal = b.role;
+      } else {
+        aVal = a.createdAt;
+        bVal = b.createdAt;
+      }
+      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [filtered, sortField, sortDir]);
 
-  const counts = useMemo(() => ({
-    active: users.filter((u) => u.isApproved && !u.isDisabled && !u.rejectedAt).length,
-    pending: users.filter((u) => !u.isApproved && !u.rejectedAt && !u.isDisabled && u.emailVerified).length,
-    disabled: users.filter((u) => u.isDisabled || u.rejectedAt).length,
-  }), [users]);
-
-  function handleSort(field: SortField) {
+  const toggleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortField(field);
       setSortDir("asc");
     }
-  }
+    setCurrentPage(1);
+  };
 
-  function SortIcon({ field }: { field: SortField }) {
-    if (sortField !== field) return <ChevronsUpDown className="w-3 h-3 text-gray-400" />;
-    return sortDir === "asc" ? (
-      <ChevronUp className="w-3 h-3 text-blue-600" />
-    ) : (
-      <ChevronDown className="w-3 h-3 text-blue-600" />
-    );
-  }
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE);
+  const paginatedRows = sorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const tabs: { key: TabKey; label: string; icon: React.ElementType; count: number }[] = [
-    { key: "active", label: "Active", icon: Users, count: counts.active },
-    { key: "pending", label: "Pending Approval", icon: Clock, count: counts.pending },
-    { key: "disabled", label: "Disabled / Rejected", icon: Ban, count: counts.disabled },
-  ];
+  const thClass =
+    "text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider select-none cursor-pointer hover:text-gray-800 transition-colors";
 
   return (
     <div className="space-y-4">
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
-        {tabs.map((t) => (
+      {/* Tabs + Search bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        {/* Tabs */}
+        <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-1 gap-1 w-fit">
           <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-              tab === t.key
-                ? "border-blue-600 text-blue-700"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+            onClick={() => { setTab("active"); setSearch(""); setCurrentPage(1); }}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              tab === "active"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <t.icon className="w-4 h-4" />
-            {t.label}
+            Active
             <span
-              className={`ml-1 px-1.5 py-0.5 text-xs rounded-full ${
-                tab === t.key
+              className={`ml-2 inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                tab === "active"
                   ? "bg-blue-100 text-blue-700"
-                  : "bg-gray-100 text-gray-500"
+                  : "bg-gray-200 text-gray-500"
               }`}
             >
-              {t.count}
+              {activeUsers.length}
             </span>
           </button>
-        ))}
-      </div>
+          <button
+            onClick={() => { setTab("pending"); setSearch(""); setCurrentPage(1); }}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              tab === "pending"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Pending / To Verify
+            <span
+              className={`ml-2 inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                tab === "pending"
+                  ? pendingUsers.length > 0
+                    ? "bg-amber-100 text-amber-700"
+                    : "bg-blue-100 text-blue-700"
+                  : pendingUsers.length > 0
+                  ? "bg-amber-100 text-amber-700"
+                  : "bg-gray-200 text-gray-500"
+              }`}
+            >
+              {pendingUsers.length}
+            </span>
+          </button>
+          <button
+            onClick={() => { setTab("disabled"); setSearch(""); setCurrentPage(1); }}
+            className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              tab === "disabled"
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            Disabled
+            <span
+              className={`ml-2 inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                disabledUsers.length > 0
+                  ? "bg-gray-300 text-gray-700"
+                  : "bg-gray-200 text-gray-500"
+              }`}
+            >
+              {disabledUsers.length}
+            </span>
+          </button>
+        </div>
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search by name, email, role, or company…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        {/* Search */}
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+            placeholder="Search name, email, org…"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          />
+        </div>
       </div>
 
       {/* Table */}
-      <Card className="overflow-hidden">
+      <Card>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                {([
-                  { field: "name" as SortField, label: "Name" },
-                  { field: "email" as SortField, label: "Email" },
-                  { field: "role" as SortField, label: "Role" },
-                ] as { field: SortField; label: string }[]).map(({ field, label }) => (
-                  <th
-                    key={field}
-                    onClick={() => handleSort(field)}
-                    className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
-                  >
-                    <div className="flex items-center gap-1">
-                      {label}
-                      <SortIcon field={field} />
-                    </div>
+          {sorted.length === 0 ? (
+            <div className="px-6 py-16 text-center">
+              <Users className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm text-gray-400">
+                {search ? "No users match your search." : "No users in this category."}
+              </p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className={thClass} onClick={() => toggleSort("name")}>
+                    Name <SortIcon field="name" sortField={sortField} sortDir={sortDir} />
                   </th>
-                ))}
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
-                  Company
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
-                  Status
-                </th>
-                <th
-                  onClick={() => handleSort("createdAt")}
-                  className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none hidden lg:table-cell"
-                >
-                  <div className="flex items-center gap-1">
-                    Joined
-                    <SortIcon field="createdAt" />
-                  </div>
-                </th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-gray-400">
-                    No users found.
-                  </td>
+                  <th className={thClass} onClick={() => toggleSort("email")}>
+                    Email <SortIcon field="email" sortField={sortField} sortDir={sortDir} />
+                  </th>
+                  <th className={thClass} onClick={() => toggleSort("role")}>
+                    Role <SortIcon field="role" sortField={sortField} sortDir={sortDir} />
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                    Organization / Company
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className={`${thClass} hidden lg:table-cell`} onClick={() => toggleSort("createdAt")}>
+                    Created <SortIcon field="createdAt" sortField={sortField} sortDir={sortDir} />
+                  </th>
+                  <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
-              ) : (
-                filtered.map((user) => {
-                  const roleInfo = ROLE_CONFIG[user.role] ?? {
-                    label: user.role,
-                    color: "bg-gray-100 text-gray-700",
-                    icon: Users,
-                  };
-                  const RoleIcon = roleInfo.icon;
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {paginatedRows.map((u) => {
+                  const cfg = ROLE_CONFIG[u.role] ?? ROLE_CONFIG.OPERATOR;
+                  const { isPending, isRejected, isUnverified } = getStatus(u);
+                  const isUserDisabled = u.isDisabled;
 
                   return (
-                    <tr key={user.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-3 font-medium text-gray-900">
-                        {user.name ?? <span className="text-gray-400 italic">—</span>}
+                    <tr
+                      key={u.id}
+                      className={`hover:bg-gray-50 transition-colors ${
+                        isPending ? "bg-amber-50 hover:bg-amber-100" : ""
+                      } ${isRejected ? "bg-red-50/50 hover:bg-red-50" : ""} ${
+                        isUserDisabled ? "opacity-60" : ""
+                      }`}
+                    >
+                      <td className="px-6 py-4">
+                        <p className="text-sm font-medium text-gray-900">
+                          {u.name || <span className="text-gray-400 italic">No name</span>}
+                        </p>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{user.email}</td>
-                      <td className="px-4 py-3">
-                        <Badge
-                          variant={roleInfo.color}
-                          className="flex items-center gap-1 w-fit"
-                        >
-                          <RoleIcon className="w-3 h-3" />
-                          {roleInfo.label}
-                        </Badge>
+                      <td className="px-6 py-4">
+                        <p className="text-sm text-gray-600">{u.email}</p>
                       </td>
-                      <td className="px-4 py-3 text-gray-600 hidden md:table-cell">
-                        {user.organization?.name ?? user.vendor?.companyName ?? (
-                          <span className="text-gray-400">—</span>
-                        )}
+                      <td className="px-6 py-4">
+                        <Badge variant={cfg.color}>{cfg.label}</Badge>
                       </td>
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        {user.isDisabled ? (
-                          <Badge variant="bg-gray-200 text-gray-600" className="flex items-center gap-1 w-fit">
-                            <Ban className="w-3 h-3" /> Disabled
+                      <td className="px-6 py-4 hidden md:table-cell">
+                        <p className="text-sm text-gray-600">
+                          {u.organization?.name ?? u.vendor?.companyName ?? (
+                            <span className="text-gray-400">&mdash;</span>
+                          )}
+                        </p>
+                      </td>
+                      <td className="px-6 py-4">
+                        {u.role === "ADMIN" ? (
+                          <Badge variant="bg-emerald-100 text-emerald-700">Active</Badge>
+                        ) : isUserDisabled ? (
+                          <Badge variant="bg-gray-200 text-gray-600">
+                            <Ban className="w-3 h-3 mr-0.5" />
+                            Disabled
                           </Badge>
-                        ) : user.rejectedAt ? (
-                          <Badge variant="bg-red-100 text-red-700" className="flex items-center gap-1 w-fit">
-                            <AlertTriangle className="w-3 h-3" /> Rejected
+                        ) : isUnverified ? (
+                          <Badge variant="bg-gray-200 text-gray-600">Unverified</Badge>
+                        ) : isPending ? (
+                          <Badge variant="bg-amber-100 text-amber-800">
+                            <Clock className="w-3 h-3 mr-0.5" />
+                            Pending Approval
                           </Badge>
-                        ) : user.isApproved ? (
-                          <Badge variant="bg-emerald-100 text-emerald-700" className="flex items-center gap-1 w-fit">
-                            Active
-                          </Badge>
-                        ) : user.emailVerified ? (
-                          <Badge variant="bg-yellow-100 text-yellow-700" className="flex items-center gap-1 w-fit">
-                            <Clock className="w-3 h-3" /> Pending
-                          </Badge>
+                        ) : isRejected ? (
+                          <div className="space-y-1">
+                            <Badge variant="bg-red-100 text-red-700">
+                              <AlertTriangle className="w-3 h-3 mr-0.5" />
+                              Rejected
+                            </Badge>
+                            {u.rejectionNote && (
+                              <p
+                                className="text-xs text-red-600 max-w-[200px] truncate"
+                                title={u.rejectionNote}
+                              >
+                                {u.rejectionNote}
+                              </p>
+                            )}
+                          </div>
+                        ) : u.isApproved ? (
+                          <Badge variant="bg-emerald-100 text-emerald-700">Active</Badge>
                         ) : (
-                          <Badge variant="bg-gray-100 text-gray-500" className="flex items-center gap-1 w-fit">
-                            Unverified
-                          </Badge>
+                          <Badge variant="bg-gray-200 text-gray-600">Inactive</Badge>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-500 hidden lg:table-cell whitespace-nowrap">
-                        {formatDate(new Date(user.createdAt))}
+                      <td className="px-6 py-4 text-sm text-gray-500 hidden lg:table-cell">
+                        {formatDate(u.createdAt)}
                       </td>
-                      <td className="px-4 py-3 text-right">
-                        <UserActions user={user} />
+                      <td className="px-6 py-4 text-right">
+                        <UserActions
+                          userId={u.id}
+                          userName={u.name ?? ""}
+                          userEmail={u.email}
+                          isApproved={u.isApproved}
+                          isRejected={isRejected}
+                          isDisabled={isUserDisabled}
+                          isPending={!!isPending}
+                          isAdmin={u.role === "ADMIN"}
+                        />
                       </td>
                     </tr>
                   );
-                })
-              )}
-            </tbody>
-          </table>
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-3 border-t border-gray-100">
+            <p className="text-sm text-gray-500">
+              Showing{" "}
+              <span className="font-medium text-gray-700">
+                {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, sorted.length)}
+              </span>{" "}
+              of <span className="font-medium text-gray-700">{sorted.length}</span>
+            </p>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md text-gray-600 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                ‹
+              </button>
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                const half = 2;
+                let start = Math.max(1, currentPage - half);
+                let end = Math.min(totalPages, start + 4);
+                if (end - start < 4) start = Math.max(1, end - 4);
+                return start + i;
+              }).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`inline-flex items-center justify-center w-8 h-8 rounded-md text-sm transition-colors ${
+                    p === currentPage
+                      ? "bg-blue-600 text-white font-semibold"
+                      : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md text-gray-600 hover:bg-gray-100 disabled:text-gray-300 disabled:cursor-not-allowed transition-colors"
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        )}
       </Card>
-
-      <p className="text-xs text-gray-400">
-        Showing {filtered.length} of {users.length} total users
-      </p>
     </div>
   );
 }
