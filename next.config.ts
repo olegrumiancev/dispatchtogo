@@ -9,6 +9,25 @@ const nextConfig: NextConfig = {
     // Override in .env.local (or the environment) to change the default of 3.
     AI_TRIAGE_MAX_RETRIES: process.env.AI_TRIAGE_MAX_RETRIES ?? "3",
   },
+  async redirects() {
+    return [
+      {
+        source: "/login",
+        destination: "https://app.dispatchtogo.com/app/login",
+        permanent: false,
+      },
+      {
+        source: "/dashboard",
+        destination: "https://app.dispatchtogo.com/app/login",
+        permanent: false,
+      },
+      {
+        source: "/register",
+        destination: "https://app.dispatchtogo.com/app/register",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default withSentryConfig(nextConfig, {
