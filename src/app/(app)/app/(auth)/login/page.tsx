@@ -84,15 +84,18 @@ function LoginForm() {
       const role = (session?.user as any)?.role ?? "OPERATOR";
       const dashboardUrl = getDashboardUrl(role);
 
+      // Redirect to the originally requested URL if present and same-origin
       const callbackUrl = searchParams.get("callbackUrl");
       let destination = dashboardUrl;
       if (callbackUrl) {
         try {
           const parsed = new URL(callbackUrl);
+          // Only follow the redirect if it points to the same origin
           if (parsed.origin === window.location.origin) {
             destination = parsed.pathname + parsed.search + parsed.hash;
           }
         } catch {
+          // callbackUrl is already a relative path
           if (callbackUrl.startsWith("/")) {
             destination = callbackUrl;
           }
@@ -126,6 +129,7 @@ function LoginForm() {
 
   return (
     <div className="w-full max-w-md">
+      {/* Branding */}
       <div className="flex flex-col items-center mb-8">
         <Link href="/">
           <div className="w-14 h-14 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg mb-4">
@@ -136,6 +140,7 @@ function LoginForm() {
         <p className="text-slate-400 text-sm mt-1">Field service management</p>
       </div>
 
+      {/* Card */}
       <div className="bg-white rounded-2xl shadow-2xl p-8">
         <h2 className="text-xl font-semibold text-gray-900 mb-6">Sign In</h2>
 
@@ -171,24 +176,60 @@ function LoginForm() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input label="Email" type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" />
-          <Input label="Password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
-          <Button type="submit" variant="primary" size="lg" loading={loading} className="w-full">Sign In</Button>
+          <Input
+            label="Email"
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="email"
+          />
+          <Input
+            label="Password"
+            type="password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+          />
+          <Button
+            type="submit"
+            variant="primary"
+            size="lg"
+            loading={loading}
+            className="w-full"
+          >
+            Sign In
+          </Button>
         </form>
 
         <div className="text-center mt-4">
-          <Link href="/app/forgot-password" className="text-sm text-gray-500 hover:text-blue-600 transition-colors">Forgot your password?</Link>
+          <Link
+            href="/app/forgot-password"
+            className="text-sm text-gray-500 hover:text-blue-600 transition-colors"
+          >
+            Forgot your password?
+          </Link>
         </div>
 
         <p className="text-center text-sm text-gray-500 mt-4">
           Don&apos;t have an account?{" "}
-          <Link href="/app/register" className="text-blue-600 hover:text-blue-700 font-medium">Register here</Link>
+          <Link
+            href="/app/register"
+            className="text-blue-600 hover:text-blue-700 font-medium"
+          >
+            Register here
+          </Link>
         </p>
+        
         <p className="text-center">
           <Link href="/" className="text-center mt-3 text-blue-600 text-xs inline-flex items-center gap-1">
             <Globe className="w-3 h-3" /> Dispatch To Go
           </Link>
         </p>
+        
       </div>
     </div>
   );
@@ -196,7 +237,15 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="w-full max-w-md"><div className="bg-white rounded-2xl shadow-2xl p-8 text-center"><p className="text-gray-500">Loading...</p></div></div>}>
+    <Suspense
+      fallback={
+        <div className="w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
+            <p className="text-gray-500">Loading...</p>
+          </div>
+        </div>
+      }
+    >
       <LoginForm />
     </Suspense>
   );

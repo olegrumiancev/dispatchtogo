@@ -60,100 +60,112 @@ export default function NotificationsPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-4 space-y-8">
+    <div className="max-w-3xl mx-auto space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <Bell className="w-6 h-6 text-blue-600" />
-          SMS Notifications
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Manage Twilio SMS configuration and send test messages.
+        <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Manage SMS notification settings and test delivery.
         </p>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="text-base font-semibold text-slate-800 mb-4">Configuration Status</h2>
-        <div className="space-y-3">
-          <StatusRow
-            label="Twilio Integration"
-            enabled={smsEnabled}
-            description={
-              smsEnabled
-                ? "Credentials detected — SMS will be delivered via Twilio."
-                : "TWILIO_ACCOUNT_SID not set — messages are logged to console only."
-            }
-          />
-          <StatusRow label="Notify vendor on dispatch" enabled={NOTIFICATION_SETTINGS.notifyVendorOnDispatch} />
-          <StatusRow label="Notify operator on status change" enabled={NOTIFICATION_SETTINGS.notifyOperatorOnStatusChange} />
-          <StatusRow label="Notify operator on job completion" enabled={NOTIFICATION_SETTINGS.notifyOperatorOnCompletion} />
+      {/* SMS Status Card */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center">
+            <Bell className="w-5 h-5 text-blue-600" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">SMS Notifications</h2>
+            <p className="text-xs text-gray-500">Powered by Twilio</p>
+          </div>
+          <div className="ml-auto">
+            {smsEnabled ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                Enabled
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+                <XCircle className="w-3.5 h-3.5" />
+                Disabled
+              </span>
+            )}
+          </div>
         </div>
-      </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="text-base font-semibold text-slate-800 mb-1">Send a Test SMS</h2>
-        <p className="text-sm text-slate-500 mb-4">Verify your Twilio credentials by sending a test message.</p>
+        <div className="text-sm text-gray-600 space-y-1">
+          <p>
+            SMS is currently{" "}
+            <span className={smsEnabled ? "text-emerald-600 font-medium" : "text-gray-400 font-medium"}>
+              {smsEnabled ? "active" : "inactive"}
+            </span>
+            . Configure{" "}
+            <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded font-mono">TWILIO_*</code>{" "}
+            environment variables to enable SMS delivery.
+          </p>
+        </div>
+      </div>
+
+      {/* Test SMS */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <h2 className="text-base font-semibold text-gray-900 mb-1">Send Test SMS</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Test the SMS pipeline by sending a message to any phone number.
+        </p>
 
         <form onSubmit={handleSendTest} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Phone Number</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Phone Number
+            </label>
             <input
               type="tel"
               value={form.phone}
               onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-              placeholder="+16135550000"
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="+1 555 000 0000"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               required
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Message
+            </label>
             <textarea
               value={form.message}
               onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
               rows={3}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
               required
             />
           </div>
+
           <button
             type="submit"
             disabled={form.status === "sending"}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+            className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
           >
-            {form.status === "sending" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {form.status === "sending" ? "Sending…" : "Send Test SMS"}
+            {form.status === "sending" ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+            {form.status === "sending" ? "Sending..." : "Send Test"}
           </button>
+
           {form.feedback && (
-            <div className={`flex items-start gap-2 p-3 rounded-md text-sm ${
-              form.status === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"
-            }`}>
-              {form.status === "success" ? <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+            <div
+              className={`text-sm px-3 py-2 rounded-lg ${
+                form.status === "success"
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-red-50 text-red-700 border border-red-200"
+              }`}
+            >
               {form.feedback}
             </div>
           )}
         </form>
-      </section>
-
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="text-base font-semibold text-slate-800 mb-3">Automatic Notification Events</h2>
-        <ul className="space-y-2 text-sm text-slate-600">
-          <li><strong>Vendor dispatched</strong> — SMS sent to vendor when a job is assigned.</li>
-          <li><strong>Job accepted / rejected</strong> — SMS sent to operator when vendor responds.</li>
-          <li><strong>Job started</strong> — SMS sent to operator when vendor begins work.</li>
-          <li><strong>Job completed</strong> — SMS sent to operator when vendor marks work done.</li>
-        </ul>
-      </section>
-    </div>
-  );
-}
-
-function StatusRow({ label, enabled, description }: { label: string; enabled: boolean; description?: string; }) {
-  return (
-    <div className="flex items-start gap-3">
-      {enabled ? <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" /> : <XCircle className="w-4 h-4 text-slate-300 mt-0.5 flex-shrink-0" />}
-      <div>
-        <p className="text-sm font-medium text-slate-700">{label}</p>
-        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
       </div>
     </div>
   );

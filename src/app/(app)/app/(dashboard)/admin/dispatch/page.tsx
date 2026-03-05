@@ -32,6 +32,7 @@ export default async function DispatchBoardPage() {
   if (user.role !== "ADMIN") redirect("/");
 
   const [unassignedRequests, activeJobs, availableVendors, disputedRequests] = await Promise.all([
+    // Requests ready to be dispatched (no job yet, or job was declined)
     prisma.serviceRequest.findMany({
       where: {
         status: { in: ["READY_TO_DISPATCH", "SUBMITTED"] },
@@ -45,10 +46,13 @@ export default async function DispatchBoardPage() {
         organization: { select: { name: true } },
       },
       orderBy: [
+        // Emergency first, then by createdAt
         { urgency: "desc" },
         { createdAt: "asc" },
       ],
     }),
+
+    // Active jobs: not yet completed and not declined
     prisma.job.findMany({
       where: {
         completedAt: null,
@@ -64,6 +68,8 @@ export default async function DispatchBoardPage() {
       },
       orderBy: { createdAt: "desc" },
     }),
+
+    // All active vendors with their skills for the assign modal
     prisma.vendor.findMany({
       where: { isActive: true },
       include: {
@@ -71,6 +77,8 @@ export default async function DispatchBoardPage() {
       },
       orderBy: { companyName: "asc" },
     }),
+
+    // Disputed requests requiring admin mediation
     prisma.serviceRequest.findMany({
       where: { status: "DISPUTED" },
       include: {
@@ -82,6 +90,7 @@ export default async function DispatchBoardPage() {
     }),
   ]);
 
+  // Serialize for client components
   const vendorsForModal = availableVendors.map((v) => ({
     id: v.id,
     companyName: v.companyName,
@@ -101,6 +110,7 @@ export default async function DispatchBoardPage() {
         </div>
       </div>
 
+      {/* Disputed requests — admin action required */}
       {disputedRequests.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
@@ -154,13 +164,17 @@ export default async function DispatchBoardPage() {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left: Unassigned / Ready to dispatch */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-gray-800">Ready to Dispatch</h2>
+            <h2 className="text-lg font-semibold text-gray-800">
+              Ready to Dispatch
+            </h2>
             <span className="bg-orange-100 text-orange-700 text-xs font-semibold px-2 py-0.5 rounded-full">
               {unassignedRequests.length}
             </span>
           </div>
+
           {unassignedRequests.length === 0 ? (
             <Card>
               <CardContent className="py-10 text-center text-sm text-gray-400">
@@ -174,12 +188,18 @@ export default async function DispatchBoardPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-gray-900">{req.referenceNumber}</span>
+                        <span className="text-sm font-semibold text-gray-900">
+                          {req.referenceNumber}
+                        </span>
                         <Badge variant={getUrgencyColor(req.urgency)}>
-                          {req.urgency === "EMERGENCY" && <AlertTriangle className="w-3 h-3 mr-1" />}
+                          {req.urgency === "EMERGENCY" && (
+                            <AlertTriangle className="w-3 h-3 mr-1" />
+                          )}
                           {req.urgency}
                         </Badge>
-                        <Badge variant={getStatusColor(req.status)}>{getStatusLabel(req.status)}</Badge>
+                        <Badge variant={getStatusColor(req.status)}>
+                          {getStatusLabel(req.status)}
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-1 text-sm text-gray-700">
                         <MapPin className="w-3.5 h-3.5 text-gray-400" />
@@ -193,23 +213,34 @@ export default async function DispatchBoardPage() {
                         {formatDate(req.createdAt)}
                       </div>
                     </div>
-                    <AssignModal requestRef={req.referenceNumber} requestId={req.id} vendors={vendorsForModal} />
+                    <AssignModal
+                      requestRef={req.referenceNumber}
+                      requestId={req.id}
+                      vendors={vendorsForModal}
+                    />
                   </div>
                 </CardContent>
               </Card>
             ))
           )}
         </div>
+
+        {/* Right: Active jobs */}
         <div className="space-y-4">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-gray-800">Active Jobs</h2>
+            <h2 className="text-lg font-semibold text-gray-800">
+              Active Jobs
+            </h2>
             <span className="bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
               {activeJobs.length}
             </span>
           </div>
+
           {activeJobs.length === 0 ? (
             <Card>
-              <CardContent className="py-10 text-center text-sm text-gray-400">No active jobs.</CardContent>
+              <CardContent className="py-10 text-center text-sm text-gray-400">
+                No active jobs.
+              </CardContent>
             </Card>
           ) : (
             activeJobs.map((job) => {
@@ -222,13 +253,21 @@ export default async function DispatchBoardPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-900">{sr.referenceNumber}</span>
+                          <span className="text-sm font-semibold text-gray-900">
+                            {sr.referenceNumber}
+                          </span>
                           {isPaused ? (
-                            <Badge variant="bg-amber-100 text-amber-800">Paused — Will Return</Badge>
+                            <Badge variant="bg-amber-100 text-amber-800">
+                              Paused — Will Return
+                            </Badge>
                           ) : (
-                            <Badge variant={getStatusColor(sr.status)}>{getStatusLabel(sr.status)}</Badge>
+                            <Badge variant={getStatusColor(sr.status)}>
+                              {getStatusLabel(sr.status)}
+                            </Badge>
                           )}
-                          <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
+                          <Badge variant={getUrgencyColor(sr.urgency)}>
+                            {sr.urgency}
+                          </Badge>
                         </div>
                         <div className="flex items-center gap-1 text-sm text-gray-700">
                           <MapPin className="w-3.5 h-3.5 text-gray-400" />
@@ -238,13 +277,20 @@ export default async function DispatchBoardPage() {
                           <User className="w-3.5 h-3.5 text-gray-400" />
                           <span>{job.vendor.companyName}</span>
                           <span className="text-gray-400 mx-1">·</span>
-                          <a href={`tel:${job.vendor.phone}`} className="text-blue-600 hover:text-blue-700 text-xs">
+                          <a
+                            href={`tel:${job.vendor.phone}`}
+                            className="text-blue-600 hover:text-blue-700 text-xs"
+                          >
                             {job.vendor.phone}
                           </a>
                         </div>
-                        <div className="text-xs text-gray-500">{getCategoryLabel(sr.category)}</div>
+                        <div className="text-xs text-gray-500">
+                          {getCategoryLabel(sr.category)}
+                        </div>
                         {isPaused && pauseReason && (
-                          <div className="text-xs text-amber-700 italic bg-amber-50 rounded px-2 py-1 mt-1">{pauseReason}</div>
+                          <div className="text-xs text-amber-700 italic bg-amber-50 rounded px-2 py-1 mt-1">
+                            {pauseReason}
+                          </div>
                         )}
                       </div>
                     </div>
