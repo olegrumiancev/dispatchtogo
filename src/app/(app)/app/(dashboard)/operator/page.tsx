@@ -2,239 +2,299 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { REQUEST_STATUSES } from "@/lib/constants";
+import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import { ClipboardList, Clock, CheckCircle, TrendingUp, Plus } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import {
-  ClipboardList,
-  CheckCircle,
-  Clock,
-  AlertTriangle,
-  Building2,
-  ChevronRight,
-} from "lucide-react";
 
-export const metadata = {
-  title: "Dashboard | DispatchToGo",
-};
+function getUrgencyColor(urgency: string) {
+  return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
+}
 
 function getStatusColor(status: string) {
-  return (
-    REQUEST_STATUSES.find((s) => s.value === status)?.color ??
-    "bg-gray-100 text-gray-800"
-  );
+  return REQUEST_STATUSES.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-800";
 }
 
 function getStatusLabel(status: string) {
   return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
-export default async function OperatorDashboardPage() {
+function getCategoryLabel(category: string) {
+  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+}
+
+export default async function OperatorDashboard() {
   const session = await auth();
   if (!session) redirect("/app/login");
 
   const user = session.user as any;
-  if (user.role !== "OPERATOR") redirect("/");
+  const orgId: string = user.organizationId!;
 
-  const dbUser = await prisma.user.findUnique({
-    where: { id: user.id },
-    include: { organization: true },
+  // Fetch organization name
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { name: true },
   });
 
-  if (!dbUser?.organization) redirect("/app/onboarding");
-  const org = dbUser.organization;
+  // First day of current month
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [requests, properties] = await Promise.all([
-    prisma.serviceRequest.findMany({
-      where: { organizationId: org.id },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      include: {
-        property: { select: { name: true } },
-        jobs: { select: { status: true } },
+  // Run all stat queries in parallel
+  const [
+    openRequests,
+    inProgress,
+    completedThisMonth,
+    completedForAvg,
+    recentRequests,
+  ] = await Promise.all([
+    // Open requests: NOT in terminal statuses
+    prisma.serviceRequest.count({
+      where: {
+        organizationId: orgId,
+        status: {
+          notIn: ["COMPLETED", "VERIFIED", "CANCELLED"],
+        },
       },
     }),
-    prisma.property.count({ where: { organizationId: org.id } }),
+
+    // In-progress count
+    prisma.serviceRequest.count({
+      where: {
+        organizationId: orgId,
+        status: "IN_PROGRESS",
+      },
+    }),
+
+    // Completed this month
+    prisma.serviceRequest.count({
+      where: {
+        organizationId: orgId,
+        status: { in: ["COMPLETED", "VERIFIED"] },
+        resolvedAt: { gte: firstOfMonth },
+      },
+    }),
+
+    // For avg resolution: fetch completed this month with timestamps
+    prisma.serviceRequest.findMany({
+      where: {
+        organizationId: orgId,
+        status: { in: ["COMPLETED", "VERIFIED"] },
+        resolvedAt: { gte: firstOfMonth },
+        createdAt: { not: undefined },
+      },
+      select: { createdAt: true, resolvedAt: true },
+    }),
+
+    // Recent 10 requests
+    prisma.serviceRequest.findMany({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      include: {
+        property: { select: { name: true } },
+        job: {
+          include: {
+            notes: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+          },
+        },
+        requestViews: { where: { userId: user.id }, select: { viewedAt: true } },
+      },
+    }),
   ]);
 
-  // KPI counts
-  const totalRequests = requests.length;
-  const openRequests = requests.filter(
-    (r) => !["COMPLETED", "CANCELLED"].includes(r.status)
-  ).length;
-  const completedRequests = requests.filter((r) => r.status === "COMPLETED").length;
-  const urgentRequests = requests.filter(
-    (r) => r.priority === "URGENT" && !["COMPLETED", "CANCELLED"].includes(r.status)
-  ).length;
+  // Calculate average resolution hours
+  let avgResolutionHours: string = "—";
+  if (completedForAvg.length > 0) {
+    const totalMs = completedForAvg.reduce((sum, r) => {
+      if (!r.resolvedAt) return sum;
+      return sum + (r.resolvedAt.getTime() - r.createdAt.getTime());
+    }, 0);
+    const avgMs = totalMs / completedForAvg.length;
+    const hours = avgMs / (1000 * 60 * 60);
+    avgResolutionHours = `${hours.toFixed(1)}h`;
+  }
 
-  const recentRequests = requests.slice(0, 8);
+  // Compute new-activity flag for recent requests
+  const recentRequestsWithActivity = recentRequests.map((req) => {
+    const job = req.job;
+    const viewedAt = req.requestViews[0]?.viewedAt;
+    const latestActivity = (
+      [job?.enRouteAt, job?.arrivedAt, job?.completedAt, job?.notes[0]?.createdAt] as (Date | null | undefined)[]
+    ).reduce<Date | null>((max, d) => {
+      if (!d) return max;
+      return !max || d > max ? d : max;
+    }, null);
+    const hasNewActivity = !!latestActivity && (!viewedAt || latestActivity > viewedAt);
+    return { ...req, hasNewActivity };
+  });
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Welcome header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Welcome back
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">
-            <Building2 className="inline w-4 h-4 mr-1 text-gray-400" />
-            {org.name}
+            Welcome back,{" "}
+            <span className="font-medium text-gray-700">
+              {user?.name ?? user?.email}
+            </span>{" "}
+            — {org?.name ?? "Your Organization"}
           </p>
         </div>
-        <Link
-          href="/app/operator/requests/new"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
-        >
-          + New Request
+        <Link href="/app/operator/requests/new">
+          <Button variant="primary" size="md">
+            <Plus className="w-4 h-4" />
+            New Service Request
+          </Button>
         </Link>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stat cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="flex flex-col items-center py-5 gap-1.5">
+          <CardContent className="flex items-center gap-4 py-5">
             <div className="p-2 bg-blue-100 rounded-lg">
-              <ClipboardList className="w-5 h-5 text-blue-600" />
+              <ClipboardList className="w-6 h-6 text-blue-600" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{totalRequests}</p>
-            <p className="text-xs text-gray-500 text-center">Total Requests</p>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{openRequests}</p>
+              <p className="text-xs text-gray-500">Open Requests</p>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="flex flex-col items-center py-5 gap-1.5">
-            <div className="p-2 bg-yellow-100 rounded-lg">
-              <Clock className="w-5 h-5 text-yellow-600" />
+          <CardContent className="flex items-center gap-4 py-5">
+            <div className="p-2 bg-cyan-100 rounded-lg">
+              <Clock className="w-6 h-6 text-cyan-600" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{openRequests}</p>
-            <p className="text-xs text-gray-500 text-center">Open</p>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{inProgress}</p>
+              <p className="text-xs text-gray-500">In Progress</p>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="flex flex-col items-center py-5 gap-1.5">
+          <CardContent className="flex items-center gap-4 py-5">
             <div className="p-2 bg-emerald-100 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-emerald-600" />
+              <CheckCircle className="w-6 h-6 text-emerald-600" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{completedRequests}</p>
-            <p className="text-xs text-gray-500 text-center">Completed</p>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{completedThisMonth}</p>
+              <p className="text-xs text-gray-500">Completed This Month</p>
+            </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="flex flex-col items-center py-5 gap-1.5">
-            <div className="p-2 bg-red-100 rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
+          <CardContent className="flex items-center gap-4 py-5">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <TrendingUp className="w-6 h-6 text-orange-600" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{urgentRequests}</p>
-            <p className="text-xs text-gray-500 text-center">Urgent</p>
+            <div>
+              <p className="text-2xl font-bold text-gray-900">{avgResolutionHours}</p>
+              <p className="text-xs text-gray-500">Avg Resolution Time</p>
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Quick Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card>
-          <CardContent className="flex items-center justify-between py-4 px-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-slate-100 rounded-lg">
-                <Building2 className="w-4 h-4 text-slate-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Properties</p>
-                <p className="text-xs text-gray-400">Managed locations</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <p className="text-xl font-bold text-gray-900">{properties}</p>
-              <Link
-                href="/app/operator/properties"
-                className="text-blue-500 hover:text-blue-700 transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center justify-between py-4 px-5">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-slate-100 rounded-lg">
-                <ClipboardList className="w-4 h-4 text-slate-600" />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">All Requests</p>
-                <p className="text-xs text-gray-400">View & manage</p>
-              </div>
-            </div>
+      {/* Recent requests */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Recent Requests</CardTitle>
             <Link
               href="/app/operator/requests"
-              className="text-blue-500 hover:text-blue-700 transition-colors"
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
             >
-              <ChevronRight className="w-4 h-4" />
+              View all →
             </Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Requests */}
-      <div>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-semibold text-gray-900">Recent Requests</h2>
-          <Link
-            href="/app/operator/requests"
-            className="text-sm text-blue-600 hover:text-blue-800"
-          >
-            View all
-          </Link>
-        </div>
-
-        {recentRequests.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-gray-400">
-              No requests yet.{" "}
-              <Link
-                href="/app/operator/requests/new"
-                className="text-blue-600 hover:underline"
-              >
-                Create your first request
-              </Link>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-2">
-            {recentRequests.map((req) => (
-              <Link key={req.id} href={`/app/operator/requests/${req.id}`}>
-                <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                  <CardContent className="flex items-center justify-between py-3 px-4 gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {req.title}
-                        </p>
-                        {req.priority === "URGENT" && (
-                          <span className="flex-shrink-0 text-xs font-medium text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
-                            URGENT
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500">
-                        {req.property.name} · {formatDate(req.createdAt)}
-                      </p>
-                    </div>
-                    <Badge variant={getStatusColor(req.status)}>
-                      {getStatusLabel(req.status)}
-                    </Badge>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
           </div>
-        )}
-      </div>
+        </CardHeader>
+        <div className="overflow-x-auto">
+          {recentRequests.length === 0 ? (
+            <div className="px-6 py-10 text-center text-sm text-gray-400">
+              No service requests yet.{" "}
+              <Link href="/app/operator/requests/new" className="text-blue-600 hover:underline">
+                Create one
+              </Link>
+              .
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Ref #
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Property
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                    Category
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                    Urgency
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                    Created
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {recentRequestsWithActivity.map((req) => (
+                  <tr key={req.id} className={`hover:bg-gray-50 transition-colors ${req.hasNewActivity ? "bg-amber-50 hover:bg-amber-100" : ""}`}>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-1.5">
+                        {req.hasNewActivity && (
+                          <span
+                            title="New vendor activity"
+                            className="inline-block h-2 w-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0"
+                          />
+                        )}
+                        <Link
+                          href={`/app/operator/requests/${req.id}`}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                        >
+                          {req.referenceNumber}
+                        </Link>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-700 max-w-[160px] truncate">
+                      {req.property.name}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500 hidden md:table-cell">
+                      {getCategoryLabel(req.category)}
+                    </td>
+                    <td className="px-6 py-4 hidden sm:table-cell">
+                      <Badge variant={getUrgencyColor(req.urgency)}>
+                        {req.urgency}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4">
+                      <Badge variant={getStatusColor(req.status)}>
+                        {getStatusLabel(req.status)}
+                      </Badge>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-500 hidden lg:table-cell">
+                      {formatDate(req.createdAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }
