@@ -31,7 +31,7 @@ export default async function ProofPacketsPage({
 
   const where = {
     organizationId: user.organizationId as string,
-    status: { in: ["COMPLETED", "VERIFIED"] as const },
+    status: { in: ["COMPLETED", "VERIFIED"] as string[] },
   };
 
   const [total, completedRequests] = await Promise.all([
