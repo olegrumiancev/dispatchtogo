@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
 
     if (!token) {
       return NextResponse.redirect(
-        new URL("/login?error=invalid-verification", request.url)
+        new URL("/app/login?error=invalid-verification", request.url)
       );
     }
 
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
     if (!user) {
       return NextResponse.redirect(
-        new URL("/login?error=invalid-verification", request.url)
+        new URL("/app/login?error=invalid-verification", request.url)
       );
     }
 
@@ -94,17 +94,17 @@ export async function GET(request: NextRequest) {
     // Redirect based on role: admins go straight to login, others see a pending message
     if (user.role === "ADMIN") {
       return NextResponse.redirect(
-        new URL("/login?verified=true", request.url)
+        new URL("/app/login?verified=true", request.url)
       );
     }
 
     return NextResponse.redirect(
-      new URL("/login?verified=true&pending=true", request.url)
+      new URL("/app/login?verified=true&pending=true", request.url)
     );
   } catch (error) {
     console.error("[GET /api/auth/verify-email]", error);
     return NextResponse.redirect(
-      new URL("/login?error=verification-failed", request.url)
+      new URL("/app/login?error=verification-failed", request.url)
     );
   }
 }
