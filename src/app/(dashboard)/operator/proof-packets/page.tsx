@@ -50,7 +50,7 @@ export default async function ProofPacketsPage({
           },
         },
       },
-    }) as any,
+    }),
   ]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -81,7 +81,7 @@ export default async function ProofPacketsPage({
         </Card>
       ) : (
         <div className="space-y-3">
-          {completedRequests.map((req) => (
+          {completedRequests.map((req: any) => (
             <Card key={req.id}>
               <CardContent className="py-4">
                 <div className="flex items-center justify-between gap-4">
@@ -101,8 +101,8 @@ export default async function ProofPacketsPage({
                     </div>
                     <p className="text-xs text-gray-500">
                       {req.property.name}
-                      {req.job?.vendor && ` · ${req.job.vendor.companyName}`}
-                      {` · Completed ${formatDate(req.updatedAt)}`}
+                      {req.job?.vendor && ` \u00b7 ${req.job.vendor.companyName}`}
+                      {` \u00b7 Completed ${formatDate(req.updatedAt)}`}
                     </p>
                   </div>
 
