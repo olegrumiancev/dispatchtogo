@@ -272,7 +272,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         return;
       }
       if (action === "decline") {
-        router.push("/vendor/jobs");
+        router.push("/app/vendor/jobs");
       } else {
         router.refresh();
       }
@@ -435,7 +435,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   return (
     <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
       <Link
-        href="/vendor/jobs"
+        href="/app/vendor/jobs"
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -808,7 +808,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                             {deletingPhotoId === photo.id ? (
                               <Loader2 className="w-3 h-3 animate-spin" />
                             ) : (
-                              <X className="w-3 h-3" />
+                              <Trash2 className="w-3 h-3" />
                             )}
                           </button>
                         )}
@@ -816,11 +816,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                     ))}
                   </div>
                 ) : (
-                  <div className="flex items-center justify-center h-20 border-2 border-dashed border-gray-200 rounded-lg">
-                    <p className="text-xs text-gray-400">
-                      {canModifyPhotos ? "No photos yet — tap Add Photo" : "No photos"}
-                    </p>
-                  </div>
+                  <p className="text-xs text-gray-400 italic">No {type.toLowerCase()} photos yet</p>
                 )}
               </div>
             );
@@ -831,99 +827,93 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
       {/* Materials */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Materials Used</CardTitle>
-            <Button variant="secondary" size="sm" onClick={addNewMaterial}>
-              <Plus className="w-4 h-4" />
-              Add Item
-            </Button>
-          </div>
+          <CardTitle>Materials</CardTitle>
         </CardHeader>
-        <CardContent>
-          {/* Saved materials */}
+        <CardContent className="space-y-4">
+          {materialError && <p className="text-xs text-red-600">{materialError}</p>}
+
+          {/* Existing materials */}
           {job.materials.length > 0 && (
-            <div className="space-y-1 mb-4">
+            <div className="space-y-2">
               {job.materials.map((m) => (
-                <div key={m.id} className="flex items-center justify-between text-sm py-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-gray-700">{m.description}</span>
-                    <span className="text-gray-400">× {m.quantity}</span>
-                  </div>
-                  <span className="text-gray-600 font-medium">
-                    {formatCurrency(m.unitCost * m.quantity)}
+                <div key={m.id} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-700">{m.description}</span>
+                  <span className="text-gray-500">
+                    {m.quantity} × {formatCurrency(m.unitCost)} = {formatCurrency(m.quantity * m.unitCost)}
                   </span>
                 </div>
               ))}
-              <div className="flex justify-between pt-2 mt-1 border-t border-gray-100 text-sm text-gray-600">
-                <span>Subtotal (saved)</span>
+              <div className="flex justify-between text-sm font-medium pt-2 border-t">
+                <span>Materials Total</span>
                 <span>{formatCurrency(existingMaterialsTotal)}</span>
               </div>
             </div>
           )}
 
-          {/* New unsaved materials */}
-          {newMaterials.length === 0 && job.materials.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">
-              No materials added yet.
-            </p>
-          ) : null}
-
+          {/* New materials */}
           {newMaterials.length > 0 && (
-            <div className="space-y-3">
-              {materialError && (
-                <p className="text-xs text-red-600">{materialError}</p>
-              )}
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">New Materials</p>
               {newMaterials.map((m) => (
-                <div key={m.tempId} className="flex flex-col sm:flex-row gap-2 items-start">
+                <div key={m.tempId} className="flex items-center gap-2">
                   <input
                     type="text"
                     placeholder="Description"
                     value={m.description}
                     onChange={(e) => updateNewMaterial(m.tempId, "description", e.target.value)}
-                    className="w-full sm:flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 rounded-md border border-gray-300 px-2 py-1 text-sm"
                   />
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      value={m.qty}
-                      min={1}
-                      onChange={(e) => updateNewMaterial(m.tempId, "qty", Number(e.target.value))}
-                      className="w-20 sm:w-16 rounded-md border border-gray-300 px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Cost"
-                      value={m.unitCost}
-                      min={0}
-                      step={0.01}
-                      onChange={(e) => updateNewMaterial(m.tempId, "unitCost", Number(e.target.value))}
-                      className="flex-1 sm:w-24 rounded-md border border-gray-300 px-2 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={() => removeNewMaterial(m.tempId)}
-                      className="p-2 min-h-[44px] min-w-[44px] text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors flex items-center justify-center"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <input
+                    type="number"
+                    placeholder="Qty"
+                    value={m.qty}
+                    min={1}
+                    onChange={(e) => updateNewMaterial(m.tempId, "qty", parseInt(e.target.value) || 1)}
+                    className="w-16 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                  />
+                  <input
+                    type="number"
+                    placeholder="Unit $"
+                    value={m.unitCost}
+                    min={0}
+                    step={0.01}
+                    onChange={(e) => updateNewMaterial(m.tempId, "unitCost", parseFloat(e.target.value) || 0)}
+                    className="w-20 rounded-md border border-gray-300 px-2 py-1 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeNewMaterial(m.tempId)}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               ))}
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                <p className="text-sm font-semibold text-gray-900">
-                  New items total: {formatCurrency(newMaterialsTotal)}
-                </p>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  loading={savingMaterials}
-                  onClick={handleSaveMaterials}
-                >
-                  Save Materials
-                </Button>
-              </div>
+              {newMaterialsTotal > 0 && (
+                <div className="flex justify-between text-sm font-medium pt-1 border-t">
+                  <span>New Total</span>
+                  <span>{formatCurrency(newMaterialsTotal)}</span>
+                </div>
+              )}
             </div>
           )}
+
+          <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={addNewMaterial}>
+              <Plus className="w-4 h-4" />
+              Add Material
+            </Button>
+            {newMaterials.length > 0 && (
+              <Button
+                variant="primary"
+                size="sm"
+                loading={savingMaterials}
+                onClick={handleSaveMaterials}
+              >
+                Save Materials
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -932,83 +922,76 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         <CardHeader>
           <CardTitle>Add Note</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3">
           {noteError && <p className="text-xs text-red-600">{noteError}</p>}
           <Textarea
-            placeholder="Add notes about the work performed, findings, or follow-up required..."
             value={noteText}
             onChange={(e) => setNoteText(e.target.value)}
-            rows={4}
+            placeholder="Add a note about this job..."
+            rows={3}
           />
-          <div className="flex justify-end">
-            <Button
-              variant="primary"
-              loading={savingNote}
-              disabled={!noteText.trim()}
-              onClick={handleSaveNote}
-            >
-              Save Note
-            </Button>
-          </div>
+          <Button
+            variant="primary"
+            size="sm"
+            loading={savingNote}
+            onClick={handleSaveNote}
+            disabled={!noteText.trim()}
+          >
+            Save Note
+          </Button>
         </CardContent>
       </Card>
 
-      {/* ─── Decline reason modal ──────────────────────────────────────────── */}
+      {/* Decline modal */}
       <Modal
-        isOpen={showDeclineModal}
+        open={showDeclineModal}
         onClose={resetDeclineModal}
         title="Decline Job"
       >
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">
-            This job will be returned to the dispatch queue and assigned to another vendor.
-            Please select a reason:
-          </p>
+          <p className="text-sm text-gray-600">Select a reason for declining this job:</p>
 
-          <div className="flex flex-col gap-2">
+          <div className="space-y-2">
             {DECLINE_OPTIONS.map((opt) => (
-              <button
+              <label
                 key={opt.key}
-                type="button"
-                onClick={() => { setDeclineKey(opt.key); setOtherDeclineReason(""); }}
-                className={`text-left px-4 py-3 rounded-lg border transition-colors ${
+                className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                   declineKey === opt.key
-                    ? "border-red-400 bg-red-50 text-red-900 font-medium"
-                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                    ? "border-red-300 bg-red-50"
+                    : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                 }`}
               >
-                <span className="text-sm">{opt.label}</span>
-              </button>
+                <input
+                  type="radio"
+                  name="declineReason"
+                  value={opt.key}
+                  checked={declineKey === opt.key}
+                  onChange={() => setDeclineKey(opt.key)}
+                  className="mt-0.5"
+                />
+                <span className="text-sm text-gray-700">{opt.label}</span>
+              </label>
             ))}
           </div>
 
           {declineKey === "other" && (
-            <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-600">
-                Describe the reason
-              </label>
-              <textarea
-                rows={3}
-                placeholder="Provide details about why you're declining this job…"
-                value={otherDeclineReason}
-                onChange={(e) => setOtherDeclineReason(e.target.value)}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
-              />
-            </div>
+            <Textarea
+              value={otherDeclineReason}
+              onChange={(e) => setOtherDeclineReason(e.target.value)}
+              placeholder="Please provide a reason..."
+              rows={3}
+            />
           )}
 
           {actionError && (
-            <p className="text-xs text-red-600">{actionError}</p>
+            <p className="text-sm text-red-600">{actionError}</p>
           )}
 
-          <div className="flex gap-3 pt-1">
+          <div className="flex gap-3">
             <Button
               variant="danger"
               loading={actionLoading}
-              disabled={
-                !declineKey ||
-                (declineKey === "other" && !otherDeclineReason.trim())
-              }
+              disabled={!declineKey || (declineKey === "other" && !otherDeclineReason.trim())}
               onClick={handleDeclineConfirm}
               className="flex-1 justify-center"
             >
@@ -1016,7 +999,6 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
             </Button>
             <Button
               variant="secondary"
-              disabled={actionLoading}
               onClick={resetDeclineModal}
               className="flex-1 justify-center"
             >
