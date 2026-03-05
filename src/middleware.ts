@@ -47,9 +47,10 @@ export default async function middleware(request: NextRequest) {
   // Strip port so "app.dispatchtogo.com:3000" matches the same as "app.dispatchtogo.com"
   const host = (request.headers.get("host") ?? "").split(":")[0];
 
-  // On the www/marketing host, redirect all /app/* paths to the app subdomain
-  if (!APP_HOSTS.includes(host) && pathname.startsWith("/app/")) {
-    return NextResponse.redirect(`${APP_BASE_URL}${pathname}`);
+  // On the www/marketing host, redirect all /app and /app/* paths to the app subdomain
+  if (!APP_HOSTS.includes(host) && (pathname === "/app" || pathname.startsWith("/app/"))) {
+    const search = request.nextUrl.search;
+    return NextResponse.redirect(`${APP_BASE_URL}${pathname}${search}`);
   }
 
   // On the app subdomain, redirect marketing pages to /app/login
