@@ -146,7 +146,7 @@ export default async function RequestDetailPage({
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-wrap">
           {["SUBMITTED", "TRIAGING", "NEEDS_CLARIFICATION", "READY_TO_DISPATCH"].includes(req.status) && (
-            <CancelRequestButton requestId={req.id} redirectTo="/operator/requests" />
+            <CancelRequestButton requestId={req.id} redirectTo="/app/operator/requests" />
           )}
           {(req.status === "COMPLETED" || req.status === "VERIFIED") && req.job && (
             <a

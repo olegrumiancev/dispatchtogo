@@ -93,7 +93,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
 
-  // ─── Fetch billing usage on mount ─────────────────────────────────────────────────────────────
+  // ─── Fetch billing usage on mount ─────────────────────────────────────────
   useEffect(() => {
     fetch("/api/requests/usage")
       .then((res) => (res.ok ? res.json() : null))
@@ -101,7 +101,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       .catch(() => {});
   }, []);
 
-  // ─── Fetch available vendors when category changes on step 2 ────────────────
+  // ─── Fetch available vendors when category changes on step 2 ────────────
   useEffect(() => {
     if (step !== "review" || !editCategory) {
       setAvailableVendors([]);
@@ -134,7 +134,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     };
   }, [step, editCategory, propertyId]);
 
-  // ─── Handlers ──────────────────────────────────────────────────────────────────────────
+  // ─── Handlers ──────────────────────────────────────────────────────────────
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -230,7 +230,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       const photoUrls: string[] = [];
       if (files.length > 0) {
         for (let i = 0; i < files.length; i++) {
-          setUploadProgress(`Uploading photo ${i + 1} of ${files.length}\u2026`);
+          setUploadProgress(`Uploading photo ${i + 1} of ${files.length}…`);
           const formData = new FormData();
           formData.append("file", files[i]);
           const uploadRes = await fetch("/api/upload", {
@@ -283,7 +283,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       }
 
       const created = await res.json();
-      router.push(`/operator/requests/${created.id}`);
+      router.push(`/app/operator/requests/${created.id}`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -292,11 +292,11 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     }
   };
 
-  // ─── Helpers ─────────────────────────────────────────────────────────────────────────────
+  // ─── Helpers ───────────────────────────────────────────────────────────────
 
   const propertyOptions = properties.map((p) => ({
     value: p.id,
-    label: p.address ? `${p.name} \u2014 ${p.address}` : p.name,
+    label: p.address ? `${p.name} — ${p.address}` : p.name,
   }));
 
   const getCategoryLabel = (value: string) =>
@@ -331,7 +331,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       : v.companyName,
   }));
 
-  // ─── Render ──────────────────────────────────────────────────────────────────────────────
+  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -417,7 +417,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
         </div>
       )}
 
-      {/* ─── Step 1: Describe ───────────────────────────────────────────────────────────────────── */}
+      {/* ─── Step 1: Describe ─────────────────────────────────────────────── */}
       {step === "describe" && (
         <>
           <Card>
@@ -557,7 +557,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
         </>
       )}
 
-      {/* ─── Step 2: Review & Submit ──────────────────────────────────────────────────────────── */}
+      {/* ─── Step 2: Review & Submit ──────────────────────────────────────── */}
       {step === "review" && (
         <>
           {/* Summary of what they entered */}
@@ -713,7 +713,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                 Leave blank to let the system automatically assign the best available vendor.
               </p>
               {loadingVendors ? (
-                <p className="text-sm text-gray-400">Loading vendors\u2026</p>
+                <p className="text-sm text-gray-400">Loading vendors…</p>
               ) : availableVendors.length === 0 ? (
                 <p className="text-sm text-gray-400">
                   No vendors available for this category yet.
@@ -779,7 +779,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
               onClick={handleSubmit}
               className="w-full sm:w-auto justify-center"
             >
-              {uploadProgress ?? (submitting ? "Submitting\u2026" : "Submit Request")}
+              {uploadProgress ?? (submitting ? "Submitting…" : "Submit Request")}
             </Button>
           </div>
         </>
@@ -787,4 +787,3 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     </div>
   );
 }
-

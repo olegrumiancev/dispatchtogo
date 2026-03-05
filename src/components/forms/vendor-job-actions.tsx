@@ -43,7 +43,7 @@ export function VendorJobActions({ jobId, mode }: VendorJobActionsProps) {
         setError(data.error ?? "Failed to accept job.");
         return;
       }
-      router.push(`/vendor/jobs/${jobId}`);
+      router.push(`/app/vendor/jobs/${jobId}`);
     } catch {
       setError("Network error. Please try again.");
     } finally {
@@ -185,4 +185,3 @@ export function VendorJobActions({ jobId, mode }: VendorJobActionsProps) {
     </div>
   );
 }
-
