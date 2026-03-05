@@ -1,119 +1,143 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { REQUEST_STATUSES, URGENCY_LEVELS } from "@/lib/constants";
-import { ShieldCheck, Download, ExternalLink } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import { PaginationControls } from "@/components/ui/pagination-controls";
+import { FileText, ExternalLink } from "lucide-react";
 
-const PAGE_SIZE = 25;
+export const metadata = {
+  title: "Proof Packets | DispatchToGo",
+};
 
-function getUrgencyColor(urgency: string) {
-  return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-export default async function ProofPacketsPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ page?: string }>;
-}) {
+export default async function ProofPacketsPage() {
   const session = await auth();
   if (!session) redirect("/app/login");
+
   const user = session.user as any;
   if (user.role !== "OPERATOR") redirect("/");
 
-  const sp = await searchParams;
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const dbUser = await prisma.user.findUnique({
+    where: { id: user.id },
+    include: { organization: true },
+  });
 
-  const where = {
-    organizationId: user.organizationId as string,
-    status: { in: ["COMPLETED", "VERIFIED"] as string[] },
-  };
+  if (!dbUser?.organization) redirect("/app/onboarding");
+  const org = dbUser.organization;
 
-  const [total, completedRequests] = await Promise.all([
-    prisma.serviceRequest.count({ where }),
-    prisma.serviceRequest.findMany({
-      where,
-      orderBy: { updatedAt: "desc" },
-      skip: (page - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
-      include: {
-        property: { select: { name: true, address: true } },
-        job: {
-          include: {
-            vendor: { select: { companyName: true, phone: true } },
-            photos: { select: { id: true, url: true, createdAt: true } },
-          },
+  const packets = await prisma.proofPacket.findMany({
+    where: { organizationId: org.id },
+    orderBy: { createdAt: "desc" },
+    include: {
+      serviceRequest: {
+        select: {
+          referenceNumber: true,
+          title: true,
+          property: { select: { name: true } },
         },
       },
-    }),
-  ]);
-
-  const totalPages = Math.ceil(total / PAGE_SIZE);
+    },
+  });
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Proof Packets</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Downloadable proof-of-service records for completed requests.
-          </p>
-        </div>
-        <span className="text-sm text-gray-500">{total} completed</span>
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Proof Packets</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Download compiled PDF reports for completed service requests.
+        </p>
       </div>
 
-      {total === 0 ? (
+      {packets.length === 0 ? (
         <Card>
-          <CardContent className="py-16 text-center">
-            <ShieldCheck className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-            <p className="text-gray-500">No completed requests yet.</p>
-            <p className="text-sm text-gray-400 mt-1">Proof packets will appear here once jobs are completed.</p>
+          <CardContent className="py-12 text-center">
+            <FileText className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+            <p className="text-sm text-gray-500">No proof packets yet.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Proof packets are generated when service requests are completed.
+            </p>
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {completedRequests.map((req: any) => (
-            <Card key={req.id}>
-              <CardContent className="py-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-semibold text-gray-900">{req.referenceNumber}</span>
-                      <Badge variant={getUrgencyColor(req.urgency)}>{req.urgency}</Badge>
-                      {req.job && (
-                        <Badge className="bg-green-100 text-green-800">
-                          {req.job.photos.length} photo{req.job.photos.length !== 1 ? "s" : ""}
+        <Card>
+          <CardHeader>
+            <CardTitle>All Proof Packets ({packets.length})</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Request
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      Property
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                      Generated
+                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Download
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {packets.map((packet) => (
+                    <tr key={packet.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900">
+                          {packet.serviceRequest.referenceNumber}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate max-w-[160px]">
+                          {packet.serviceRequest.title}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-600 hidden md:table-cell">
+                        {packet.serviceRequest.property.name}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">
+                        {formatDate(packet.createdAt)}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge
+                          variant={
+                            packet.status === "READY"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : packet.status === "GENERATING"
+                              ? "bg-yellow-100 text-yellow-700"
+                              : "bg-red-100 text-red-700"
+                          }
+                        >
+                          {packet.status}
                         </Badge>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      {req.property.name}
-                      {req.job?.vendor && ` \u00b7 ${req.job.vendor.companyName}`}
-                      {` \u00b7 Completed ${formatDate(req.updatedAt)}`}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <Link href={`/app/operator/requests/${req.id}`}>
-                      <Button variant="ghost" size="sm"><ExternalLink className="w-4 h-4" />View</Button>
-                    </Link>
-                    {req.job && (
-                      <a href={`/api/proof-packets/${req.job.id}`} target="_blank" rel="noopener noreferrer">
-                        <Button variant="secondary" size="sm"><Download className="w-4 h-4" />Proof Packet</Button>
-                      </a>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {packet.status === "READY" && packet.pdfUrl ? (
+                          <a
+                            href={packet.pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-800 text-sm font-medium"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                            Download
+                          </a>
+                        ) : (
+                          <span className="text-gray-400 text-sm">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
       )}
-      <PaginationControls page={page} totalPages={totalPages} basePath="/app/operator/proof-packets" total={total} pageSize={PAGE_SIZE} />
     </div>
   );
 }
