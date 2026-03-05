@@ -95,8 +95,8 @@ function LoginForm() {
             destination = parsed.pathname + parsed.search + parsed.hash;
           }
         } catch {
-          // callbackUrl is already a relative path
-          if (callbackUrl.startsWith("/")) {
+          // callbackUrl is already a relative path; ensure it is not protocol-relative (e.g. "//evil.com")
+          if (callbackUrl.startsWith("/") && !callbackUrl.startsWith("//")) {
             destination = callbackUrl;
           }
         }
