@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { Settings, Mail, Loader2, CheckCircle2, AlertCircle, Copy } from "lucide-react";
 
-/* —— Types ————————————————————————————————————————————————————————— */
+/* ── Types ──────────────────────────────────────────────────────────────────────────── */
 
 interface SettingsData {
   emailVerification: boolean;
@@ -37,7 +37,7 @@ const DEFAULT_SETTINGS: SettingsData = {
   bccAddresses: "",
 };
 
-/* —— Email event metadata —————————————————————————————————————————— */
+/* ── Email event metadata ───────────────────────────────────────────────────────────────────────────── */
 
 interface EventMeta {
   key: keyof SettingsData;
@@ -115,7 +115,7 @@ const EMAIL_EVENTS: EventMeta[] = [
   },
 ];
 
-/* —— Component ————————————————————————————————————————————————————— */
+/* ── Component ──────────────────────────────────────────────────────────────────────────── */
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsData>(DEFAULT_SETTINGS);
