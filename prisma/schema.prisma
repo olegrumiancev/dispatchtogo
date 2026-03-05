@@ -421,3 +421,25 @@ model RequestView {
   @@index([userId])
   @@index([requestId])
 }
+
+model SystemSettings {
+  id        String   @id @default("singleton")
+  updatedAt DateTime @updatedAt
+
+  // ── Email notification toggles ──────────────────────────────────────────
+  emailVerification          Boolean @default(true)
+  emailPasswordReset         Boolean @default(true)
+  emailNewRegistration       Boolean @default(true)
+  emailAccountApproved       Boolean @default(true)
+  emailAccountRejected       Boolean @default(true)
+  emailVendorDispatch        Boolean @default(true)
+  emailOperatorStatusUpdate  Boolean @default(true)
+  emailJobCompletion         Boolean @default(true)
+  emailVendorRejection       Boolean @default(true)
+  emailAdminRejection        Boolean @default(true)
+  emailWelcome               Boolean @default(true)
+
+  // ── BCC settings ────────────────────────────────────────────────────────
+  bccEnabled  Boolean @default(false)
+  bccAddresses String  @default("")
+}

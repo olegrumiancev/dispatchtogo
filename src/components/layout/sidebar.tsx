@@ -25,6 +25,7 @@ import {
   UserCog,
   Heart,
   CreditCard,
+  Settings,
 } from "lucide-react";
 
 interface NavItem {
@@ -58,6 +59,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/admin/billing", label: "Billing", icon: CreditCard },
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/proof-packets", label: "Proof Packets", icon: ShieldCheck },
+  { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 interface SidebarProps {

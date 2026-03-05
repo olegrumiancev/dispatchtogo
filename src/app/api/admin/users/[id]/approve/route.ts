@@ -68,7 +68,9 @@ export async function POST(
               <a href="${appUrl}/login" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0;font-weight:bold">Sign In Now</a>
               <p style="color:#6b7280;font-size:13px;margin-top:24px">Welcome to the platform!</p>
             </div>
-          </div>`
+          </div>`,
+          undefined,
+          { eventKey: "emailAccountApproved" }
         ).then((r) => {
           if (!r.success) console.error(`[approve] Email failed for ${targetUser.email}:`, r.error);
         });
@@ -103,7 +105,9 @@ export async function POST(
             ${rejectionNote ? `<p style="background:#f9fafb;border-left:4px solid #6b7280;padding:12px;border-radius:0 6px 6px 0;margin:16px 0"><strong>Note:</strong> ${rejectionNote}</p>` : ""}
             <p>If you have questions, please contact us at <a href="mailto:admin@dispatchtogo.com" style="color:#1e40af">admin@dispatchtogo.com</a>.</p>
           </div>
-        </div>`
+        </div>`,
+        undefined,
+        { eventKey: "emailAccountRejected" }
       ).then((r) => {
         if (!r.success) console.error(`[reject] Email failed for ${targetUser.email}:`, r.error);
       });

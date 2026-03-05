@@ -82,7 +82,9 @@ export async function GET(request: NextRequest) {
               <a href="${appUrl}/admin/users" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0;font-weight:bold">Review & Approve</a>
               <p style="color:#6b7280;font-size:13px;margin-top:24px">The user cannot log in until you approve their account.</p>
             </div>
-          </div>`
+          </div>`,
+          undefined,
+          { eventKey: "emailNewRegistration" }
         ).then((r) => {
           if (!r.success) console.error(`[verify-email] Admin notification failed for ${admin.email}:`, r.error);
         });

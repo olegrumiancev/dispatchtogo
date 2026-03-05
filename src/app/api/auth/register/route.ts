@@ -187,7 +187,9 @@ export async function POST(request: NextRequest) {
             <p style="color:#6b7280;font-size:13px;margin-top:24px">This link expires in 24 hours. If you didn't create this account, you can safely ignore this email.</p>
             <p style="color:#6b7280;font-size:12px;word-break:break-all">If the button doesn't work: ${verifyUrl}</p>
           </div>
-        </div>`
+        </div>`,
+        undefined,
+        { eventKey: "emailVerification" }
       ).then((r) => {
         if (!r.success) console.error(`[register] Verification email failed:`, r.error);
       });

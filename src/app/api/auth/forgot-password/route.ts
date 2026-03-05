@@ -56,7 +56,9 @@ export async function POST(request: NextRequest) {
             <p style="color:#6b7280;font-size:13px">If the button doesn't work, copy and paste this URL into your browser:</p>
             <p style="color:#6b7280;font-size:12px;word-break:break-all">${resetUrl}</p>
           </div>
-        </div>`
+        </div>`,
+        undefined,
+        { eventKey: "emailPasswordReset" }
       );
     }
 

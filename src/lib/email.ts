@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
+import { isEmailEventEnabled, getBccRecipients } from "@/lib/settings";
+import type { SystemSettings } from "@prisma/client";
 
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "465", 10);
@@ -36,21 +38,35 @@ export async function sendEmail(
   to: string,
   subject: string,
   html: string,
-  text?: string
+  text?: string,
+  options?: { eventKey?: keyof SystemSettings }
 ): Promise<EmailResult> {
+  // If an event key is provided, check whether this event is enabled
+  if (options?.eventKey) {
+    const enabled = await isEmailEventEnabled(options.eventKey).catch(() => true);
+    if (!enabled) {
+      console.log(`[email] Event ${String(options.eventKey)} is disabled – skipping`);
+      return { success: false, error: "Event disabled by admin settings" };
+    }
+  }
+
   const transporter = getTransporter();
   if (!transporter) {
-    console.warn("[email] SMTP not configured \u2013 skipping email");
+    console.warn("[email] SMTP not configured – skipping email");
     return { success: false, error: "SMTP not configured" };
   }
 
   try {
+    // Resolve BCC recipients
+    const bcc = await getBccRecipients().catch(() => [] as string[]);
+
     const info = await transporter.sendMail({
       from: EMAIL_FROM,
       to,
       subject,
       html,
       text: text || html.replace(/<[^>]*>/g, ""),
+      ...(bcc.length > 0 ? { bcc: bcc.join(", ") } : {}),
     });
     return { success: true, messageId: info.messageId ?? "" };
   } catch (err: any) {
@@ -86,7 +102,7 @@ export async function sendVendorDispatchEmail(
   }
 ): Promise<EmailResult> {
   const appUrl = details.appUrl || "https://dispatchtogo.com";
-  const subject = `New Job Dispatched \u2013 ${details.refNumber}`;
+  const subject = `New Job Dispatched – ${details.refNumber}`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
@@ -108,7 +124,7 @@ export async function sendVendorDispatchEmail(
         <p style="color:#6b7280;font-size:13px;margin-top:24px">Please log in to accept or decline this job.</p>
       </div>
     </div>`;
-  return sendEmail(vendorEmail, subject, html);
+  return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailVendorDispatch" });
 }
 
 export async function sendOperatorStatusEmail(
@@ -118,7 +134,7 @@ export async function sendOperatorStatusEmail(
   vendorName?: string
 ): Promise<EmailResult> {
   const who = vendorName ? ` by ${vendorName}` : "";
-  const subject = `Job ${refNumber} \u2013 Status: ${status}`;
+  const subject = `Job ${refNumber} – Status: ${status}`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
@@ -130,7 +146,7 @@ export async function sendOperatorStatusEmail(
         <a href="https://dispatchtogo.com/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Details</a>
       </div>
     </div>`;
-  return sendEmail(operatorEmail, subject, html);
+  return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailOperatorStatusUpdate" });
 }
 
 export async function sendJobCompletionEmail(
@@ -138,7 +154,7 @@ export async function sendJobCompletionEmail(
   refNumber: string,
   vendorName: string
 ): Promise<EmailResult> {
-  const subject = `Job ${refNumber} \u2013 Completed by ${vendorName}`;
+  const subject = `Job ${refNumber} – Completed by ${vendorName}`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:#16a34a;color:#fff;padding:20px;border-radius:8px 8px 0 0">
@@ -151,7 +167,7 @@ export async function sendJobCompletionEmail(
         <a href="https://dispatchtogo.com/requests" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Review Proof Packet</a>
       </div>
     </div>`;
-  return sendEmail(operatorEmail, subject, html);
+  return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailJobCompletion" });
 }
 
 export async function sendWelcomeEmail(
@@ -172,10 +188,10 @@ export async function sendWelcomeEmail(
         <a href="https://dispatchtogo.com/login" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Log In</a>
       </div>
     </div>`;
-  return sendEmail(email, subject, html);
+  return sendEmail(email, subject, html, undefined, { eventKey: "emailWelcome" });
 }
 
-// \u2500\u2500 Rejection notification helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// ── Rejection notification helpers ──────────────────────────────────────────
 
 const REJECTION_TYPE_LABELS: Record<string, string> = {
   send_back: "Sent back for rework",
@@ -199,19 +215,19 @@ export async function sendVendorRejectionEmail(
 ): Promise<EmailResult> {
   const typeLabel = REJECTION_TYPE_LABELS[rejectionType] ?? "Rejected";
   const message = REJECTION_TYPE_VENDOR_MSGS[rejectionType] ?? "Your completed work has been rejected.";
-  const subject = `Work Rejected on Job ${refNumber} \u2013 ${typeLabel}`;
+  const subject = `Work Rejected on Job ${refNumber} – ${typeLabel}`;
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:#dc2626;color:#fff;padding:20px;border-radius:8px 8px 0 0">
         <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
       </div>
       <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Work Rejected \u2013 ${typeLabel}</h2>
+        <h2 style="margin:0 0 16px">Work Rejected – ${typeLabel}</h2>
         <p>Hi ${vendorCompanyName},</p>
         <p>${message}</p>
         <table style="width:100%;border-collapse:collapse;margin:16px 0">
           <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;width:140px">Reference</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${refNumber}</td></tr>
-          ${property ? `<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Property</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${property.name ?? ""}${property.address ? ` \u2013 ${property.address}` : ""}</td></tr>` : ""}
+          ${property ? `<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Property</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${property.name ?? ""}${property.address ? ` – ${property.address}` : ""}</td></tr>` : ""}
           <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Outcome</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${typeLabel}</td></tr>
         </table>
         <p style="margin:0 0 8px"><strong>Operator's reason:</strong></p>
@@ -219,7 +235,7 @@ export async function sendVendorRejectionEmail(
         <a href="https://dispatchtogo.com/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Job in App</a>
       </div>
     </div>`;
-  return sendEmail(vendorEmail, subject, html);
+  return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailVendorRejection" });
 }
 
 export async function sendAdminRejectionEmail(
@@ -231,15 +247,15 @@ export async function sendAdminRejectionEmail(
   vendorName: string
 ): Promise<EmailResult> {
   const typeLabel = REJECTION_TYPE_LABELS[rejectionType] ?? "Rejected";
-  const subject = `Completion Rejected \u2013 Job ${refNumber} (${typeLabel})`;
+  const subject = `Completion Rejected – Job ${refNumber} (${typeLabel})`;
   const isDispute = rejectionType === "dispute";
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
       <div style="background:${isDispute ? "#7c3aed" : "#1e40af"};color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo${isDispute ? " \u2013 Dispute" : ""}</h1>
+        <h1 style="margin:0;font-size:20px">DispatchToGo${isDispute ? " – Dispute" : ""}</h1>
       </div>
       <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Completion Rejected \u2013 ${typeLabel}</h2>
+        <h2 style="margin:0 0 16px">Completion Rejected – ${typeLabel}</h2>
         <p>Hi ${adminName},</p>
         <p>An operator has rejected completed work on job <strong>${refNumber}</strong> assigned to <strong>${vendorName}</strong>.</p>
         <table style="width:100%;border-collapse:collapse;margin:16px 0">
@@ -249,9 +265,9 @@ export async function sendAdminRejectionEmail(
         </table>
         <p style="margin:0 0 8px"><strong>Reason given:</strong></p>
         <p style="background:#f9fafb;padding:12px;border-radius:6px">${reason}</p>
-        ${isDispute ? `<p style="color:#7c3aed;font-weight:bold">\u26A0 This job has been escalated and requires admin mediation.</p>` : ""}
+        ${isDispute ? `<p style="color:#7c3aed;font-weight:bold">⚠ This job has been escalated and requires admin mediation.</p>` : ""}
         <a href="https://dispatchtogo.com/admin/dispatch" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View in Admin Panel</a>
       </div>
     </div>`;
-  return sendEmail(adminEmail, subject, html);
+  return sendEmail(adminEmail, subject, html, undefined, { eventKey: "emailAdminRejection" });
 }
