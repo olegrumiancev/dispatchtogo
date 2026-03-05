@@ -5,8 +5,9 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDate } from "@/lib/utils";
 import { Building2 } from "lucide-react";
-import { BILLING_PLANS } from "@/lib/constants";
+import { BILLING_PLANS, ORGANIZATION_TYPES } from "@/lib/constants";
 import { ChangePlanButton } from "./change-plan-button";
+import { ChangeTypeButton } from "./change-type-button";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 
 export const metadata = {
@@ -15,13 +16,9 @@ export const metadata = {
 
 const PAGE_SIZE = 25;
 
-const ORG_TYPE_LABELS: Record<string, string> = {
-  HOTEL: "Hotel",
-  CAMPGROUND: "Campground",
-  MARINA: "Marina",
-  STR: "Short-Term Rental",
-  OTHER: "Other",
-};
+const ORG_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  ORGANIZATION_TYPES.map((t) => [t.value, t.label])
+);
 
 const ORG_TYPE_COLORS: Record<string, string> = {
   HOTEL: "bg-blue-100 text-blue-700",
@@ -138,13 +135,16 @@ export default async function AdminOrganizationsPage({
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      <Badge
-                        variant={
-                          ORG_TYPE_COLORS[org.type] ?? "bg-gray-100 text-gray-600"
-                        }
-                      >
-                        {ORG_TYPE_LABELS[org.type] ?? org.type}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge
+                          variant={
+                            ORG_TYPE_COLORS[org.type] ?? "bg-gray-100 text-gray-600"
+                          }
+                        >
+                          {ORG_TYPE_LABELS[org.type] ?? org.type}
+                        </Badge>
+                        <ChangeTypeButton orgId={org.id} currentType={org.type} />
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ export default async function AdminOrganizationsPage({
                           {org.contactPhone}
                         </a>
                       ) : (
-                        <span className="text-sm text-gray-400">—</span>
+                        <span className="text-sm text-gray-400">\u2014</span>
                       )}
                     </td>
                     <td className="px-6 py-4 text-center hidden lg:table-cell">

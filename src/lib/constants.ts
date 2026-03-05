@@ -37,7 +37,7 @@ export const REQUEST_STATUSES = [
 
 export const VENDOR_AVAILABILITY_STATUSES = [
   { value: "AVAILABLE", label: "Available", color: "bg-emerald-100 text-emerald-800", description: "Ready to accept new jobs" },
-  { value: "BUSY", label: "Busy", color: "bg-amber-100 text-amber-800", description: "On a job — will be back soon" },
+  { value: "BUSY", label: "Busy", color: "bg-amber-100 text-amber-800", description: "On a job \u2014 will be back soon" },
   { value: "OFF_DUTY", label: "Off Duty", color: "bg-gray-200 text-gray-600", description: "Day off, vacation, or not working" },
 ] as const;
 
@@ -45,7 +45,7 @@ export const JOB_STATUSES = [
   { value: "OFFERED", label: "Offered", color: "bg-blue-100 text-blue-800" },
   { value: "ACCEPTED", label: "Accepted", color: "bg-teal-100 text-teal-800" },
   { value: "IN_PROGRESS", label: "In Progress", color: "bg-cyan-100 text-cyan-800" },
-  { value: "PAUSED", label: "Paused — Will Return", color: "bg-amber-100 text-amber-800" },
+  { value: "PAUSED", label: "Paused \u2014 Will Return", color: "bg-amber-100 text-amber-800" },
   { value: "COMPLETED", label: "Completed", color: "bg-emerald-100 text-emerald-800" },
   { value: "DECLINED", label: "Declined", color: "bg-gray-200 text-gray-600" },
   { value: "REJECTED", label: "Rejected", color: "bg-red-100 text-red-800" },
@@ -59,7 +59,7 @@ export const INVOICE_STATUSES = [
   { value: "CANCELLED", label: "Cancelled", color: "bg-gray-200 text-gray-600" },
 ] as const;
 
-// ─── Billing ──────────────────────────────────────────────────────────────────
+// \u2500\u2500\u2500 Billing \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
 /** Job statuses that count as a billable completed request */
 export const BILLED_JOB_STATUSES = ["COMPLETED", "VERIFIED"] as const;
@@ -71,6 +71,14 @@ export const BILLING_PLANS: Record<
   FREE: { label: "Free", includedRequests: 15, ratePerRequest: 0.25 },
   VALUE: { label: "Value", includedRequests: 100, ratePerRequest: 0.25 },
 };
+
+export const ORGANIZATION_TYPES = [
+  { value: "HOTEL", label: "Hotel" },
+  { value: "CAMPGROUND", label: "Campground" },
+  { value: "MARINA", label: "Marina" },
+  { value: "STR", label: "Short-Term Rental" },
+  { value: "OTHER", label: "Other" },
+] as const;
 
 export const PLATFORM_BILL_STATUSES = [
   { value: "DRAFT", label: "Draft", color: "bg-gray-100 text-gray-800" },

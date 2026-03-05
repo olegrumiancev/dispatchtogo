@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { SERVICE_CATEGORIES } from "@/lib/constants";
+import { SERVICE_CATEGORIES, ORGANIZATION_TYPES } from "@/lib/constants";
 import { sendEmail } from "@/lib/email";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, role, organizationName, companyName, phone, categories } = body;
+    const { name, email, password, role, organizationName, organizationType, companyName, phone, categories } = body;
 
     if (!email || !password || !role) {
       return NextResponse.json(
@@ -55,9 +55,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const allowedOrgTypes = new Set<string>(ORGANIZATION_TYPES.map((t) => t.value));
+      const orgType = typeof organizationType === "string" && allowedOrgTypes.has(organizationType)
+        ? organizationType
+        : "OTHER";
+
       const organization = await prisma.organization.create({
         data: {
           name: organizationName,
+          type: orgType,
           contactEmail: normalizedEmail,
           contactPhone: phone ?? null,
         },
@@ -96,9 +102,9 @@ export async function POST(request: NextRequest) {
       const allowedCategories = new Set<string>(SERVICE_CATEGORIES.map((c) => c.value));
       const parsedCategories: string[] = Array.isArray(categories)
         ? categories
-            .filter((c) => typeof c === "string")
-            .map((c) => c.trim())
-            .filter((c) => c.length > 0 && allowedCategories.has(c))
+            .filter((c: any) => typeof c === "string")
+            .map((c: any) => c.trim())
+            .filter((c: string) => c.length > 0 && allowedCategories.has(c))
         : [];
 
       const uniqueCategories = Array.from(new Set(parsedCategories));
@@ -174,7 +180,7 @@ export async function POST(request: NextRequest) {
 
       sendEmail(
         user.email,
-        "Verify Your Email — DispatchToGo",
+        "Verify Your Email \u2014 DispatchToGo",
         `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
           <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
             <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
@@ -190,7 +196,7 @@ export async function POST(request: NextRequest) {
         </div>`,
         undefined,
         { eventKey: "emailVerification" }
-      ).then((r) => {
+      ).then((r: any) => {
         if (!r.success) console.error(`[register] Verification email failed:`, r.error);
       });
     }

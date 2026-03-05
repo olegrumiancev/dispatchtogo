@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SERVICE_CATEGORIES } from "@/lib/constants";
+import { SERVICE_CATEGORIES, ORGANIZATION_TYPES } from "@/lib/constants";
 import { Truck, AlertCircle, Mail, Globe } from "lucide-react";
 
 type Role = "OPERATOR" | "VENDOR" | "";
@@ -23,6 +23,7 @@ export default function RegisterPage() {
     confirmPassword: "",
     role: "" as Role,
     organizationName: "",
+    organizationType: "",
     companyName: "",
     phone: "",
     categories: [] as string[],
@@ -59,6 +60,10 @@ export default function RegisterPage() {
       setError("Please select at least one service category.");
       return;
     }
+    if (form.role === "OPERATOR" && !form.organizationType) {
+      setError("Please select a property type.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -71,6 +76,7 @@ export default function RegisterPage() {
           password: form.password,
           role: form.role,
           organizationName: form.role === "OPERATOR" ? form.organizationName : undefined,
+          organizationType: form.role === "OPERATOR" ? form.organizationType : undefined,
           companyName: form.role === "VENDOR" ? form.companyName : undefined,
           phone: form.role === "VENDOR" ? form.phone : undefined,
           categories: form.role === "VENDOR" ? form.categories : undefined,
@@ -181,7 +187,7 @@ export default function RegisterPage() {
             <Input
               label="Password"
               type="password"
-              placeholder="••••••••"
+              placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
               value={form.password}
               onChange={(e) => set("password", e.target.value)}
               required
@@ -189,7 +195,7 @@ export default function RegisterPage() {
             <Input
               label="Confirm Password"
               type="password"
-              placeholder="••••••••"
+              placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
               value={form.confirmPassword}
               onChange={(e) => set("confirmPassword", e.target.value)}
               required
@@ -227,14 +233,41 @@ export default function RegisterPage() {
 
           {/* Operator fields */}
           {form.role === "OPERATOR" && (
-            <Input
-              label="Organization Name"
-              type="text"
-              placeholder="Cornwall Properties Inc."
-              value={form.organizationName}
-              onChange={(e) => set("organizationName", e.target.value)}
-              required
-            />
+            <div className="space-y-4">
+              <Input
+                label="Organization Name"
+                type="text"
+                placeholder="Cornwall Properties Inc."
+                value={form.organizationName}
+                onChange={(e) => set("organizationName", e.target.value)}
+                required
+              />
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-gray-700">Property Type</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {ORGANIZATION_TYPES.map((orgType) => (
+                    <label
+                      key={orgType.value}
+                      className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
+                        form.organizationType === orgType.value
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-gray-200 hover:border-gray-300 text-gray-700"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="organizationType"
+                        value={orgType.value}
+                        checked={form.organizationType === orgType.value}
+                        onChange={() => set("organizationType", orgType.value)}
+                        className="sr-only"
+                      />
+                      <span className="font-medium">{orgType.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Vendor fields */}
