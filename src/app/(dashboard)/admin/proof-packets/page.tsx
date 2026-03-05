@@ -28,7 +28,7 @@ export default async function AdminProofPacketsPage({
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
 
   const where = {
-    status: { in: ["COMPLETED", "VERIFIED"] as const },
+    status: { in: ["COMPLETED", "VERIFIED"] as string[] },
     job: { isNot: null as any },
   };
 
