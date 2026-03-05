@@ -3,131 +3,315 @@
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { SERVICE_CATEGORIES } from "@/lib/constants";
+import { Trash2, Plus, Heart, Building2 } from "lucide-react";
 
 interface Vendor {
   id: string;
   companyName: string;
-  contactName: string;
-  email: string;
-  phone: string;
-  serviceCategories: string[];
-  coverageRadius: number;
-  isActive: boolean;
-  user: {
-    isApproved: boolean;
-  };
+  skills: { category: string }[];
 }
 
-function getCategoryLabel(value: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === value)?.label ?? value;
+interface Property {
+  id: string;
+  name: string;
 }
 
-export default function OperatorVendorsPage() {
+interface PreferredVendor {
+  id: string;
+  category: string;
+  propertyId: string | null;
+  vendorId: string;
+  vendor: { id: string; companyName: string };
+  property: { id: string; name: string } | null;
+}
+
+const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
+
+const getCategoryLabel = (value: string) =>
+  SERVICE_CATEGORIES.find((c) => norm(c.value) === norm(value))?.label ?? value;
+
+export default function PreferredVendorsPage() {
+  const [prefs, setPrefs] = useState<PreferredVendor[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchVendors = useCallback(async () => {
+  // Add-form state
+  const [addCategory, setAddCategory] = useState("");
+  const [addPropertyId, setAddPropertyId] = useState("");
+  const [addVendorId, setAddVendorId] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (category) params.set("category", category);
-    const res = await fetch(`/api/operator/vendors?${params.toString()}`);
-    const data = await res.json();
-    setVendors(data.vendors ?? []);
-    setLoading(false);
-  }, [search, category]);
+    try {
+      const res = await fetch("/api/preferred-vendors");
+      if (!res.ok) throw new Error("Failed to load");
+      const data = await res.json();
+      setPrefs(data.prefs);
+      setProperties(data.properties);
+      setVendors(data.vendors);
+    } catch {
+      setError("Failed to load preferred vendors.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchVendors();
-  }, [fetchVendors]);
+    fetchData();
+  }, [fetchData]);
+
+  const handleAdd = async () => {
+    if (!addCategory || !addVendorId) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/preferred-vendors", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category: addCategory,
+          propertyId: addPropertyId || null,
+          vendorId: addVendorId,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? "Failed to save");
+        return;
+      }
+      setAddCategory("");
+      setAddPropertyId("");
+      setAddVendorId("");
+      await fetchData();
+    } catch {
+      setError("Network error.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await fetch(`/api/preferred-vendors?id=${id}`, { method: "DELETE" });
+      setPrefs((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      setError("Failed to remove preference.");
+    }
+  };
+
+  // Filter vendors that have skills matching the selected category
+  const filteredVendors = addCategory
+    ? vendors.filter((v) =>
+        v.skills.some((s) => norm(s.category) === norm(addCategory))
+      )
+    : vendors;
+
+  // Group prefs: org-level (no property) and property-level
+  const orgPrefs = prefs.filter((p) => !p.propertyId);
+  const propPrefs = prefs.filter((p) => p.propertyId);
+
+  // Group property prefs by property
+  const propGroups: Record<string, { name: string; prefs: PreferredVendor[] }> = {};
+  for (const p of propPrefs) {
+    const pid = p.propertyId!;
+    if (!propGroups[pid]) {
+      propGroups[pid] = { name: p.property?.name ?? "Unknown", prefs: [] };
+    }
+    propGroups[pid].prefs.push(p);
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-gray-900">Preferred Vendors</h1>
+        <p className="text-sm text-gray-400">Loading…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Vendors</h1>
-        <p className="text-sm text-gray-500 mt-1">Browse approved vendors in your network</p>
+        <h1 className="text-2xl font-bold text-gray-900">Preferred Vendors</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Set default vendors per service category. Property-level preferences
+          override organization defaults.
+        </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <Input
-          placeholder="Search by name or email..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
-        />
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-gray-900"
-        >
-          <option value="">All Categories</option>
-          {SERVICE_CATEGORIES.map((c) => (
-            <option key={c.value} value={c.value}>{c.label}</option>
-          ))}
-        </select>
-        <Button variant="outline" onClick={fetchVendors} disabled={loading}>
-          {loading ? "Loading..." : "Refresh"}
-        </Button>
-      </div>
+      {error && (
+        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Loading vendors...</div>
-      ) : vendors.length === 0 ? (
-        <div className="text-center py-12 text-gray-400">No vendors found.</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {vendors.map((vendor) => (
-            <Card key={vendor.id} className="p-4">
-              <CardHeader className="p-0 pb-3">
-                <div className="flex items-start justify-between">
-                  <CardTitle className="text-base">{vendor.companyName}</CardTitle>
-                  <Badge
-                    variant={vendor.isActive && vendor.user.isApproved ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"}
+      {/* Add new preference */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Plus className="w-5 h-5" />
+            Add Preference
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Select
+              label="Category"
+              options={SERVICE_CATEGORIES.map((c) => ({
+                value: c.value,
+                label: c.label,
+              }))}
+              placeholder="Select category…"
+              value={addCategory}
+              onChange={(e) => {
+                setAddCategory(e.target.value);
+                setAddVendorId("");
+              }}
+              required
+            />
+            <Select
+              label="Property (optional)"
+              options={properties.map((p) => ({ value: p.id, label: p.name }))}
+              placeholder="All properties"
+              value={addPropertyId}
+              onChange={(e) => setAddPropertyId(e.target.value)}
+            />
+            <Select
+              label="Vendor"
+              options={filteredVendors.map((v) => ({
+                value: v.id,
+                label: v.companyName,
+              }))}
+              placeholder={
+                addCategory
+                  ? filteredVendors.length === 0
+                    ? "No vendors for this category"
+                    : "Select vendor…"
+                  : "Choose category first"
+              }
+              value={addVendorId}
+              onChange={(e) => setAddVendorId(e.target.value)}
+              required
+            />
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="primary"
+                loading={saving}
+                disabled={!addCategory || !addVendorId}
+                onClick={handleAdd}
+                className="w-full justify-center"
+              >
+                Save Preference
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Organization-level defaults */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Heart className="w-5 h-5 text-pink-500" />
+            Organization Defaults
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {orgPrefs.length === 0 ? (
+            <p className="text-sm text-gray-400">
+              No organization-level vendor preferences set yet.
+            </p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {orgPrefs.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="flex items-center gap-3">
+                    <Badge className="bg-purple-100 text-purple-800">
+                      {getCategoryLabel(p.category)}
+                    </Badge>
+                    <span className="text-sm text-gray-700">
+                      {p.vendor.companyName}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(p.id)}
+                    className="text-gray-400 hover:text-red-500 transition-colors"
                   >
-                    {vendor.isActive && vendor.user.isApproved ? "Active" : "Inactive"}
-                  </Badge>
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0 space-y-2">
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <p className="text-xs text-gray-400">Contact</p>
-                    <p className="text-gray-700">{vendor.contactName}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Phone</p>
-                    <a href={`tel:${vendor.phone}`} className="text-blue-600 text-sm">{vendor.phone}</a>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Email</p>
-                    <p className="text-gray-700 truncate">{vendor.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-400">Coverage</p>
-                    <p className="text-gray-700">{vendor.coverageRadius} km</p>
-                  </div>
-                </div>
-                {vendor.serviceCategories.length > 0 && (
-                  <div>
-                    <p className="text-xs text-gray-400 mb-1">Services</p>
-                    <div className="flex flex-wrap gap-1">
-                      {vendor.serviceCategories.map((cat) => (
-                        <span key={cat} className="px-2 py-0.5 bg-gray-100 rounded text-xs text-gray-600">
-                          {getCategoryLabel(cat)}
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Property-level overrides */}
+      {Object.keys(propGroups).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="w-5 h-5 text-blue-500" />
+              Property Overrides
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {Object.entries(propGroups).map(([pid, group]) => (
+              <div key={pid}>
+                <p className="text-sm font-medium text-gray-900 mb-2">
+                  {group.name}
+                </p>
+                <div className="divide-y divide-gray-100 pl-4 border-l-2 border-blue-100">
+                  {group.prefs.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center justify-between py-2 first:pt-0 last:pb-0"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Badge className="bg-purple-100 text-purple-800">
+                          {getCategoryLabel(p.category)}
+                        </Badge>
+                        <span className="text-sm text-gray-700">
+                          {p.vendor.companyName}
                         </span>
-                      ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(p.id)}
+                        className="text-gray-400 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
+                  ))}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {prefs.length === 0 && (
+        <div className="text-center py-12">
+          <Heart className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+          <p className="text-sm text-gray-400">
+            No preferred vendors configured yet.
+          </p>
+          <p className="text-sm text-gray-400 mt-1">
+            Add preferences above to auto-assign your trusted vendors to new
+            requests.
+          </p>
         </div>
       )}
     </div>

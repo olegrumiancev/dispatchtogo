@@ -12,26 +12,41 @@ export default async function VendorJobDetailPage({
   if (!session) redirect("/app/login");
 
   const user = session.user as any;
-  if (user.role !== "VENDOR") redirect("/");
-
+  const vendorId: string = user.vendorId!;
   const { id } = await params;
 
-  const job = (await prisma.job.findFirst({
-    where: { id, vendorId: user.vendorProfileId },
+  const job = await prisma.job.findUnique({
+    where: { id },
     include: {
       serviceRequest: {
-        include: { property: true, photos: true },
+        include: {
+          property: true,
+          photos: true,
+        },
       },
       notes: {
-        include: { author: { select: { id: true, name: true, role: true } } },
+        include: {
+          author: {
+            select: { id: true, name: true, email: true, role: true },
+          },
+        },
         orderBy: { createdAt: "asc" },
       },
       photos: true,
       materials: true,
+      proofPacket: true,
     },
-  })) as any;
+  });
 
   if (!job) notFound();
 
-  return <VendorJobDetail job={job} />;
+  // Vendor can only view their own jobs
+  if (job.vendorId !== vendorId) {
+    redirect("/app/vendor/jobs");
+  }
+
+  // Serialize dates so they can be passed to client components
+  const serialized = JSON.parse(JSON.stringify(job));
+
+  return <VendorJobDetail job={serialized} />;
 }

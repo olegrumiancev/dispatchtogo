@@ -1,28 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useRef, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
+import { Select } from "@/components/ui/select";
 import { SERVICE_CATEGORIES, URGENCY_LEVELS } from "@/lib/constants";
-import {
-  ImagePlus,
-  ArrowLeft,
-  Brain,
-  AlertTriangle,
-  Pencil,
-  Check,
-  RotateCcw,
-  Sparkles,
-  TrendingUp,
-} from "lucide-react";
-import Link from "next/link";
-
-const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-const AI_MAX_RETRIES = Math.max(1, parseInt(process.env.AI_TRIAGE_MAX_RETRIES ?? "3", 10));
+import { createServiceRequestAction } from "@/lib/actions";
+import { X, ImagePlus, Loader2 } from "lucide-react";
 
 interface Property {
   id: string;
@@ -30,760 +17,218 @@ interface Property {
   address: string | null;
 }
 
-interface AvailableVendor {
-  id: string;
-  companyName: string;
-  contactName: string;
-  serviceArea: string | null;
-}
-
 interface NewRequestFormProps {
   properties: Property[];
 }
 
-interface ClassificationResult {
-  category: string;
-  urgency: string;
-  summary: string;
-  confidence: number;
-  reasoning: string;
-  requiresLicensedTrade: boolean;
-}
-
-type Step = "describe" | "review";
+const MAX_FILES = 5;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 export function NewRequestForm({ properties }: NewRequestFormProps) {
   const router = useRouter();
-  const [step, setStep] = useState<Step>("describe");
+  const [isPending, startTransition] = useTransition();
 
-  // Form state
   const [propertyId, setPropertyId] = useState("");
+  const [category, setCategory] = useState("");
+  const [urgency, setUrgency] = useState("MEDIUM");
   const [description, setDescription] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [dragging, setDragging] = useState(false);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // AI classification
-  const [classifying, setClassifying] = useState(false);
-  const [classification, setClassification] = useState<ClassificationResult | null>(null);
-  const [classifyError, setClassifyError] = useState<string | null>(null);
-  const [classifyStatus, setClassifyStatus] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Editable overrides (operator can change these)
-  const [editCategory, setEditCategory] = useState("");
-  const [editUrgency, setEditUrgency] = useState("");
-  const [editing, setEditing] = useState(false);
+  const handleFileChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files ?? []);
+      if (!files.length) return;
 
-  // Vendor picker
-  const [availableVendors, setAvailableVendors] = useState<AvailableVendor[]>([]);
-  const [preferredVendorId, setPreferredVendorId] = useState<string | null>(null);
-  const [selectedVendorId, setSelectedVendorId] = useState("");
-  const [loadingVendors, setLoadingVendors] = useState(false);
+      const oversized = files.filter((f) => f.size > MAX_FILE_SIZE);
+      if (oversized.length) {
+        setError(`Some files exceed 10 MB: ${oversized.map((f) => f.name).join(", ")}`);
+        e.target.value = "";
+        return;
+      }
 
-  // Billing usage
-  const [usage, setUsage] = useState<{
-    completedRequests: number;
-    includedRequests: number;
-    ratePerRequest: number;
-    isOverLimit: boolean;
-    amountCad: number;
-  } | null>(null);
+      const combined = [...photos, ...files].slice(0, MAX_FILES);
+      setPhotos(combined);
+      setPreviews(combined.map((f) => URL.createObjectURL(f)));
+      setError(null);
+      e.target.value = "";
+    },
+    [photos]
+  );
 
-  // Submit
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const removePhoto = useCallback(
+    (index: number) => {
+      const updated = photos.filter((_, i) => i !== index);
+      setPhotos(updated);
+      setPreviews(updated.map((f) => URL.createObjectURL(f)));
+    },
+    [photos]
+  );
 
-  // ─── Fetch billing usage on mount ─────────────────────────────────────────
-  useEffect(() => {
-    fetch("/api/requests/usage")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { if (data) setUsage(data); })
-      .catch(() => {});
-  }, []);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setFieldErrors({});
 
-  // ─── Fetch available vendors when category changes on step 2 ────────────
-  useEffect(() => {
-    if (step !== "review" || !editCategory) {
-      setAvailableVendors([]);
-      setPreferredVendorId(null);
-      setSelectedVendorId("");
+    if (!propertyId) {
+      setFieldErrors((prev) => ({ ...prev, propertyId: "Please select a property." }));
+      return;
+    }
+    if (!category) {
+      setFieldErrors((prev) => ({ ...prev, category: "Please select a category." }));
+      return;
+    }
+    if (!description.trim()) {
+      setFieldErrors((prev) => ({ ...prev, description: "Please describe the issue." }));
       return;
     }
 
-    let cancelled = false;
-    setLoadingVendors(true);
+    const formData = new FormData();
+    formData.append("propertyId", propertyId);
+    formData.append("category", category);
+    formData.append("urgency", urgency);
+    formData.append("description", description);
+    photos.forEach((file) => formData.append("photos", file));
 
-    const params = new URLSearchParams({ category: editCategory });
-    if (propertyId) params.set("propertyId", propertyId);
-
-    fetch(`/api/vendors/available?${params}`)
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (cancelled || !data) return;
-        setAvailableVendors(data.vendors ?? []);
-        setPreferredVendorId(data.preferredVendorId ?? null);
-        setSelectedVendorId("");
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoadingVendors(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [step, editCategory, propertyId]);
-
-  // ─── Handlers ──────────────────────────────────────────────────────────────
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragging(false);
-    const dropped = Array.from(e.dataTransfer.files).filter((f) =>
-      f.type.startsWith("image/")
-    );
-    setFiles((prev) => [...prev, ...dropped]);
-  };
-
-  const handleClassify = async () => {
-    setClassifying(true);
-    setClassifyError(null);
-    setClassifyStatus(null);
-
-    let lastError = "Classification failed. You can still submit manually.";
-
-    for (let attempt = 1; attempt <= AI_MAX_RETRIES; attempt++) {
-      if (attempt === 1) {
-        setClassifyStatus("Classifying your request\u2026");
-      } else {
-        setClassifyStatus(
-          `AI returned unexpected data \u2014 retrying\u2026 (attempt ${attempt} of ${AI_MAX_RETRIES})`
-        );
-        await sleep(1000);
-      }
-
+    startTransition(async () => {
       try {
-        const res = await fetch("/api/triage/classify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            description: description.trim(),
-            propertyId: propertyId || undefined,
-          }),
-        });
-
-        // Don't retry client errors — they won't be fixed by retrying
-        if (res.status >= 400 && res.status < 500) {
-          const data = await res.json().catch(() => ({}));
-          lastError = data.error ?? "Classification failed. You can still submit manually.";
-          break;
-        }
-
-        if (!res.ok) {
-          // 5xx or network-level bad response — retry
-          const data = await res.json().catch(() => ({}));
-          lastError = data.error ?? "Classification failed. You can still submit manually.";
-          continue;
-        }
-
-        const result: ClassificationResult = await res.json();
-        setClassifyStatus(null);
-        setClassifying(false);
-        setClassification(result);
-        setEditCategory(result.category);
-        setEditUrgency(result.urgency);
-        setEditing(false);
-        setStep("review");
-        return;
-      } catch {
-        lastError = "Network error during classification. You can still submit manually.";
-        // Network error — retry unless this was the last attempt
-      }
-    }
-
-    // All attempts exhausted — fall back to manual mode
-    setClassifyStatus(null);
-    setClassifyError(lastError);
-    setClassification(null);
-    setStep("review");
-    setEditCategory("");
-    setEditUrgency("MEDIUM");
-    setEditing(true);
-    setClassifying(false);
-  };
-
-  const handleReclassify = () => {
-    setStep("describe");
-    setClassification(null);
-    setClassifyError(null);
-    setEditing(false);
-    setSelectedVendorId("");
-  };
-
-  const handleSubmit = async () => {
-    setSubmitting(true);
-    setSubmitError(null);
-    setUploadProgress(null);
-
-    try {
-      // Upload photos to S3 first (if any), collect URLs
-      const photoUrls: string[] = [];
-      if (files.length > 0) {
-        for (let i = 0; i < files.length; i++) {
-          setUploadProgress(`Uploading photo ${i + 1} of ${files.length}…`);
-          const formData = new FormData();
-          formData.append("file", files[i]);
-          const uploadRes = await fetch("/api/upload", {
-            method: "POST",
-            body: formData,
-          });
-          if (!uploadRes.ok) {
-            const data = await uploadRes.json().catch(() => ({}));
-            throw new Error(data.error ?? `Failed to upload photo ${i + 1}`);
+        const result = await createServiceRequestAction(formData);
+        if (result?.error) {
+          if (result.fieldErrors) {
+            setFieldErrors(result.fieldErrors);
+          } else {
+            setError(result.error);
           }
-          const { url } = await uploadRes.json();
-          photoUrls.push(url);
+          return;
         }
-        setUploadProgress(null);
+        router.push("/app/operator/requests");
+      } catch {
+        setError("Something went wrong. Please try again.");
       }
-
-      const res = await fetch("/api/requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          propertyId,
-          description: description.trim(),
-          category: editCategory || "GENERAL",
-          urgency: editUrgency || "MEDIUM",
-          photoUrls,
-          preferredVendorId: selectedVendorId || undefined,
-          aiClassification: classification
-            ? {
-                aiCategory: classification.category,
-                aiUrgency: classification.urgency,
-                summary: classification.summary,
-                confidence: classification.confidence,
-                reasoning: classification.reasoning,
-                requiresLicensedTrade: classification.requiresLicensedTrade,
-                operatorOverrodeCategory:
-                  editCategory.trim().toLowerCase() !==
-                  classification.category.trim().toLowerCase(),
-                operatorOverrodeUrgency:
-                  editUrgency.trim().toLowerCase() !==
-                  classification.urgency.trim().toLowerCase(),
-              }
-            : null,
-        }),
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        setSubmitError(data.error ?? "Failed to submit request.");
-        return;
-      }
-
-      const created = await res.json();
-      router.push(`/app/operator/requests/${created.id}`);
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Network error. Please try again.");
-    } finally {
-      setSubmitting(false);
-      setUploadProgress(null);
-    }
+    });
   };
-
-  // ─── Helpers ───────────────────────────────────────────────────────────────
-
-  const propertyOptions = properties.map((p) => ({
-    value: p.id,
-    label: p.address ? `${p.name} — ${p.address}` : p.name,
-  }));
-
-  const getCategoryLabel = (value: string) =>
-    SERVICE_CATEGORIES.find(
-      (c) => c.value.trim().toLowerCase() === value.trim().toLowerCase()
-    )?.label ?? value;
-
-  const getUrgencyLabel = (value: string) =>
-    URGENCY_LEVELS.find(
-      (u) => u.value.trim().toLowerCase() === value.trim().toLowerCase()
-    )?.label ?? value;
-
-  const getUrgencyColor = (value: string) => {
-    const match = URGENCY_LEVELS.find(
-      (u) => u.value.trim().toLowerCase() === value.trim().toLowerCase()
-    );
-    return match?.color ?? "bg-gray-100 text-gray-800";
-  };
-
-  const confidenceLabel = (confidence: number) => {
-    if (confidence >= 0.75) return { text: "High", color: "bg-emerald-100 text-emerald-800" };
-    if (confidence >= 0.45) return { text: "Medium", color: "bg-yellow-100 text-yellow-800" };
-    return { text: "Low", color: "bg-red-100 text-red-800" };
-  };
-
-  const canClassify = propertyId && description.trim().length >= 10;
-
-  const vendorOptions = availableVendors.map((v) => ({
-    value: v.id,
-    label: v.serviceArea
-      ? `${v.companyName} (${v.serviceArea})`
-      : v.companyName,
-  }));
-
-  // ─── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
-      {/* Back link */}
-      <Link
-        href="/app/operator/requests"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to Requests
-      </Link>
-
-      <h1 className="text-2xl font-bold text-gray-900">New Service Request</h1>
-
-      {/* Step indicator */}
-      <div className="flex items-center gap-3 text-sm">
-        <div
-          className={`flex items-center gap-1.5 ${
-            step === "describe" ? "text-blue-700 font-medium" : "text-gray-400"
-          }`}
-        >
-          <span
-            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-              step === "describe"
-                ? "bg-blue-600 text-white"
-                : "bg-green-500 text-white"
-            }`}
-          >
-            {step === "describe" ? "1" : <Check className="w-3.5 h-3.5" />}
-          </span>
-          Describe Issue
-        </div>
-        <div className="flex-1 h-px bg-gray-200" />
-        <div
-          className={`flex items-center gap-1.5 ${
-            step === "review" ? "text-blue-700 font-medium" : "text-gray-400"
-          }`}
-        >
-          <span
-            className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-              step === "review"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-500"
-            }`}
-          >
-            2
-          </span>
-          Review &amp; Submit
-        </div>
-      </div>
-
-      {/* Billing overage banner — shown when org is in pay-as-you-go territory */}
-      {usage?.isOverLimit && (
-        <div className="rounded-md bg-amber-50 border border-amber-300 px-4 py-3 flex items-start gap-3">
-          <TrendingUp className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div className="text-sm">
-            <p className="font-semibold text-amber-800">
-              Pay-as-you-go — {usage.completedRequests} of {usage.includedRequests} included requests used this month
-            </p>
-            <p className="text-amber-700 mt-0.5">
-              This request will be billed at <strong>${usage.ratePerRequest.toFixed(2)} CAD</strong> upon completion.
-              Charges are invoiced at the end of the month.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* AI retry status — shown while classify attempts are in-flight */}
-      {classifyStatus && (
-        <div className="rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700 flex items-center gap-2">
-          <svg className="w-4 h-4 animate-spin flex-shrink-0" viewBox="0 0 24 24" fill="none">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-          </svg>
-          {classifyStatus}
-        </div>
-      )}
-
-      {/* Errors */}
-      {(classifyError || submitError) && (
-        <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          {classifyError || submitError}
-        </div>
-      )}
-
-      {/* ─── Step 1: Describe ─────────────────────────────────────────────── */}
-      {step === "describe" && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle>Describe the Issue</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              {/* Property */}
-              {properties.length === 0 ? (
-                <div className="rounded-md bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800">
-                  No properties found for your organization. Please contact your administrator.
-                </div>
-              ) : (
-                <Select
-                  label="Property"
-                  options={propertyOptions}
-                  placeholder="Select a property..."
-                  value={propertyId}
-                  onChange={(e) => setPropertyId(e.target.value)}
-                  required
-                />
-              )}
-
-              {/* Description */}
-              <Textarea
-                label="Description"
-                placeholder="Describe the issue in detail — what's wrong, where exactly, and any relevant details..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={5}
-                required
-              />
-            </CardContent>
-          </Card>
-
-          {/* Photo upload */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Photos (Optional)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={() => setDragging(false)}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                  dragging
-                    ? "border-blue-400 bg-blue-50"
-                    : "border-gray-300 hover:border-gray-400"
-                }`}
-              >
-                <div className="flex flex-col items-center gap-3">
-                  <ImagePlus className="w-10 h-10 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">
-                      Drag &amp; drop photos here
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      or{" "}
-                      <label className="text-blue-600 hover:text-blue-700 cursor-pointer font-medium">
-                        browse files
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="sr-only"
-                          onChange={(e) => {
-                            const selected = Array.from(e.target.files ?? []);
-                            setFiles((prev) => [...prev, ...selected]);
-                          }}
-                        />
-                      </label>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      PNG, JPG, HEIC up to 10MB each
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {files.length > 0 && (
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {files.map((file, i) => (
-                    <div key={i} className="relative group">
-                      <div className="aspect-square rounded-md bg-gray-100 flex items-center justify-center overflow-hidden">
-                        <img
-                          src={URL.createObjectURL(file)}
-                          alt={file.name}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setFiles((prev) => prev.filter((_, idx) => idx !== i))
-                        }
-                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        ×
-                      </button>
-                      <p className="text-xs text-gray-500 mt-1 truncate">
-                        {file.name}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Classify / Cancel buttons */}
-          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
-            <Link href="/app/operator/requests" className="sm:flex-none">
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full sm:w-auto justify-center"
-              >
-                Cancel
-              </Button>
-            </Link>
-            <Button
-              type="button"
-              variant="primary"
-              loading={classifying}
-              disabled={!canClassify || properties.length === 0}
-              onClick={handleClassify}
-              className="w-full sm:w-auto justify-center gap-2"
-            >
-              <Sparkles className="w-4 h-4" />
-              Classify with AI
-            </Button>
-          </div>
-        </>
-      )}
-
-      {/* ─── Step 2: Review & Submit ──────────────────────────────────────── */}
-      {step === "review" && (
-        <>
-          {/* Summary of what they entered */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Your Description</span>
-                <button
-                  type="button"
-                  onClick={handleReclassify}
-                  className="text-sm font-normal text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Edit &amp; Reclassify
-                </button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <p className="text-sm text-gray-500">
-                  <span className="font-medium text-gray-700">Property:</span>{" "}
-                  {propertyOptions.find((p) => p.value === propertyId)?.label ??
-                    "Unknown"}
-                </p>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                  {description}
-                </p>
-                {files.length > 0 && (
-                  <p className="text-xs text-gray-500">
-                    {files.length} photo{files.length !== 1 ? "s" : ""} attached
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* AI Classification Results */}
-          {classification && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="w-5 h-5 text-purple-600" />
-                  AI Classification
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Badges row */}
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="bg-purple-100 text-purple-800">
-                    {getCategoryLabel(classification.category)}
-                  </Badge>
-                  <Badge className={getUrgencyColor(classification.urgency)}>
-                    {getUrgencyLabel(classification.urgency)}
-                  </Badge>
-                  <Badge
-                    className={
-                      confidenceLabel(classification.confidence).color
-                    }
-                  >
-                    {confidenceLabel(classification.confidence).text} confidence (
-                    {Math.round(classification.confidence * 100)}%)
-                  </Badge>
-                  {classification.requiresLicensedTrade && (
-                    <Badge className="bg-amber-100 text-amber-800 gap-1">
-                      <AlertTriangle className="w-3 h-3" />
-                      Licensed trade required
-                    </Badge>
-                  )}
-                </div>
-
-                {/* Summary & reasoning */}
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    {classification.summary}
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    {classification.reasoning}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Editable category / urgency */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>
-                  {editing ? "Set Category & Urgency" : "Final Category & Urgency"}
-                </span>
-                {classification && !editing && (
-                  <button
-                    type="button"
-                    onClick={() => setEditing(true)}
-                    className="text-sm font-normal text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                    Override
-                  </button>
-                )}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {editing ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Select
-                    label="Category"
-                    options={SERVICE_CATEGORIES.map((c) => ({
-                      value: c.value,
-                      label: c.label,
-                    }))}
-                    placeholder="Select category..."
-                    value={editCategory}
-                    onChange={(e) => setEditCategory(e.target.value)}
-                    required
-                  />
-                  <Select
-                    label="Urgency"
-                    options={URGENCY_LEVELS.map((u) => ({
-                      value: u.value,
-                      label: u.label,
-                    }))}
-                    value={editUrgency}
-                    onChange={(e) => setEditUrgency(e.target.value)}
-                    required
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <Badge className="bg-purple-100 text-purple-800 text-sm px-3 py-1">
-                    {getCategoryLabel(editCategory)}
-                  </Badge>
-                  <Badge
-                    className={`text-sm px-3 py-1 ${getUrgencyColor(editUrgency)}`}
-                  >
-                    {getUrgencyLabel(editUrgency)}
-                  </Badge>
-                  <span className="text-xs text-gray-400">
-                    Accepting AI suggestion
-                  </span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Optional vendor picker */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Preferred Vendor (Optional)</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <p className="text-sm text-gray-500">
-                Leave blank to let the system automatically assign the best available vendor.
-              </p>
-              {loadingVendors ? (
-                <p className="text-sm text-gray-400">Loading vendors…</p>
-              ) : availableVendors.length === 0 ? (
-                <p className="text-sm text-gray-400">
-                  No vendors available for this category yet.
-                </p>
-              ) : (
-                <>
-                  <Select
-                    label="Vendor"
-                    options={vendorOptions}
-                    placeholder="Auto-assign (recommended)"
-                    value={selectedVendorId}
-                    onChange={(e) => setSelectedVendorId(e.target.value)}
-                  />
-                  {preferredVendorId && (
-                    <p className="text-xs text-blue-600">
-                      Your saved preference:{" "}
-                      <button
-                        type="button"
-                        className="underline hover:text-blue-800"
-                        onClick={() => setSelectedVendorId(preferredVendorId)}
-                      >
-                        {availableVendors.find((v) => v.id === preferredVendorId)
-                          ?.companyName ?? "Preferred vendor"}
-                      </button>
-                    </p>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Overage cost notice on review step */}
-          {usage?.isOverLimit && (
-            <div className="rounded-md bg-amber-50 border border-amber-300 px-4 py-3 flex items-start gap-3">
-              <TrendingUp className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="font-semibold text-amber-800">Billable request</p>
-                <p className="text-amber-700 mt-0.5">
-                  You have used <strong>{usage.completedRequests}</strong> of your{" "}
-                  <strong>{usage.includedRequests}</strong> included requests this month.
-                  Submitting this request will add <strong>${usage.ratePerRequest.toFixed(2)} CAD</strong> to your
-                  end-of-month invoice upon completion.
-                </p>
-              </div>
+    <Card className="max-w-2xl">
+      <CardHeader>
+        <CardTitle>New Service Request</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {error && (
+            <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+              {error}
             </div>
           )}
 
-          {/* Submit / Back buttons */}
-          <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+          <Select
+            label="Property"
+            options={properties.map((p) => ({ value: p.id, label: p.name }))}
+            placeholder="Select a property…"
+            value={propertyId}
+            onChange={(e) => setPropertyId(e.target.value)}
+            required
+            error={fieldErrors.propertyId}
+          />
+
+          <Select
+            label="Service Category"
+            options={SERVICE_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+            placeholder="Select category…"
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            required
+            error={fieldErrors.category}
+          />
+
+          <Select
+            label="Urgency"
+            options={URGENCY_LEVELS.map((u) => ({ value: u.value, label: u.label }))}
+            value={urgency}
+            onChange={(e) => setUrgency(e.target.value)}
+          />
+
+          <Textarea
+            label="Description"
+            placeholder="Describe the issue in detail…"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={4}
+            required
+            error={fieldErrors.description}
+          />
+
+          {/* Photo upload */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              Photos{" "}
+              <span className="text-gray-400 font-normal">(optional, up to 5)</span>
+            </label>
+
+            {/* Preview grid */}
+            {previews.length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-2 mb-3">
+                {previews.map((src, i) => (
+                  <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-gray-200">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt="" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(i)}
+                      className="absolute top-1 right-1 bg-white bg-opacity-80 rounded-full p-0.5 hover:bg-opacity-100 transition"
+                    >
+                      <X className="w-3 h-3 text-gray-600" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {photos.length < MAX_FILES && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 border border-dashed border-blue-300 rounded-lg px-4 py-2.5 hover:bg-blue-50 transition-colors"
+              >
+                <ImagePlus className="w-4 h-4" />
+                {photos.length === 0 ? "Add photos" : "Add more"}
+              </button>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={isPending}
+              loading={isPending}
+            >
+              {isPending ? "Submitting…" : "Submit Request"}
+            </Button>
             <Button
               type="button"
               variant="secondary"
-              onClick={handleReclassify}
-              className="w-full sm:w-auto justify-center"
+              onClick={() => router.back()}
+              disabled={isPending}
             >
-              Back
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              loading={submitting}
-              disabled={!editCategory}
-              onClick={handleSubmit}
-              className="w-full sm:w-auto justify-center"
-            >
-              {uploadProgress ?? (submitting ? "Submitting…" : "Submit Request")}
+              Cancel
             </Button>
           </div>
-        </>
-      )}
-    </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
