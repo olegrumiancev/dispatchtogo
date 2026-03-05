@@ -2,19 +2,24 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Building2, Users, Wrench, ClipboardList, TrendingUp, Clock } from "lucide-react";
 import Link from "next/link";
-import { formatDate } from "@/lib/utils";
-import { REQUEST_STATUSES } from "@/lib/constants";
+import {
+  Send,
+  Users,
+  Building,
+  BarChart3,
+  Bell,
+  ShieldCheck,
+  ClipboardList,
+  CheckCircle,
+  AlertTriangle,
+  Briefcase,
+  TrendingUp,
+} from "lucide-react";
 
-function getStatusColor(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusLabel(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
-}
+export const metadata = {
+  title: "Admin Dashboard | DispatchToGo",
+};
 
 export default async function AdminDashboardPage() {
   const session = await auth();
@@ -23,164 +28,140 @@ export default async function AdminDashboardPage() {
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
 
-  const [orgCount, userCount, vendorCount, requestStats, recentRequests] = await Promise.all([
-    prisma.organization.count(),
-    prisma.user.count(),
-    prisma.vendor.count({ where: { isActive: true } }),
-    prisma.serviceRequest.groupBy({
-      by: ["status"],
-      _count: { _all: true },
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const [
+    pendingDispatch,
+    activeJobs,
+    completedThisMonth,
+    totalRequests,
+    activeVendors,
+    totalOrgs,
+    emergencyRequests,
+    requestsThisMonth,
+  ] = await Promise.all([
+    prisma.serviceRequest.count({
+      where: { status: { in: ["SUBMITTED", "READY_TO_DISPATCH"] }, job: null },
     }),
-    prisma.serviceRequest.findMany({
-      take: 5,
-      orderBy: { createdAt: "desc" },
-      include: {
-        organization: { select: { name: true } },
-        property: { select: { name: true } },
-      },
+    prisma.job.count({ where: { completedAt: null } }),
+    prisma.job.count({
+      where: { completedAt: { gte: firstOfMonth, not: null } },
+    }),
+    prisma.serviceRequest.count(),
+    prisma.vendor.count({ where: { isActive: true } }),
+    prisma.organization.count(),
+    prisma.serviceRequest.count({
+      where: { urgency: "EMERGENCY", status: { notIn: ["COMPLETED", "VERIFIED", "CANCELLED"] } },
+    }),
+    prisma.serviceRequest.count({
+      where: { createdAt: { gte: firstOfMonth } },
     }),
   ]);
 
-  const totalRequests = requestStats.reduce((sum, s) => sum + s._count._all, 0);
-  const openRequests = requestStats
-    .filter((s) => !["COMPLETED", "CANCELLED"].includes(s.status))
-    .reduce((sum, s) => sum + s._count._all, 0);
+  const stats = [
+    {
+      label: "Pending Dispatch",
+      value: pendingDispatch,
+      icon: Send,
+      color: "bg-orange-100 text-orange-600",
+      highlight: pendingDispatch > 0,
+    },
+    {
+      label: "Active Jobs",
+      value: activeJobs,
+      icon: Briefcase,
+      color: "bg-blue-100 text-blue-600",
+      highlight: false,
+    },
+    {
+      label: "Completed This Month",
+      value: completedThisMonth,
+      icon: CheckCircle,
+      color: "bg-emerald-100 text-emerald-600",
+      highlight: false,
+    },
+    {
+      label: "Emergencies",
+      value: emergencyRequests,
+      icon: AlertTriangle,
+      color: "bg-red-100 text-red-600",
+      highlight: emergencyRequests > 0,
+    },
+    {
+      label: "Requests This Month",
+      value: requestsThisMonth,
+      icon: TrendingUp,
+      color: "bg-purple-100 text-purple-600",
+      highlight: false,
+    },
+    {
+      label: "Total Requests",
+      value: totalRequests,
+      icon: ClipboardList,
+      color: "bg-gray-100 text-gray-600",
+      highlight: false,
+    },
+  ];
+
+  const quickLinks = [
+    { href: "/app/admin/dispatch", label: "Dispatch Board", icon: Send, desc: "Assign vendors to pending requests" },
+    { href: "/app/admin/vendors", label: "Vendors", icon: Users, desc: `${activeVendors} active vendors` },
+    { href: "/app/admin/organizations", label: "Organizations", icon: Building, desc: `${totalOrgs} organizations` },
+    { href: "/app/admin/users", label: "User Management", icon: Users, desc: "Manage users and roles" },
+    { href: "/app/admin/reports", label: "Reports", icon: BarChart3, desc: "Platform-wide KPIs" },
+    { href: "/app/admin/notifications", label: "Notifications", icon: Bell, desc: "SMS configuration" },
+    { href: "/app/admin/proof-packets", label: "Proof Packets", icon: ShieldCheck, desc: "Completed job documentation" },
+  ];
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-sm text-gray-500 mt-1">System overview and quick actions</p>
+        <p className="text-sm text-gray-500 mt-1">Platform overview and quick actions.</p>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Building2 className="w-4.5 h-4.5 text-blue-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-gray-500 truncate">Organizations</p>
-                <p className="text-xl font-bold text-gray-900">{orgCount}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-purple-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Users className="w-4.5 h-4.5 text-purple-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-gray-500 truncate">Users</p>
-                <p className="text-xl font-bold text-gray-900">{userCount}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-emerald-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Wrench className="w-4.5 h-4.5 text-emerald-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-gray-500 truncate">Active Vendors</p>
-                <p className="text-xl font-bold text-gray-900">{vendorCount}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <ClipboardList className="w-4.5 h-4.5 text-orange-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-gray-500 truncate">Total Requests</p>
-                <p className="text-xl font-bold text-gray-900">{totalRequests}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="pt-5 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-rose-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                <TrendingUp className="w-4.5 h-4.5 text-rose-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-xs text-gray-500 truncate">Open Requests</p>
-                <p className="text-xl font-bold text-gray-900">{openRequests}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className={stat.highlight ? "ring-2 ring-orange-300" : ""}>
+              <CardContent className="flex flex-col items-center py-5 gap-2">
+                <div className={`p-2 rounded-lg ${stat.color}`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-xs text-gray-500 text-center">{stat.label}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Recent Requests */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">Recent Requests</h2>
-          <Link
-            href="/app/admin/dispatch"
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            View Dispatch Board →
-          </Link>
+      {/* Quick links */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-800 mb-3">Quick Actions</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {quickLinks.map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link key={link.href} href={link.href}>
+                <Card className="hover:border-blue-300 hover:shadow-md transition-all cursor-pointer h-full">
+                  <CardContent className="flex items-start gap-3 py-4">
+                    <div className="p-2 bg-blue-50 rounded-lg flex-shrink-0">
+                      <Icon className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{link.label}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{link.desc}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
-
-        {recentRequests.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-sm text-gray-400">
-              No service requests yet.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-4 py-3">Ref #</th>
-                  <th className="text-left px-4 py-3">Organization</th>
-                  <th className="text-left px-4 py-3">Property</th>
-                  <th className="text-left px-4 py-3">Status</th>
-                  <th className="text-left px-4 py-3">Created</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
-                {recentRequests.map((req) => (
-                  <tr key={req.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700">
-                      {req.referenceNumber}
-                    </td>
-                    <td className="px-4 py-3 text-gray-700">{req.organization.name}</td>
-                    <td className="px-4 py-3 text-gray-700">{req.property.name}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={getStatusColor(req.status)}>
-                        {getStatusLabel(req.status)}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-gray-500">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        {formatDate(req.createdAt)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
       </div>
     </div>
   );
