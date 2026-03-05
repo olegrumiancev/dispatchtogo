@@ -1,70 +1,63 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Modal } from "@/components/ui/modal";
+import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
 import {
   MapPin,
-  Clock,
-  FileText,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
+  Navigation,
+  CheckCircle,
+  Camera,
+  Plus,
+  Trash2,
+  ArrowLeft,
   X,
-  ImagePlus,
-  Package,
+  Loader2,
   RotateCcw,
-  PauseCircle,
+  ChevronDown,
+  Pause,
+  Play,
 } from "lucide-react";
-import {
-  URGENCY_LEVELS,
-  REQUEST_STATUSES,
-  SERVICE_CATEGORIES,
-} from "@/lib/constants";
-import {
-  submitJobCompletionAction,
-  addJobNoteAction,
-  uploadJobPhotosAction,
-  addMaterialAction,
-  deleteMaterialAction,
-  requestPauseAction,
-  cancelPauseAction,
-} from "@/lib/actions";
-import { formatDate } from "@/lib/utils";
+import Link from "next/link";
+import { formatDate, formatCurrency } from "@/lib/utils";
 
-type JobNote = {
+interface Property {
+  name: string;
+  address: string | null;
+}
+
+interface JobMaterial {
   id: string;
-  content: string;
-  createdAt: string;
-  author: { id: string; name: string | null; email: string; role: string };
-};
+  description: string;
+  quantity: number;
+  unitCost: number;
+}
 
-type JobPhoto = {
+interface JobNote {
+  id: string;
+  text: string;
+  createdAt: Date | string;
+  author: {
+    id: string;
+    name: string | null;
+    email: string;
+    role: string;
+  };
+}
+
+interface JobPhoto {
   id: string;
   url: string;
   type: string;
-  caption: string | null;
-};
+  thumbnailUrl?: string | null;
+}
 
-type JobMaterial = {
-  id: string;
-  name: string;
-  quantity: number;
-  unit: string | null;
-  cost: number | null;
-};
-
-type ProofPacket = {
-  id: string;
-  pdfUrl: string;
-  generatedAt: string;
-};
-
-type ServiceRequest = {
+interface ServiceRequest {
   id: string;
   referenceNumber: string;
   description: string;
@@ -72,41 +65,42 @@ type ServiceRequest = {
   urgency: string;
   status: string;
   rejectionReason: string | null;
-  property: {
-    id: string;
-    name: string;
-    address: string | null;
-  };
+  property: Property;
   photos: JobPhoto[];
-};
+}
 
-type Job = {
+interface Job {
   id: string;
-  vendorId: string;
-  acceptedAt: string | null;
-  completedAt: string | null;
+  acceptedAt: Date | string | null;
+  enRouteAt: Date | string | null;
+  arrivedAt: Date | string | null;
+  completedAt: Date | string | null;
+  vendorNotes: string | null;
+  totalLabourHours: number | null;
+  totalMaterialsCost: number | null;
+  totalCost: number | null;
   isPaused: boolean;
   pauseReason: string | null;
   estimatedReturnDate: string | null;
-  serviceRequest: ServiceRequest;
+  pausedAt: string | null;
   notes: JobNote[];
-  photos: JobPhoto[];
   materials: JobMaterial[];
-  proofPacket: ProofPacket | null;
-};
+  photos: JobPhoto[];
+  serviceRequest: ServiceRequest;
+}
+
+interface VendorJobDetailProps {
+  job: Job;
+}
+
+type JobStatusAction = "accept" | "enroute" | "arrive" | "complete";
 
 function getUrgencyColor(urgency: string) {
-  return (
-    URGENCY_LEVELS.find((u) => u.value === urgency)?.color ??
-    "bg-gray-100 text-gray-800"
-  );
+  return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
 }
 
 function getStatusColor(status: string) {
-  return (
-    REQUEST_STATUSES.find((s) => s.value === status)?.color ??
-    "bg-gray-100 text-gray-800"
-  );
+  return REQUEST_STATUSES.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-800";
 }
 
 function getStatusLabel(status: string) {
@@ -114,708 +108,923 @@ function getStatusLabel(status: string) {
 }
 
 function getCategoryLabel(category: string) {
-  return (
-    SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category
-  );
+  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
 }
 
-interface VendorJobDetailProps {
-  job: Job;
+interface NewMaterial {
+  tempId: string;
+  description: string;
+  qty: number;
+  unitCost: number;
 }
 
-export function VendorJobDetail({ job: initialJob }: VendorJobDetailProps) {
+type DeclineKey = "capacity" | "wont_service" | "other";
+
+const DECLINE_OPTIONS: { key: DeclineKey; label: string; value: string | null }[] = [
+  { key: "capacity",     label: "Over capacity",         value: "Over capacity — currently unavailable to take on new jobs" },
+  { key: "wont_service", label: "Won't service",          value: "Unable to service this request" },
+  { key: "other",        label: "Other (provide reason)", value: null },
+];
+
+export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const sr = job.serviceRequest;
 
-  const [job, setJob] = useState<Job>(initialJob);
-  const [noteText, setNoteText] = useState("");
-  const [completionNote, setCompletionNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [noteError, setNoteError] = useState<string | null>(null);
-  const [photoError, setPhotoError] = useState<string | null>(null);
-  const [materialError, setMaterialError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
-  // Material form
-  const [matName, setMatName] = useState("");
-  const [matQty, setMatQty] = useState("1");
-  const [matUnit, setMatUnit] = useState("");
-  const [matCost, setMatCost] = useState("");
+  // Decline flow
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineKey, setDeclineKey] = useState<DeclineKey | null>(null);
+  const [otherDeclineReason, setOtherDeclineReason] = useState("");
 
-  // Pause form
-  const [showPauseForm, setShowPauseForm] = useState(false);
+  // Pause modal state
+  const [showPauseModal, setShowPauseModal] = useState(false);
   const [pauseReason, setPauseReason] = useState("");
-  const [pauseReturnDate, setPauseReturnDate] = useState("");
+  const [estimatedReturnDate, setEstimatedReturnDate] = useState("");
+  const [pauseLoading, setPauseLoading] = useState(false);
   const [pauseError, setPauseError] = useState<string | null>(null);
 
-  const [showNotes, setShowNotes] = useState(true);
-  const [showPhotos, setShowPhotos] = useState(true);
-  const [showMaterials, setShowMaterials] = useState(true);
+  const [noteText, setNoteText] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [noteError, setNoteError] = useState<string | null>(null);
 
-  const photoInputRef = useRef<HTMLInputElement>(null);
+  const [newMaterials, setNewMaterials] = useState<NewMaterial[]>([]);
+  const [savingMaterials, setSavingMaterials] = useState(false);
+  const [materialError, setMaterialError] = useState<string | null>(null);
 
-  const sr = job.serviceRequest;
-  const isCompleted = !!job.completedAt;
-  const hasRejection = !!sr.rejectionReason;
+  const [photoUploading, setPhotoUploading] = useState<Record<string, boolean>>({});
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<JobPhoto[]>(job.photos);
+  const [pendingPhotos, setPendingPhotos] = useState<Record<"BEFORE" | "AFTER", File[]>>({
+    BEFORE: [],
+    AFTER: [],
+  });
 
-  // --- Note ---
-  const handleAddNote = () => {
-    if (!noteText.trim()) return;
-    startTransition(async () => {
-      setNoteError(null);
-      try {
-        const result = await addJobNoteAction(job.id, noteText);
-        if (result?.error) {
-          setNoteError(result.error);
-          return;
-        }
-        if (result?.note) {
-          setJob((prev) => ({
-            ...prev,
-            notes: [...prev.notes, result.note],
-          }));
-          setNoteText("");
-        }
-      } catch {
-        setNoteError("Failed to add note.");
-      }
-    });
-  };
+  const canModifyPhotos = !["COMPLETED", "VERIFIED", "CANCELLED"].includes(sr.status);
 
-  // --- Photos ---
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (!files.length) return;
+  const beforePhotos = photos.filter((p) => p.type === "BEFORE");
+  const afterPhotos  = photos.filter((p) => p.type === "AFTER");
 
-    startTransition(async () => {
-      setPhotoError(null);
-      const formData = new FormData();
-      files.forEach((f) => formData.append("photos", f));
-      formData.append("type", isCompleted ? "AFTER" : "DURING");
-
-      try {
-        const result = await uploadJobPhotosAction(job.id, formData);
-        if (result?.error) {
-          setPhotoError(result.error);
-          return;
-        }
-        if (result?.photos) {
-          setJob((prev) => ({
-            ...prev,
-            photos: [...prev.photos, ...result.photos],
-          }));
-        }
-      } catch {
-        setPhotoError("Failed to upload photos.");
-      }
-    });
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, photoType: "BEFORE" | "AFTER") => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const selectedFiles = Array.from(files);
+    setPendingPhotos((prev) => ({
+      ...prev,
+      [photoType]: [...prev[photoType], ...selectedFiles],
+    }));
     e.target.value = "";
   };
 
-  // --- Materials ---
-  const handleAddMaterial = () => {
-    if (!matName.trim()) return;
-    startTransition(async () => {
-      setMaterialError(null);
-      try {
-        const result = await addMaterialAction(job.id, {
-          name: matName,
-          quantity: parseFloat(matQty) || 1,
-          unit: matUnit || undefined,
-          cost: matCost ? parseFloat(matCost) : undefined,
-        });
-        if (result?.error) {
-          setMaterialError(result.error);
-          return;
-        }
-        if (result?.material) {
-          setJob((prev) => ({
+  const handleUploadPendingPhotos = async (photoType: "BEFORE" | "AFTER") => {
+    const filesToUpload = pendingPhotos[photoType];
+    if (filesToUpload.length === 0) return;
+
+    setPhotoError(null);
+    setPhotoUploading((prev) => ({ ...prev, [photoType]: true }));
+    let uploadedAny = false;
+    let firstError: string | null = null;
+    const failedFiles: File[] = [];
+    try {
+      for (const file of filesToUpload) {
+        try {
+          const fd = new FormData();
+          fd.append("file", file);
+          const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
+          if (!uploadRes.ok) {
+            const d = await uploadRes.json().catch(() => ({}));
+            throw new Error(d.error ?? "Upload failed");
+          }
+          const { url } = await uploadRes.json();
+          const saveRes = await fetch(`/api/jobs/${job.id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ type: "photo", url, photoType }),
+          });
+          if (!saveRes.ok) {
+            const d = await saveRes.json().catch(() => ({}));
+            throw new Error(d.error ?? "Failed to save photo");
+          }
+          const createdPhoto = await saveRes.json();
+          uploadedAny = true;
+          setPhotos((prev) => [
             ...prev,
-            materials: [...prev.materials, result.material],
-          }));
-          setMatName("");
-          setMatQty("1");
-          setMatUnit("");
-          setMatCost("");
+            {
+              id: createdPhoto.id,
+              url: createdPhoto.url,
+              type: createdPhoto.type,
+              thumbnailUrl: createdPhoto.thumbnailUrl ?? null,
+            },
+          ]);
+        } catch (fileErr: any) {
+          failedFiles.push(file);
+          if (!firstError) firstError = fileErr.message ?? "Photo upload failed";
         }
-      } catch {
-        setMaterialError("Failed to add material.");
       }
-    });
-  };
-
-  const handleDeleteMaterial = (materialId: string) => {
-    startTransition(async () => {
-      try {
-        await deleteMaterialAction(materialId);
-        setJob((prev) => ({
-          ...prev,
-          materials: prev.materials.filter((m) => m.id !== materialId),
-        }));
-      } catch {
-        setMaterialError("Failed to delete material.");
-      }
-    });
-  };
-
-  // --- Pause / Resume ---
-  const handleRequestPause = () => {
-    if (!pauseReason.trim()) {
-      setPauseError("Please provide a reason for the pause.");
-      return;
+    } finally {
+      if (uploadedAny) router.refresh();
+      setPendingPhotos((prev) => ({
+        ...prev,
+        [photoType]: failedFiles,
+      }));
+      if (firstError) setPhotoError(firstError);
+      setPhotoUploading((prev) => ({ ...prev, [photoType]: false }));
     }
-    startTransition(async () => {
-      setPauseError(null);
-      try {
-        const result = await requestPauseAction(job.id, {
-          reason: pauseReason,
-          estimatedReturnDate: pauseReturnDate || undefined,
-        });
-        if (result?.error) {
-          setPauseError(result.error);
-          return;
-        }
-        setJob((prev) => ({
-          ...prev,
-          isPaused: true,
-          pauseReason,
-          estimatedReturnDate: pauseReturnDate || null,
-        }));
-        setShowPauseForm(false);
-        setPauseReason("");
-        setPauseReturnDate("");
-      } catch {
-        setPauseError("Failed to request pause.");
-      }
-    });
   };
 
-  const handleCancelPause = () => {
-    startTransition(async () => {
-      setPauseError(null);
-      try {
-        const result = await cancelPauseAction(job.id);
-        if (result?.error) {
-          setPauseError(result.error);
-          return;
-        }
-        setJob((prev) => ({
-          ...prev,
-          isPaused: false,
-          pauseReason: null,
-          estimatedReturnDate: null,
-        }));
-      } catch {
-        setPauseError("Failed to cancel pause.");
+  const handlePhotoDelete = async (photoId: string) => {
+    setDeletingPhotoId(photoId);
+    setPhotoError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/photos/${photoId}`, { method: "DELETE" });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error ?? "Failed to delete photo");
       }
-    });
+      setPhotos((prev) => prev.filter((photo) => photo.id !== photoId));
+      router.refresh();
+    } catch (err: any) {
+      setPhotoError(err.message ?? "Delete failed");
+    } finally {
+      setDeletingPhotoId(null);
+    }
   };
 
-  // --- Completion ---
-  const handleComplete = () => {
-    startTransition(async () => {
-      setError(null);
-      try {
-        const result = await submitJobCompletionAction(job.id, completionNote);
-        if (result?.error) {
-          setError(result.error);
-          return;
-        }
+  const handleStatusAction = async (
+    action: JobStatusAction | "decline",
+    declineReason?: string
+  ) => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const body: Record<string, string> = { action };
+      if (declineReason) body.declineReason = declineReason;
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setActionError(data.error ?? "Action failed.");
+        return;
+      }
+      if (action === "decline") {
+        router.push("/app/vendor/jobs");
+      } else {
         router.refresh();
-      } catch {
-        setError("Failed to submit completion.");
       }
-    });
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setActionLoading(false);
+      setShowDeclineModal(false);
+    }
   };
+
+  const handleDeclineConfirm = () => {
+    if (!declineKey) return;
+    const reason =
+      declineKey === "other"
+        ? otherDeclineReason.trim()
+        : (DECLINE_OPTIONS.find((o) => o.key === declineKey)?.value ?? "");
+    if (!reason) return;
+    handleStatusAction("decline", reason);
+  };
+
+  const resetDeclineModal = () => {
+    setShowDeclineModal(false);
+    setDeclineKey(null);
+    setOtherDeclineReason("");
+  };
+
+  const handlePause = async () => {
+    setPauseLoading(true);
+    setPauseError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "pause",
+          pauseReason: pauseReason.trim() || null,
+          estimatedReturnDate: estimatedReturnDate || null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setPauseError(data.error ?? "Failed to pause job.");
+        return;
+      }
+      setShowPauseModal(false);
+      setPauseReason("");
+      setEstimatedReturnDate("");
+      router.refresh();
+    } catch {
+      setPauseError("Network error. Please try again.");
+    } finally {
+      setPauseLoading(false);
+    }
+  };
+
+  const handleResume = async () => {
+    setActionLoading(true);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resume" }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setActionError(data.error ?? "Failed to resume.");
+        return;
+      }
+      router.refresh();
+    } catch {
+      setActionError("Network error. Please try again.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleSaveNote = async () => {
+    if (!noteText.trim()) return;
+    setSavingNote(true);
+    setNoteError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "note", text: noteText.trim() }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setNoteError(data.error ?? "Failed to save note.");
+        return;
+      }
+      setNoteText("");
+      router.refresh();
+    } catch {
+      setNoteError("Network error. Please try again.");
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const addNewMaterial = () => {
+    setNewMaterials((prev) => [
+      ...prev,
+      { tempId: Date.now().toString(), description: "", qty: 1, unitCost: 0 },
+    ]);
+  };
+
+  const updateNewMaterial = (tempId: string, field: keyof NewMaterial, value: string | number) => {
+    setNewMaterials((prev) =>
+      prev.map((m) => (m.tempId === tempId ? { ...m, [field]: value } : m))
+    );
+  };
+
+  const removeNewMaterial = (tempId: string) => {
+    setNewMaterials((prev) => prev.filter((m) => m.tempId !== tempId));
+  };
+
+  const handleSaveMaterials = async () => {
+    const toSave = newMaterials.filter((m) => m.description.trim());
+    if (toSave.length === 0) return;
+    setSavingMaterials(true);
+    setMaterialError(null);
+    try {
+      await Promise.all(
+        toSave.map((m) =>
+          fetch(`/api/jobs/${job.id}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              type: "material",
+              description: m.description,
+              quantity: m.qty,
+              unitCost: m.unitCost,
+            }),
+          })
+        )
+      );
+      setNewMaterials([]);
+      router.refresh();
+    } catch {
+      setMaterialError("Network error. Please try again.");
+    } finally {
+      setSavingMaterials(false);
+    }
+  };
+
+  const existingMaterialsTotal = job.materials.reduce(
+    (sum, m) => sum + m.unitCost * m.quantity,
+    0
+  );
+  const newMaterialsTotal = newMaterials.reduce((sum, m) => sum + m.qty * m.unitCost, 0);
+
+  // Tomorrow's date for the min on the return date picker
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            {sr.referenceNumber}
-          </h1>
-          <div className="flex items-center gap-2 mt-1 flex-wrap">
+    <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
+      <Link
+        href="/app/vendor/jobs"
+        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+      >
+        <ArrowLeft className="w-4 h-4" />
+        Back to Jobs
+      </Link>
+
+      {/* Job header */}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">{sr.referenceNumber}</h1>
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
+          <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
+          <Badge variant="bg-gray-100 text-gray-700">{getCategoryLabel(sr.category)}</Badge>
+          {job.isPaused ? (
+            <Badge variant="bg-amber-100 text-amber-800">Paused — Will Return</Badge>
+          ) : (
             <Badge variant={getStatusColor(sr.status)}>
               {getStatusLabel(sr.status)}
             </Badge>
-            <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-              {getCategoryLabel(sr.category)}
-            </span>
-            {job.isPaused && (
-              <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
-                Paused
-              </span>
-            )}
-          </div>
+          )}
         </div>
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="text-sm text-gray-500 hover:text-gray-700 self-start sm:self-auto"
-        >
-          ← Back to Jobs
-        </button>
       </div>
 
-      {/* Rejection banner */}
-      {hasRejection && (
-        <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          <RotateCcw className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+      {/* Paused banner */}
+      {job.isPaused && (
+        <div className="flex items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+          <Pause className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-800">Job paused — you need to return</p>
+            {job.pauseReason && (
+              <p className="text-sm text-amber-700 mt-0.5">{job.pauseReason}</p>
+            )}
+            {job.estimatedReturnDate && (
+              <p className="text-xs text-amber-600 mt-1">
+                Expected return: {new Date(job.estimatedReturnDate).toLocaleDateString("en-CA", { weekday: "short", month: "short", day: "numeric" })}
+              </p>
+            )}
+            <div className="mt-3">
+              <Button
+                variant="primary"
+                size="sm"
+                loading={actionLoading}
+                onClick={handleResume}
+              >
+                <Play className="w-4 h-4" />
+                Resume Work
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection reason banner (work sent back for rework) */}
+      {sr.rejectionReason && sr.status === "IN_PROGRESS" && (
+        <div className="flex items-start gap-3 rounded-xl border-2 border-amber-300 bg-amber-50 px-4 py-3">
+          <RotateCcw className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
           <div>
-            <p className="text-sm font-semibold text-amber-800">
-              Work returned for rework
-            </p>
+            <p className="text-sm font-semibold text-amber-800">Work sent back for rework</p>
             <p className="text-sm text-amber-700 mt-0.5">{sr.rejectionReason}</p>
           </div>
         </div>
       )}
 
-      {/* Pause banner */}
-      {job.isPaused && (
-        <div className="flex items-start gap-3 bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
-          <PauseCircle className="w-5 h-5 text-orange-600 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-orange-800">
-              Job Paused — Will Return
-            </p>
-            {job.pauseReason && (
-              <p className="text-sm text-orange-700 mt-0.5">{job.pauseReason}</p>
-            )}
-            {job.estimatedReturnDate && (
-              <p className="text-xs text-orange-600 mt-1">
-                Expected return: {formatDate(job.estimatedReturnDate)}
-              </p>
-            )}
-          </div>
-          <Button
-            variant="secondary"
-            onClick={handleCancelPause}
-            loading={isPending}
-            disabled={isPending}
-            className="text-xs"
-          >
-            Resume
-          </Button>
-        </div>
-      )}
-
-      {/* Details */}
-      <Card>
-        <CardContent className="py-5 space-y-3">
-          <div className="flex items-center gap-2 text-sm text-gray-700">
-            <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-            <span className="font-medium">{sr.property.name}</span>
-            {sr.property.address && (
-              <span className="text-gray-400 text-xs">· {sr.property.address}</span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-gray-400">
-            <Clock className="w-3.5 h-3.5" />
-            {job.acceptedAt
-              ? `Accepted ${formatDate(job.acceptedAt)}`
-              : "Not yet accepted"}
-          </div>
-
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">
-            {sr.description}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Before photos (from service request) */}
-      {sr.photos.length > 0 && (
+      {/* Status action button */}
+      {sr.status !== "COMPLETED" && sr.status !== "VERIFIED" && sr.status !== "CANCELLED" && !job.isPaused && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Before Photos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {sr.photos.map((photo) => (
-                <a
-                  key={photo.id}
-                  href={photo.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block aspect-square rounded-lg overflow-hidden border border-gray-100 hover:opacity-90 transition"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={photo.url}
-                    alt={photo.caption ?? ""}
-                    className="w-full h-full object-cover"
-                  />
-                </a>
-              ))}
+          <CardContent className="py-5">
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Current Status</p>
+                {actionError && <p className="text-xs text-red-600 mt-0.5">{actionError}</p>}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                {/* Decline — only available when job is freshly dispatched */}
+                {sr.status === "DISPATCHED" && (
+                  <Button
+                    variant="danger"
+                    loading={actionLoading}
+                    onClick={() => setShowDeclineModal(true)}
+                    className="w-full sm:w-auto justify-center min-h-[44px] gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Decline Job
+                    <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+                  </Button>
+                )}
+                {/* If accepted and not yet en route */}
+                {sr.status === "ACCEPTED" && !job.enRouteAt && (
+                  <Button
+                    variant="primary"
+                    loading={actionLoading}
+                    onClick={() => handleStatusAction("enroute")}
+                    className="w-full sm:w-auto justify-center min-h-[44px]"
+                  >
+                    <Navigation className="w-4 h-4" />
+                    En Route
+                  </Button>
+                )}
+                {/* If en route but not arrived */}
+                {sr.status === "ACCEPTED" && job.enRouteAt && !job.arrivedAt && (
+                  <Button
+                    variant="primary"
+                    loading={actionLoading}
+                    onClick={() => handleStatusAction("arrive")}
+                    className="w-full sm:w-auto justify-center min-h-[44px]"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Arrived on Site
+                  </Button>
+                )}
+                {/* If dispatched, show accept */}
+                {sr.status === "DISPATCHED" && (
+                  <Button
+                    variant="primary"
+                    loading={actionLoading}
+                    onClick={() => handleStatusAction("accept")}
+                    className="w-full sm:w-auto justify-center min-h-[44px]"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Accept Job
+                  </Button>
+                )}
+                {/* If in progress, show complete + pause */}
+                {sr.status === "IN_PROGRESS" && (
+                  <>
+                    <Button
+                      variant="primary"
+                      loading={actionLoading}
+                      onClick={() => handleStatusAction("complete")}
+                      className="w-full sm:w-auto justify-center min-h-[44px]"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Mark Complete
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPauseReason("");
+                        setEstimatedReturnDate("");
+                        setPauseError(null);
+                        setShowPauseModal(true);
+                      }}
+                      disabled={actionLoading}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2 min-h-[44px] border border-amber-300 text-amber-700 text-sm font-medium rounded-md hover:bg-amber-50 transition-colors disabled:opacity-50 w-full sm:w-auto"
+                    >
+                      <Pause className="w-4 h-4" />
+                      Pause — Will Return
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Notes */}
-      <Card>
-        <CardHeader>
-          <button
-            type="button"
-            className="flex items-center justify-between w-full"
-            onClick={() => setShowNotes((v) => !v)}
-          >
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="w-4 h-4" />
-              Notes ({job.notes.length})
-            </CardTitle>
-            {showNotes ? (
-              <ChevronUp className="w-4 h-4 text-gray-400" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            )}
-          </button>
-        </CardHeader>
-        {showNotes && (
-          <CardContent className="space-y-4">
-            {noteError && (
-              <p className="text-sm text-red-500">{noteError}</p>
-            )}
-            {job.notes.length === 0 ? (
-              <p className="text-sm text-gray-400">No notes yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {job.notes.map((note) => (
-                  <div key={note.id} className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-gray-700">
-                        {note.author.name ?? note.author.email}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        {formatDate(note.createdAt)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                      {note.content}
-                    </p>
-                  </div>
-                ))}
+      {/* Pause modal */}
+      {showPauseModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPauseModal(false); }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md space-y-5 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Pause Job</h2>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  Need to order parts, wait for delivery, or come back another day? Pause the job and resume when ready.
+                </p>
               </div>
+              <button
+                onClick={() => setShowPauseModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 -mt-1 -mr-1"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                Why are you pausing? <span className="text-gray-400 text-xs font-normal">(recommended)</span>
+              </label>
+              <Textarea
+                value={pauseReason}
+                onChange={(e) => setPauseReason(e.target.value)}
+                placeholder="e.g., Need to order a replacement valve — parts arriving tomorrow"
+                rows={3}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                When do you expect to return?
+              </label>
+              <input
+                type="date"
+                value={estimatedReturnDate}
+                min={tomorrowStr}
+                onChange={(e) => setEstimatedReturnDate(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            {pauseError && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {pauseError}
+              </p>
             )}
 
-            {!isCompleted && (
-              <div className="flex gap-2">
-                <Textarea
-                  placeholder="Add a note…"
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  rows={2}
-                  className="flex-1"
-                />
-                <Button
-                  variant="secondary"
-                  onClick={handleAddNote}
-                  disabled={!noteText.trim() || isPending}
-                  loading={isPending}
-                  className="self-end"
-                >
-                  Add
-                </Button>
+            <div className="flex justify-end gap-3 pt-1">
+              <button
+                onClick={() => setShowPauseModal(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePause}
+                disabled={pauseLoading}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-amber-600 rounded-md hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {pauseLoading ? (
+                  <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Pausing…</>
+                ) : (
+                  <><Pause className="w-3.5 h-3.5" /> Pause Job</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Job info */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Job Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start gap-2">
+            <MapPin className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-gray-900">{sr.property.name}</p>
+              {sr.property.address && (
+                <p className="text-xs text-gray-500">{sr.property.address}</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Description</p>
+            <p className="text-sm text-gray-700 mt-1">{sr.description}</p>
+          </div>
+
+          {/* Timeline */}
+          {(job.acceptedAt || job.enRouteAt || job.arrivedAt || job.completedAt || job.pausedAt) && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Timeline</p>
+              <div className="space-y-1 text-xs text-gray-600">
+                {job.acceptedAt && <div><span className="font-medium">Accepted:</span> {formatDate(job.acceptedAt)}</div>}
+                {job.enRouteAt && <div><span className="font-medium">En Route:</span> {formatDate(job.enRouteAt)}</div>}
+                {job.arrivedAt && <div><span className="font-medium">Arrived:</span> {formatDate(job.arrivedAt)}</div>}
+                {job.pausedAt && job.isPaused && <div><span className="font-medium text-amber-700">Paused:</span> {formatDate(job.pausedAt)}</div>}
+                {job.completedAt && <div><span className="font-medium">Completed:</span> {formatDate(job.completedAt)}</div>}
               </div>
-            )}
-          </CardContent>
-        )}
+            </div>
+          )}
+        </CardContent>
       </Card>
 
-      {/* Job photos */}
+      {/* Existing notes */}
+      {job.notes.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Previous Notes</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {job.notes.map((note) => (
+              <div key={note.id} className="p-3 bg-gray-50 rounded-md">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-gray-700">
+                    {note.author.name ?? note.author.email}
+                  </span>
+                  <span className="text-xs text-gray-400">{formatDate(note.createdAt)}</span>
+                </div>
+                <p className="text-sm text-gray-700">{note.text}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Photos */}
       <Card>
         <CardHeader>
-          <button
-            type="button"
-            className="flex items-center justify-between w-full"
-            onClick={() => setShowPhotos((v) => !v)}
-          >
-            <CardTitle className="text-base flex items-center gap-2">
-              <ImagePlus className="w-4 h-4" />
-              Job Photos ({job.photos.length})
-            </CardTitle>
-            {showPhotos ? (
-              <ChevronUp className="w-4 h-4 text-gray-400" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            )}
-          </button>
+          <CardTitle>Before / After Photos</CardTitle>
         </CardHeader>
-        {showPhotos && (
-          <CardContent className="space-y-3">
-            {photoError && (
-              <p className="text-sm text-red-500">{photoError}</p>
-            )}
-            {job.photos.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {job.photos.map((photo) => (
-                  <a
-                    key={photo.id}
-                    href={photo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block aspect-square rounded-lg overflow-hidden border border-gray-100 hover:opacity-90 transition"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={photo.url}
-                      alt={photo.caption ?? ""}
-                      className="w-full h-full object-cover"
-                    />
-                  </a>
-                ))}
+        <CardContent className="space-y-5">
+          {photoError && (
+            <p className="text-xs text-red-600">{photoError}</p>
+          )}
+          {(["BEFORE", "AFTER"] as const).map((type) => {
+            const photos = type === "BEFORE" ? beforePhotos : afterPhotos;
+            const uploading = !!photoUploading[type];
+            const queuedCount = pendingPhotos[type].length;
+            return (
+              <div key={type}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    {type === "BEFORE" ? "Before" : "After"}
+                  </p>
+                  {canModifyPhotos && (
+                    <div className="flex items-center gap-2">
+                      <label
+                        className={`inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer px-2.5 py-1.5 rounded-md border transition-colors ${
+                          uploading
+                            ? "opacity-50 cursor-not-allowed border-gray-200 text-gray-400"
+                            : "border-blue-200 text-blue-600 hover:bg-blue-50"
+                        }`}
+                      >
+                        <><Camera className="w-3.5 h-3.5" /> Select Photos</>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          disabled={uploading}
+                          className="sr-only"
+                          onClick={(e) => {
+                            e.currentTarget.value = "";
+                          }}
+                          onChange={(e) => handlePhotoUpload(e, type)}
+                        />
+                      </label>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        loading={uploading}
+                        disabled={uploading || queuedCount === 0}
+                        onClick={() => handleUploadPendingPhotos(type)}
+                      >
+                        Upload {queuedCount > 0 ? `(${queuedCount})` : ""}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {canModifyPhotos && queuedCount > 0 && (
+                  <p className="text-xs text-gray-500 mb-2">{queuedCount} photo(s) queued for upload</p>
+                )}
+                {photos.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-3">
+                    {photos.map((photo) => (
+                      <div key={photo.id} className="relative group">
+                        <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                          <div className="aspect-square rounded-md overflow-hidden bg-gray-100">
+                            <img
+                              src={photo.url}
+                              alt={`${type} photo`}
+                              className="w-full h-full object-cover hover:opacity-90 transition-opacity"
+                            />
+                          </div>
+                        </a>
+                        {canModifyPhotos && (
+                          <button
+                            type="button"
+                            onClick={() => handlePhotoDelete(photo.id)}
+                            disabled={deletingPhotoId === photo.id}
+                            className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 disabled:opacity-50"
+                            title="Delete photo"
+                          >
+                            {deletingPhotoId === photo.id ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              <X className="w-3 h-3" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center h-20 border-2 border-dashed border-gray-200 rounded-lg">
+                    <p className="text-xs text-gray-400">
+                      {canModifyPhotos ? "No photos yet — tap Add Photo" : "No photos"}
+                    </p>
+                  </div>
+                )}
               </div>
-            ) : (
-              <p className="text-sm text-gray-400">No photos uploaded yet.</p>
-            )}
-
-            {!isCompleted && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => photoInputRef.current?.click()}
-                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 border border-dashed border-blue-300 rounded-lg px-4 py-2.5 hover:bg-blue-50 transition-colors"
-                >
-                  <ImagePlus className="w-4 h-4" />
-                  Upload photos
-                </button>
-                <input
-                  ref={photoInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handlePhotoUpload}
-                />
-              </>
-            )}
-          </CardContent>
-        )}
+            );
+          })}
+        </CardContent>
       </Card>
 
       {/* Materials */}
       <Card>
         <CardHeader>
-          <button
-            type="button"
-            className="flex items-center justify-between w-full"
-            onClick={() => setShowMaterials((v) => !v)}
-          >
-            <CardTitle className="text-base flex items-center gap-2">
-              <Package className="w-4 h-4" />
-              Materials ({job.materials.length})
-            </CardTitle>
-            {showMaterials ? (
-              <ChevronUp className="w-4 h-4 text-gray-400" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-gray-400" />
-            )}
-          </button>
+          <div className="flex items-center justify-between">
+            <CardTitle>Materials Used</CardTitle>
+            <Button variant="secondary" size="sm" onClick={addNewMaterial}>
+              <Plus className="w-4 h-4" />
+              Add Item
+            </Button>
+          </div>
         </CardHeader>
-        {showMaterials && (
-          <CardContent className="space-y-3">
-            {materialError && (
-              <p className="text-sm text-red-500">{materialError}</p>
-            )}
-            {job.materials.length > 0 ? (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-gray-400 border-b border-gray-100">
-                    <th className="text-left pb-2">Item</th>
-                    <th className="text-right pb-2">Qty</th>
-                    <th className="text-right pb-2">Unit</th>
-                    <th className="text-right pb-2">Cost</th>
-                    <th className="pb-2"></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {job.materials.map((m) => (
-                    <tr key={m.id}>
-                      <td className="py-2 text-gray-700">{m.name}</td>
-                      <td className="py-2 text-right text-gray-600">{m.quantity}</td>
-                      <td className="py-2 text-right text-gray-400">{m.unit ?? "-"}</td>
-                      <td className="py-2 text-right text-gray-600">
-                        {m.cost != null ? `$${m.cost.toFixed(2)}` : "-"}
-                      </td>
-                      <td className="py-2 text-right">
-                        {!isCompleted && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteMaterial(m.id)}
-                            className="text-gray-300 hover:text-red-400 transition-colors"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <p className="text-sm text-gray-400">No materials logged yet.</p>
-            )}
-
-            {!isCompleted && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2">
-                <Input
-                  placeholder="Item name"
-                  value={matName}
-                  onChange={(e) => setMatName(e.target.value)}
-                />
-                <Input
-                  type="number"
-                  placeholder="Qty"
-                  value={matQty}
-                  onChange={(e) => setMatQty(e.target.value)}
-                  min="0"
-                />
-                <Input
-                  placeholder="Unit (optional)"
-                  value={matUnit}
-                  onChange={(e) => setMatUnit(e.target.value)}
-                />
-                <Input
-                  type="number"
-                  placeholder="Cost (optional)"
-                  value={matCost}
-                  onChange={(e) => setMatCost(e.target.value)}
-                  min="0"
-                  step="0.01"
-                />
-                <div className="col-span-2 sm:col-span-4">
-                  <Button
-                    variant="secondary"
-                    onClick={handleAddMaterial}
-                    disabled={!matName.trim() || isPending}
-                    loading={isPending}
-                  >
-                    Add Material
-                  </Button>
+        <CardContent>
+          {/* Saved materials */}
+          {job.materials.length > 0 && (
+            <div className="space-y-1 mb-4">
+              {job.materials.map((m) => (
+                <div key={m.id} className="flex items-center justify-between text-sm py-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-700">{m.description}</span>
+                    <span className="text-gray-400">× {m.quantity}</span>
+                  </div>
+                  <span className="text-gray-600 font-medium">
+                    {formatCurrency(m.unitCost * m.quantity)}
+                  </span>
                 </div>
+              ))}
+              <div className="flex justify-between pt-2 mt-1 border-t border-gray-100 text-sm text-gray-600">
+                <span>Subtotal (saved)</span>
+                <span>{formatCurrency(existingMaterialsTotal)}</span>
               </div>
-            )}
-          </CardContent>
-        )}
+            </div>
+          )}
+
+          {/* New unsaved materials */}
+          {newMaterials.length === 0 && job.materials.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">
+              No materials added yet.
+            </p>
+          ) : null}
+
+          {newMaterials.length > 0 && (
+            <div className="space-y-3">
+              {materialError && (
+                <p className="text-xs text-red-600">{materialError}</p>
+              )}
+              {newMaterials.map((m) => (
+                <div key={m.tempId} className="flex flex-col sm:flex-row gap-2 items-start">
+                  <input
+                    type="text"
+                    placeholder="Description"
+                    value={m.description}
+                    onChange={(e) => updateNewMaterial(m.tempId, "description", e.target.value)}
+                    className="w-full sm:flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex gap-2 w-full sm:w-auto">
+                    <input
+                      type="number"
+                      placeholder="Qty"
+                      value={m.qty}
+                      min={1}
+                      onChange={(e) => updateNewMaterial(m.tempId, "qty", Number(e.target.value))}
+                      className="w-20 sm:w-16 rounded-md border border-gray-300 px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <input
+                      type="number"
+                      placeholder="Cost"
+                      value={m.unitCost}
+                      min={0}
+                      step={0.01}
+                      onChange={(e) => updateNewMaterial(m.tempId, "unitCost", Number(e.target.value))}
+                      className="flex-1 sm:w-24 rounded-md border border-gray-300 px-2 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <button
+                      onClick={() => removeNewMaterial(m.tempId)}
+                      className="p-2 min-h-[44px] min-w-[44px] text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors flex items-center justify-center"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                <p className="text-sm font-semibold text-gray-900">
+                  New items total: {formatCurrency(newMaterialsTotal)}
+                </p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={savingMaterials}
+                  onClick={handleSaveMaterials}
+                >
+                  Save Materials
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
       </Card>
 
-      {/* Proof packet */}
-      {job.proofPacket && (
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
-                <span className="text-sm font-medium text-gray-700">
-                  Proof of Service Generated
-                </span>
-              </div>
-              <a
-                href={job.proofPacket.pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+      {/* Notes */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Add Note</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {noteError && <p className="text-xs text-red-600">{noteError}</p>}
+          <Textarea
+            placeholder="Add notes about the work performed, findings, or follow-up required..."
+            value={noteText}
+            onChange={(e) => setNoteText(e.target.value)}
+            rows={4}
+          />
+          <div className="flex justify-end">
+            <Button
+              variant="primary"
+              loading={savingNote}
+              disabled={!noteText.trim()}
+              onClick={handleSaveNote}
+            >
+              Save Note
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ─── Decline reason modal ────────────────────────────────────────────────── */}
+      <Modal
+        isOpen={showDeclineModal}
+        onClose={resetDeclineModal}
+        title="Decline Job"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            This job will be returned to the dispatch queue and assigned to another vendor.
+            Please select a reason:
+          </p>
+
+          <div className="flex flex-col gap-2">
+            {DECLINE_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => { setDeclineKey(opt.key); setOtherDeclineReason(""); }}
+                className={`text-left px-4 py-3 rounded-lg border transition-colors ${
+                  declineKey === opt.key
+                    ? "border-red-400 bg-red-50 text-red-900 font-medium"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
+                }`}
               >
-                Download PDF
-              </a>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                <span className="text-sm">{opt.label}</span>
+              </button>
+            ))}
+          </div>
 
-      {/* Completion / Pause actions */}
-      {!isCompleted && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Job Actions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {error && <p className="text-sm text-red-500">{error}</p>}
-
-            {/* Pause controls */}
-            {!job.isPaused && (
-              <div>
-                {!showPauseForm ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowPauseForm(true)}
-                    className="text-sm text-orange-600 hover:text-orange-700 flex items-center gap-1"
-                  >
-                    <PauseCircle className="w-4 h-4" />
-                    Request Pause
-                  </button>
-                ) : (
-                  <div className="space-y-3 bg-orange-50 border border-orange-200 rounded-xl p-4">
-                    <p className="text-sm font-semibold text-orange-800">
-                      Request a Pause
-                    </p>
-                    {pauseError && (
-                      <p className="text-sm text-red-500">{pauseError}</p>
-                    )}
-                    <Textarea
-                      placeholder="Why do you need to pause? (required)"
-                      value={pauseReason}
-                      onChange={(e) => setPauseReason(e.target.value)}
-                      rows={2}
-                    />
-                    <Input
-                      type="date"
-                      label="Expected return date (optional)"
-                      value={pauseReturnDate}
-                      onChange={(e) => setPauseReturnDate(e.target.value)}
-                    />
-                    <div className="flex gap-2">
-                      <Button
-                        variant="primary"
-                        onClick={handleRequestPause}
-                        loading={isPending}
-                        disabled={isPending || !pauseReason.trim()}
-                      >
-                        Submit Pause Request
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => {
-                          setShowPauseForm(false);
-                          setPauseReason("");
-                          setPauseReturnDate("");
-                          setPauseError(null);
-                        }}
-                        disabled={isPending}
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Complete */}
-            <div className="space-y-3 pt-2 border-t border-gray-100">
-              <p className="text-sm font-medium text-gray-700">
-                Mark job as complete
-              </p>
-              <Textarea
-                placeholder="Completion notes (optional)"
-                value={completionNote}
-                onChange={(e) => setCompletionNote(e.target.value)}
+          {declineKey === "other" && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-gray-600">
+                Describe the reason
+              </label>
+              <textarea
                 rows={3}
+                placeholder="Provide details about why you're declining this job…"
+                value={otherDeclineReason}
+                onChange={(e) => setOtherDeclineReason(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
               />
-              <Button
-                variant="primary"
-                onClick={handleComplete}
-                loading={isPending}
-                disabled={isPending}
-              >
-                Submit Completion
-              </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+
+          {actionError && (
+            <p className="text-xs text-red-600">{actionError}</p>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <Button
+              variant="danger"
+              loading={actionLoading}
+              disabled={
+                !declineKey ||
+                (declineKey === "other" && !otherDeclineReason.trim())
+              }
+              onClick={handleDeclineConfirm}
+              className="flex-1 justify-center"
+            >
+              Confirm Decline
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={actionLoading}
+              onClick={resetDeclineModal}
+              className="flex-1 justify-center"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
