@@ -84,7 +84,25 @@ function LoginForm() {
       const role = (session?.user as any)?.role ?? "OPERATOR";
       const dashboardUrl = getDashboardUrl(role);
 
-      router.push(dashboardUrl);
+      // Redirect to the originally requested URL if present and same-origin
+      const callbackUrl = searchParams.get("callbackUrl");
+      let destination = dashboardUrl;
+      if (callbackUrl) {
+        try {
+          const parsed = new URL(callbackUrl);
+          // Only follow the redirect if it points to the same origin
+          if (parsed.origin === window.location.origin) {
+            destination = parsed.pathname + parsed.search + parsed.hash;
+          }
+        } catch {
+          // callbackUrl is already a relative path
+          if (callbackUrl.startsWith("/")) {
+            destination = callbackUrl;
+          }
+        }
+      }
+
+      router.push(destination);
       router.refresh();
     } catch {
       setError("Something went wrong. Please try again.");

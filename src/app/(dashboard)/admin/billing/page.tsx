@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PLATFORM_BILL_STATUSES } from "@/lib/constants";
-import { DollarSign, RefreshCw, Send, Ban, ExternalLink } from "lucide-react";
+import { DollarSign, RefreshCw, Send, Ban, ExternalLink, FilePlus, Eye } from "lucide-react";
 
 interface BillRow {
   orgId: string;
@@ -118,6 +118,49 @@ export default function AdminBillingPage() {
       await fetchData();
     } catch (err) {
       setError(err instanceof Error ? err.message : `${action} failed`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handlePreview = async (billId: string, existingUrl: string | null) => {
+    if (existingUrl) {
+      window.open(existingUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setActionLoading(billId + "preview");
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/billing/${billId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "preview" }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Preview failed");
+      await fetchData();
+      if (json.url) window.open(json.url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Preview failed");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleGenerateDraft = async (orgId: string) => {
+    setActionLoading(orgId + "draft");
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/billing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate-draft", orgId, month }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Generate draft failed");
+      await fetchData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generate draft failed");
     } finally {
       setActionLoading(null);
     }
@@ -265,6 +308,19 @@ export default function AdminBillingPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
+                          {!row.bill && (
+                            <Button
+                              variant="secondary"
+                              onClick={() => handleGenerateDraft(row.orgId)}
+                              loading={actionLoading === row.orgId + "draft"}
+                              disabled={!!actionLoading}
+                              className="text-xs px-2 py-1 h-auto"
+                              title="Generate a Stripe draft invoice for this org (even if $0)"
+                            >
+                              <FilePlus className="w-3 h-3 mr-1" />
+                              Generate Draft
+                            </Button>
+                          )}
                           {row.bill?.stripeInvoiceUrl && (
                             <a
                               href={row.bill.stripeInvoiceUrl}
@@ -278,6 +334,19 @@ export default function AdminBillingPage() {
                           )}
                           {row.bill?.status === "DRAFT" && (
                             <>
+                              {row.bill.amountCad > 0 && (
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => handlePreview(row.bill!.id, row.bill!.stripeInvoiceUrl)}
+                                  loading={actionLoading === row.bill!.id + "preview"}
+                                  disabled={!!actionLoading}
+                                  className="text-xs px-2 py-1 h-auto"
+                                  title="Generate and open a Stripe preview of this invoice"
+                                >
+                                  <Eye className="w-3 h-3 mr-1" />
+                                  Preview
+                                </Button>
+                              )}
                               <Button
                                 variant="primary"
                                 onClick={() => handleBillAction(row.bill!.id, "send")}

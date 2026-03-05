@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { sendPlatformBill, voidPlatformBill } from "@/lib/billing";
+import { sendPlatformBill, voidPlatformBill, previewPlatformBill } from "@/lib/billing";
 
 /**
  * POST /api/admin/billing/[id]/action
@@ -27,6 +27,11 @@ export async function POST(
     if (body.action === "void") {
       await voidPlatformBill(id);
       return NextResponse.json({ ok: true });
+    }
+
+    if (body.action === "preview") {
+      const url = await previewPlatformBill(id);
+      return NextResponse.json({ ok: true, url });
     }
 
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });

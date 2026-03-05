@@ -51,7 +51,7 @@ function StatusTimeline({ currentStatus }: TimelineProps) {
   const currentIdx = STATUS_PROGRESSION.indexOf(currentStatus as any);
 
   return (
-    <div className="flex items-center gap-1 flex-nowrap min-w-max">
+    <div className="flex items-center gap-1 flex-wrap">
       {STATUS_PROGRESSION.map((status, idx) => {
         const isDone = idx < currentIdx;
         const isCurrent = idx === currentIdx;
@@ -171,7 +171,7 @@ export default async function RequestDetailPage({
           <CardTitle>Progress</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto pb-1">
+          <div>
             <StatusTimeline currentStatus={req.status} />
           </div>
 

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
+import { sendEmail } from "@/lib/email";
 import { BILLING_PLANS, BILLED_JOB_STATUSES } from "@/lib/constants";
 import type { Organization } from "@prisma/client";
 
@@ -155,10 +156,93 @@ export async function generatePlatformBills(
   return { created, updated };
 }
 
+// ─── Build/ensure a Stripe invoice for a bill (shared by preview & send) ─────
+
+async function ensureStripeInvoice(
+  bill: Awaited<ReturnType<typeof prisma.platformBill.findUniqueOrThrow>> & {
+    organization: Awaited<ReturnType<typeof prisma.organization.findUniqueOrThrow>>;
+  }
+): Promise<{ invoiceId: string; invoiceUrl: string | null }> {
+  // Reuse existing Stripe invoice if it was already created during preview
+  if (bill.stripeInvoiceId) {
+    const existing = await stripe.invoices.retrieve(bill.stripeInvoiceId);
+    return {
+      invoiceId: existing.id,
+      invoiceUrl: existing.hosted_invoice_url ?? null,
+    };
+  }
+
+  const customerId = await ensureStripeCustomer(bill.organization);
+
+  const periodLabel = bill.periodStart.toLocaleDateString("en-CA", {
+    year: "numeric",
+    month: "long",
+    timeZone: "UTC",
+  });
+
+  const invoice = await stripe.invoices.create({
+    customer: customerId,
+    collection_method: "send_invoice",
+    days_until_due: 30,
+    currency: "cad",
+    description: `DispatchToGo — Platform fee for ${periodLabel}`,
+    metadata: { platformBillId: bill.id, organizationId: bill.organizationId },
+  });
+
+  await stripe.invoiceItems.create({
+    customer: customerId,
+    invoice: invoice.id,
+    amount: Math.round(bill.amountCad * 100),
+    currency: "cad",
+    description: `${bill.billableRequests} completed service request${
+      bill.billableRequests !== 1 ? "s" : ""
+    } × $${bill.ratePerRequest.toFixed(2)} CAD (${bill.includedRequests} included on ${
+      BILLING_PLANS[bill.organization.plan]?.label ?? bill.organization.plan
+    } plan)`,
+  });
+
+  const finalised = await stripe.invoices.finalizeInvoice(invoice.id);
+  return {
+    invoiceId: finalised.id,
+    invoiceUrl: finalised.hosted_invoice_url ?? null,
+  };
+}
+
+// ─── Preview bill via Stripe (finalize but don't send) ────────────────────────
+
+/**
+ * Create and finalise a Stripe invoice for a DRAFT PlatformBill without sending
+ * it. Persists the stripeInvoiceId and stripeInvoiceUrl so the admin can review
+ * the invoice before committing to send.
+ */
+export async function previewPlatformBill(platformBillId: string): Promise<string | null> {
+  const bill = await prisma.platformBill.findUniqueOrThrow({
+    where: { id: platformBillId },
+    include: { organization: true },
+  });
+
+  if (bill.status !== "DRAFT") {
+    throw new Error(`Bill ${platformBillId} is not in DRAFT status (current: ${bill.status})`);
+  }
+
+  const { invoiceId, invoiceUrl } = await ensureStripeInvoice(bill);
+
+  // Persist the Stripe refs if not already stored
+  if (!bill.stripeInvoiceId) {
+    await prisma.platformBill.update({
+      where: { id: platformBillId },
+      data: { stripeInvoiceId: invoiceId, stripeInvoiceUrl: invoiceUrl },
+    });
+  }
+
+  return invoiceUrl;
+}
+
 // ─── Send bill via Stripe ─────────────────────────────────────────────────────
 
 /**
- * Finalise a DRAFT PlatformBill by creating a Stripe invoice and marking it SENT.
+ * Finalise (if needed) and send a DRAFT PlatformBill via Stripe.
+ * Reuses an existing Stripe invoice if one was already created during preview.
  */
 export async function sendPlatformBill(platformBillId: string): Promise<void> {
   const bill = await prisma.platformBill.findUniqueOrThrow({
@@ -170,47 +254,100 @@ export async function sendPlatformBill(platformBillId: string): Promise<void> {
     throw new Error(`Bill ${platformBillId} is not in DRAFT status (current: ${bill.status})`);
   }
 
-  const customerId = await ensureStripeCustomer(bill.organization);
+  const { invoiceId, invoiceUrl } = await ensureStripeInvoice(bill);
 
-  // Format period for description
-  const periodLabel = bill.periodStart.toLocaleDateString("en-CA", {
-    year: "numeric",
-    month: "long",
-    timeZone: "UTC",
-  });
+  // $0 invoices are auto-paid by Stripe on finalization — can't call sendInvoice.
+  // Fall back to sending the hosted invoice URL via the app's email system.
+  const stripeInvoice = await stripe.invoices.retrieve(invoiceId);
+  if (stripeInvoice.status !== "paid") {
+    await stripe.invoices.sendInvoice(invoiceId);
+  } else {
+    const recipientEmail =
+      bill.organization.billingEmail ??
+      bill.organization.contactEmail ??
+      (bill.organization as { email?: string | null }).email ??
+      null;
 
-  // Create a Stripe invoice
-  const invoice = await stripe.invoices.create({
-    customer: customerId,
-    collection_method: "send_invoice",
-    days_until_due: 30,
-    currency: "cad",
-    description: `DispatchToGo — Platform fee for ${periodLabel}`,
-    metadata: { platformBillId: bill.id, organizationId: bill.organizationId },
-  });
+    if (recipientEmail) {
+      const periodLabel = bill.periodStart.toLocaleDateString("en-CA", {
+        year: "numeric",
+        month: "long",
+        timeZone: "UTC",
+      });
+      const invoiceLink = invoiceUrl
+        ? `<p><a href="${invoiceUrl}" style="color:#2563eb">View your invoice on Stripe</a></p>`
+        : "";
 
-  // Add a line item for the overage
-  await stripe.invoiceItems.create({
-    customer: customerId,
-    invoice: invoice.id,
-    amount: Math.round(bill.amountCad * 100), // Stripe uses cents
-    currency: "cad",
-    description: `${bill.billableRequests} completed service request${bill.billableRequests !== 1 ? "s" : ""} × $${bill.ratePerRequest.toFixed(2)} CAD (${bill.includedRequests} included on ${BILLING_PLANS[bill.organization.plan]?.label ?? bill.organization.plan} plan)`,
-  });
-
-  // Finalise and send
-  const finalised = await stripe.invoices.finalizeInvoice(invoice.id);
-  await stripe.invoices.sendInvoice(finalised.id);
+      await sendEmail(
+        recipientEmail,
+        `DispatchToGo — Platform invoice for ${periodLabel} ($0.00 CAD)`,
+        `<p>Hi ${bill.organization.name},</p>
+<p>Your DispatchToGo platform invoice for <strong>${periodLabel}</strong> has been issued.</p>
+<p><strong>Amount due: $0.00 CAD</strong><br/>
+You had no billable requests this period — this invoice has been automatically marked as paid.</p>
+${invoiceLink}
+<p>Thank you,<br/>The DispatchToGo Team</p>`
+      );
+    }
+  }
 
   await prisma.platformBill.update({
     where: { id: platformBillId },
     data: {
       status: "SENT",
-      stripeInvoiceId: finalised.id,
-      stripeInvoiceUrl: finalised.hosted_invoice_url ?? null,
+      stripeInvoiceId: invoiceId,
+      stripeInvoiceUrl: invoiceUrl,
       sentAt: new Date(),
     },
   });
+}
+
+// ─── Generate draft for a single org (even at $0) ────────────────────────────
+
+/**
+ * Create or refresh a DRAFT PlatformBill for a specific org in a period,
+ * regardless of whether the amount due is $0.
+ * Throws if a non-DRAFT bill already exists for the period.
+ */
+export async function generateDraftBillForOrg(
+  orgId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<{ created: boolean; updated: boolean }> {
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: orgId },
+    select: { plan: true },
+  });
+
+  const usage = await getOrganizationUsageForPeriod(orgId, periodStart, periodEnd);
+  const plan = BILLING_PLANS[org.plan] ?? BILLING_PLANS["FREE"];
+
+  const data = {
+    includedRequests: plan.includedRequests,
+    completedRequests: usage.completedRequests,
+    billableRequests: usage.billableRequests,
+    ratePerRequest: plan.ratePerRequest,
+    amountCad: usage.amountCad,
+  };
+
+  const existing = await prisma.platformBill.findUnique({
+    where: { organizationId_periodStart: { organizationId: orgId, periodStart } },
+  });
+
+  if (existing) {
+    if (existing.status !== "DRAFT") {
+      throw new Error(
+        `A bill already exists for this period with status: ${existing.status}. Void it first.`
+      );
+    }
+    await prisma.platformBill.update({ where: { id: existing.id }, data });
+    return { created: false, updated: true };
+  }
+
+  await prisma.platformBill.create({
+    data: { ...data, organizationId: orgId, periodStart, periodEnd, status: "DRAFT" },
+  });
+  return { created: true, updated: false };
 }
 
 // ─── Void bill ────────────────────────────────────────────────────────────────

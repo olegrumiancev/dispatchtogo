@@ -143,7 +143,7 @@ export async function sendOperatorStatusEmail(
       <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
         <h2 style="margin:0 0 16px">Job Status Update</h2>
         <p>Job <strong>${refNumber}</strong> has been updated to <strong>${status}</strong>${who}.</p>
-        <a href="https://dispatchtogo.com/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Details</a>
+        <a href="https://dispatchtogo.com/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Details</a>
       </div>
     </div>`;
   return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailOperatorStatusUpdate" });
@@ -164,7 +164,7 @@ export async function sendJobCompletionEmail(
         <h2 style="margin:0 0 16px">Job Completed</h2>
         <p>Job <strong>${refNumber}</strong> has been completed by <strong>${vendorName}</strong>.</p>
         <p>You can now review the proof of service packet and approve the work.</p>
-        <a href="https://dispatchtogo.com/requests" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Review Proof Packet</a>
+        <a href="https://dispatchtogo.com/operator/requests" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Review Proof Packet</a>
       </div>
     </div>`;
   return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailJobCompletion" });

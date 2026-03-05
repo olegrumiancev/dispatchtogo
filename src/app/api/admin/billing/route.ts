@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getOrganizationUsageForPeriod, parsePeriod, generatePlatformBills, currentPeriodStart, currentPeriodEnd } from "@/lib/billing";
+import { getOrganizationUsageForPeriod, parsePeriod, generatePlatformBills, generateDraftBillForOrg, currentPeriodStart, currentPeriodEnd } from "@/lib/billing";
 import { BILLING_PLANS } from "@/lib/constants";
 
 /**
@@ -91,6 +91,22 @@ export async function POST(request: NextRequest) {
     const { periodStart, periodEnd } = parsePeriod(monthParam);
     const result = await generatePlatformBills(periodStart, periodEnd);
     return NextResponse.json({ ok: true, ...result });
+  }
+
+  if (body.action === "generate-draft") {
+    const { orgId, month: monthParam } = body as { orgId?: string; month?: string };
+    if (!orgId) return NextResponse.json({ error: "Missing orgId" }, { status: 400 });
+    if (!monthParam || !/^\d{4}-\d{2}$/.test(monthParam)) {
+      return NextResponse.json({ error: "Invalid month format. Use YYYY-MM." }, { status: 400 });
+    }
+    try {
+      const { periodStart, periodEnd } = parsePeriod(monthParam);
+      const result = await generateDraftBillForOrg(orgId, periodStart, periodEnd);
+      return NextResponse.json({ ok: true, ...result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Generate draft failed";
+      return NextResponse.json({ error: message }, { status: 500 });
+    }
   }
 
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
