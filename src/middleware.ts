@@ -4,58 +4,65 @@ import type { NextRequest } from "next/server";
 
 /**
  * Hostnames that identify the app subdomain.
- * Requests from these are routed to /(app) routes.
+ * Requests to these hosts that land on marketing pages
+ * are redirected to /app/login.
  */
-const APP_HOSTS = ["app.dispatchtogo.ca", "app.localhost"];
+const APP_HOSTS = ["app.dispatchtogo.com"];
 
-export default withAuth(
-  function middleware(req: NextRequest) {
-    const host = req.headers.get("host") ?? "";
-    const isAppHost = APP_HOSTS.some((h) => host.startsWith(h));
+/**
+ * Paths that belong to the marketing site.
+ * If a request arrives on an APP_HOST for one of these,
+ * redirect to /app/login instead.
+ */
+function isMarketingPath(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    pathname === "/pricing" ||
+    pathname.startsWith("/pricing/")
+  );
+}
 
-    // If on app subdomain and not already under /app, rewrite
-    if (isAppHost && !req.nextUrl.pathname.startsWith("/app")) {
-      const url = req.nextUrl.clone();
-      url.pathname = `/app${req.nextUrl.pathname}`;
-      return NextResponse.rewrite(url);
-    }
-
-    return NextResponse.next();
+// Auth middleware for dashboard routes
+const authMiddleware = withAuth({
+  pages: {
+    signIn: "/app/login",
   },
-  {
-    callbacks: {
-      authorized: ({ token, req }) => {
-        const { pathname } = req.nextUrl;
+});
 
-        // Always allow public routes
-        if (
-          pathname.startsWith("/app/login") ||
-          pathname.startsWith("/app/register") ||
-          pathname.startsWith("/app/vendor/accept-invite") ||
-          pathname.startsWith("/api/auth") ||
-          pathname === "/" ||
-          pathname.startsWith("/pricing") ||
-          pathname.startsWith("/about")
-        ) {
-          return true;
-        }
+export default async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const host = request.headers.get("host") ?? "";
 
-        // Everything else requires a valid token
-        return !!token;
-      },
-    },
+  // On the app subdomain, redirect marketing pages to /app/login
+  if (APP_HOSTS.includes(host) && isMarketingPath(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/app/login";
+    return NextResponse.redirect(url);
   }
-);
+
+  // For dashboard routes, run auth middleware
+  if (
+    pathname.startsWith("/app/operator") ||
+    pathname.startsWith("/app/vendor") ||
+    pathname.startsWith("/app/admin")
+  ) {
+    return (authMiddleware as any)(request);
+  }
+
+  return NextResponse.next();
+}
 
 export const config = {
   matcher: [
     /*
-     * Match all paths except:
-     * - _next/static (static files)
-     * - _next/image (image optimization)
-     * - favicon.ico
-     * - public assets
+     * Match:
+     * - / and /pricing (for app-subdomain redirect)
+     * - /app/operator/*, /app/vendor/*, /app/admin/* (for auth)
      */
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).)*",
+    "/",
+    "/pricing/:path*",
+    "/app/operator/:path*",
+    "/app/vendor/:path*",
+    "/app/admin/:path*",
   ],
 };
