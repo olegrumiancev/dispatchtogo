@@ -25,7 +25,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Include Prisma schema + CLI so migrate deploy can run at startup
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=deps /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+COPY --from=deps /app/node_modules/.bin/prisma* ./node_modules/.bin/
 COPY --from=deps /app/node_modules/prisma ./node_modules/prisma
 COPY --from=deps /app/node_modules/@prisma ./node_modules/@prisma
 
