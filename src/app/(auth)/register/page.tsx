@@ -187,7 +187,6 @@ export default function RegisterPage() {
             <Input
               label="Password"
               type="password"
-              placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
               value={form.password}
               onChange={(e) => set("password", e.target.value)}
               required
@@ -195,7 +194,6 @@ export default function RegisterPage() {
             <Input
               label="Confirm Password"
               type="password"
-              placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
               value={form.confirmPassword}
               onChange={(e) => set("confirmPassword", e.target.value)}
               required

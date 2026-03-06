@@ -1,10 +1,17 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-export const metadata: Metadata = {
-  title: "DispatchToGo",
-  description: "Managed vendor network for tourism operators",
-};
+const isDev = process.env.NODE_ENV !== "production";
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: isDev ? "[DEV] DispatchToGo" : "DispatchToGo",
+    description: "Managed vendor network for tourism operators",
+    icons: isDev
+      ? { icon: "/favicon-dev.svg" }
+      : undefined,
+  };
+}
 
 export default function RootLayout({
   children,

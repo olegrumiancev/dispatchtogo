@@ -34,14 +34,15 @@ model User {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
-  organization        Organization?      @relation(fields: [organizationId], references: [id])
-  vendor              Vendor?            @relation(fields: [vendorId], references: [id])
-  jobNotes            JobNote[]
-  notifications       Notification[]
-  chatMessages        ChatMessage[]
-  auditLogs           AuditLog[]
-  passwordResetTokens PasswordResetToken[]
-  requestViews        RequestView[]
+  organization             Organization?              @relation(fields: [organizationId], references: [id])
+  vendor                   Vendor?                    @relation(fields: [vendorId], references: [id])
+  jobNotes                 JobNote[]
+  notifications            Notification[]
+  chatMessages             ChatMessage[]
+  auditLogs                AuditLog[]
+  passwordResetTokens      PasswordResetToken[]
+  requestViews             RequestView[]
+  notificationPreferences  UserNotificationPreferences?
 
   @@index([email])
   @@index([organizationId])
@@ -338,11 +339,18 @@ model ProofPacket {
   @@index([jobId])
 }
 
+// Notification type enum (stored as String per project convention)
+// Values: JOB_DISPATCHED | JOB_ACCEPTED | JOB_IN_PROGRESS | JOB_DECLINED
+//         JOB_PAUSED | JOB_RESUMED | JOB_ENROUTE | JOB_COMPLETED
+//         WORK_REJECTED | WORK_VERIFIED | REQUEST_CANCELLED | GENERAL
 model Notification {
   id        String   @id @default(cuid())
   userId    String
   title     String
   body      String
+  type      String   @default("GENERAL")
+  link      String?
+  metadata  Json?    @default("{}")
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
 
@@ -350,6 +358,27 @@ model Notification {
 
   @@index([userId])
   @@index([read])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model UserNotificationPreferences {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  digestEnabled      Boolean  @default(true)
+  // DAILY | NONE
+  digestFrequency    String   @default("DAILY")
+  smsOptOut          Boolean  @default(false)
+  emailOptOut        Boolean  @default(false)
+  // Used for one-click unsubscribe links in digest emails (no auth required)
+  unsubscribeToken   String   @unique @default(cuid())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([unsubscribeToken])
 }
 
 model AiClassification {
@@ -439,7 +468,19 @@ model SystemSettings {
   emailAdminRejection        Boolean @default(true)
   emailWelcome               Boolean @default(true)
 
+  // ── Digest settings ─────────────────────────────────────────────────────
+  // Master on/off switch for all digest emails.
+  digestGlobalEnabled Boolean @default(true)
+  // Hour of day (0-23, UTC) when the daily digest cron fires.
+  digestSendHour      Int     @default(17)
+
   // ── BCC settings ────────────────────────────────────────────────────────
   bccEnabled  Boolean @default(false)
   bccAddresses String  @default("")
+
+  // ── SMS redirect (testing failsafe) ─────────────────────────────────────
+  // When enabled, ALL outbound SMS are re-routed to smsRedirectNumber instead
+  // of the real recipient. Use during system testing to avoid messaging real users.
+  smsRedirectEnabled Boolean @default(false)
+  smsRedirectNumber  String  @default("")
 }

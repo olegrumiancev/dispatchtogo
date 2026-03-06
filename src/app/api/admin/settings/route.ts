@@ -41,9 +41,10 @@ export async function PATCH(request: NextRequest) {
     "emailAdminRejection",
     "emailWelcome",
     "bccEnabled",
+    "smsRedirectEnabled",
   ] as const;
 
-  const STRING_FIELDS = ["bccAddresses"] as const;
+  const STRING_FIELDS = ["bccAddresses", "smsRedirectNumber"] as const;
 
   const data: Record<string, any> = {};
 

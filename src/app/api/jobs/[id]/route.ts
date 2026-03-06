@@ -5,10 +5,15 @@ import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 import {
   sendOperatorStatusUpdate,
   sendJobCompletionNotification,
+  sendVendorEnrouteNotification,
+  sendWorkPausedNotification,
+  sendWorkResumedNotification,
+  sendJobDeclinedNotification,
 } from "@/lib/sms";
 import {
   sendOperatorStatusEmail,
   sendJobCompletionEmail,
+  sendVendorDeclinedOperatorEmail,
 } from "@/lib/email";
 
 const JOB_INCLUDE = {
@@ -174,52 +179,140 @@ export async function PATCH(
     include: JOB_INCLUDE,
   });
 
-  // Fire-and-forget SMS + email notifications based on the new status
-  if (newStatus && updated) {
+  // Fire-and-forget SMS + email + in-app notifications
+  if (action && updated) {
     const serviceRequest = updated.serviceRequest as any;
     const vendor = updated.vendor as any;
     const refNumber = serviceRequest?.referenceNumber ?? id;
     const orgId = updated.organizationId ?? "";
     const vendorName = vendor?.companyName ?? "the vendor";
+    const propertyName = serviceRequest?.property?.name ?? "the property";
 
     prisma.organization
       .findUnique({ where: { id: orgId }, select: { contactPhone: true, contactEmail: true, email: true } })
-      .then((org) => {
+      .then(async (org) => {
         const phone = org?.contactPhone;
         const email = org?.contactEmail || org?.email;
 
-        if (
-          newStatus === "COMPLETED" &&
-          NOTIFICATION_SETTINGS.notifyOperatorOnCompletion
-        ) {
+        // ── COMPLETED ───────────────────────────────────────────────────────
+        if (newStatus === "COMPLETED" && NOTIFICATION_SETTINGS.notifyOperatorOnCompletion) {
           if (phone) {
-            sendJobCompletionNotification(phone, refNumber, vendorName).then((r) => {
-              if (!r.success) console.error(`[job PATCH] Completion SMS failed:`, r.error);
-            });
+            sendJobCompletionNotification(phone, refNumber, vendorName)
+              .catch((e) => console.error("[job PATCH] Completion SMS failed:", e));
           }
           if (email && NOTIFICATION_SETTINGS.emailEnabled) {
-            sendJobCompletionEmail(email, refNumber, vendorName).then((r) => {
-              if (!r.success) console.error(`[job PATCH] Completion email failed:`, r.error);
-            });
+            sendJobCompletionEmail(email, refNumber, vendorName)
+              .catch((e) => console.error("[job PATCH] Completion email failed:", e));
           }
-        } else if (
-          (newStatus === "ACCEPTED" || newStatus === "IN_PROGRESS") &&
-          NOTIFICATION_SETTINGS.notifyOperatorOnStatusChange
-        ) {
+        }
+
+        // ── ACCEPTED / IN_PROGRESS ───────────────────────────────────────────
+        else if ((newStatus === "ACCEPTED" || newStatus === "IN_PROGRESS") && NOTIFICATION_SETTINGS.notifyOperatorOnStatusChange) {
           if (phone) {
-            sendOperatorStatusUpdate(phone, refNumber, newStatus, vendor?.companyName).then((r) => {
-              if (!r.success) console.error(`[job PATCH] Status SMS failed:`, r.error);
-            });
+            sendOperatorStatusUpdate(phone, refNumber, newStatus, vendorName)
+              .catch((e) => console.error("[job PATCH] Status SMS failed:", e));
           }
           if (email && NOTIFICATION_SETTINGS.emailEnabled) {
-            sendOperatorStatusEmail(email, refNumber, newStatus, vendor?.companyName).then((r) => {
-              if (!r.success) console.error(`[job PATCH] Status email failed:`, r.error);
-            });
+            sendOperatorStatusEmail(email, refNumber, newStatus, vendorName)
+              .catch((e) => console.error("[job PATCH] Status email failed:", e));
           }
+        }
+
+        // ── EN ROUTE ────────────────────────────────────────────────────────
+        else if (action === "enroute" && NOTIFICATION_SETTINGS.notifyOperatorOnStatusChange) {
+          if (phone) {
+            sendVendorEnrouteNotification(phone, refNumber, propertyName, vendorName)
+              .catch((e) => console.error("[job PATCH] En-route SMS failed:", e));
+          }
+        }
+
+        // ── PAUSE ───────────────────────────────────────────────────────────
+        else if (action === "pause") {
+          if (phone) {
+            sendWorkPausedNotification(
+              phone,
+              refNumber,
+              propertyName,
+              body.pauseReason ?? null,
+              body.estimatedReturnDate ? new Date(body.estimatedReturnDate) : null
+            ).catch((e) => console.error("[job PATCH] Pause SMS failed:", e));
+          }
+          // In-app notification for operator users
+          prisma.user.findMany({
+            where: { organizationId: orgId },
+            select: { id: true },
+          }).then((opUsers) => {
+            if (!opUsers.length) return;
+            return prisma.notification.createMany({
+              data: opUsers.map((u) => ({
+                userId: u.id,
+                title: `Work paused – ${refNumber}`,
+                body: `${vendorName} has paused work at ${propertyName}.${
+                  body.pauseReason ? ` Reason: ${body.pauseReason}.` : ""
+                }${
+                  body.estimatedReturnDate ? ` Est. return: ${new Date(body.estimatedReturnDate).toLocaleDateString("en-CA")}.` : ""
+                }`,
+                type: "JOB_PAUSED",
+                link: `/app/operator/requests/${job.serviceRequestId}`,
+              })),
+            });
+          }).catch((e) => console.error("[job PATCH] Pause in-app notification failed:", e));
+        }
+
+        // ── RESUME ──────────────────────────────────────────────────────────
+        else if (action === "resume") {
+          if (phone) {
+            sendWorkResumedNotification(phone, refNumber, propertyName)
+              .catch((e) => console.error("[job PATCH] Resume SMS failed:", e));
+          }
+          prisma.user.findMany({
+            where: { organizationId: orgId },
+            select: { id: true },
+          }).then((opUsers) => {
+            if (!opUsers.length) return;
+            return prisma.notification.createMany({
+              data: opUsers.map((u) => ({
+                userId: u.id,
+                title: `Work resumed – ${refNumber}`,
+                body: `${vendorName} has resumed work at ${propertyName}.`,
+                type: "JOB_RESUMED",
+                link: `/app/operator/requests/${job.serviceRequestId}`,
+              })),
+            });
+          }).catch((e) => console.error("[job PATCH] Resume in-app notification failed:", e));
+        }
+
+        // ── DECLINE ─────────────────────────────────────────────────────────
+        else if (action === "decline") {
+          // SMS + email to operator
+          if (phone) {
+            sendJobDeclinedNotification(phone, refNumber, propertyName, vendorName)
+              .catch((e) => console.error("[job PATCH] Decline SMS failed:", e));
+          }
+          if (email && NOTIFICATION_SETTINGS.emailEnabled) {
+            sendVendorDeclinedOperatorEmail(email, refNumber, propertyName, vendorName, body.declineReason ?? null)
+              .catch((e) => console.error("[job PATCH] Decline email failed:", e));
+          }
+          // In-app notification for admin users (re-dispatch attention needed)
+          prisma.user.findMany({
+            where: { role: "ADMIN" },
+            select: { id: true },
+          }).then((admins) => {
+            if (!admins.length) return;
+            return prisma.notification.createMany({
+              data: admins.map((u) => ({
+                userId: u.id,
+                title: `Vendor declined – ${refNumber} needs re-dispatch`,
+                body: `${vendorName} declined job ${refNumber} at ${propertyName}. Manual re-dispatch required.`,
+                type: "JOB_DECLINED",
+                link: `/app/admin/dispatch`,
+              })),
+            });
+          }).catch((e) => console.error("[job PATCH] Decline admin in-app notification failed:", e));
         }
       })
       .catch((err) => {
-        console.error(`[job PATCH] Could not look up org for notifications:`, err);
+        console.error("[job PATCH] Could not look up org for notifications:", err);
       });
   }
 

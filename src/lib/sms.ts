@@ -1,15 +1,8 @@
-import twilio from "twilio";
+import { getSettings } from "@/lib/settings";
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_FROM_NUMBER;
-
-function getClient() {
-  if (!accountSid || !authToken) {
-    return null;
-  }
-  return twilio(accountSid, authToken);
-}
+const TEXTBEE_API_URL = process.env.TEXTBEE_API_URL;
+const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY;
+const TEXTBEE_DEVICE_ID = process.env.TEXTBEE_DEVICE_ID;
 
 type SMSResult =
   | { success: true; sid: string }
@@ -19,19 +12,48 @@ export async function sendSMS(
   to: string,
   body: string
 ): Promise<SMSResult> {
-  const client = getClient();
-  if (!client || !fromNumber) {
-    console.warn("[sms] Twilio not configured \u2013 skipping SMS");
-    return { success: false, error: "Twilio not configured" };
+  if (!TEXTBEE_API_URL || !TEXTBEE_API_KEY || !TEXTBEE_DEVICE_ID) {
+    console.warn("[sms] textbee not configured – skipping SMS");
+    return { success: false, error: "textbee not configured" };
+  }
+
+  // SMS redirect failsafe — re-route to test number if enabled in DB settings
+  let recipient = to;
+  try {
+    const settings = await getSettings();
+    if (settings.smsRedirectEnabled && settings.smsRedirectNumber.trim()) {
+      console.warn(
+        `[sms] REDIRECT ACTIVE — re-routing SMS for ${to} → ${settings.smsRedirectNumber.trim()}`
+      );
+      recipient = settings.smsRedirectNumber.trim();
+    }
+  } catch {
+    // Don't block SMS on a settings DB failure
   }
 
   try {
-    const message = await client.messages.create({
-      body,
-      from: fromNumber,
-      to,
-    });
-    return { success: true, sid: message.sid };
+    const res = await fetch(
+      `${TEXTBEE_API_URL}/api/v1/gateway/devices/${TEXTBEE_DEVICE_ID}/send-sms`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": TEXTBEE_API_KEY,
+        },
+        body: JSON.stringify({ recipients: [recipient], message: body }),
+      }
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("[sms] Send failed:", res.status, text);
+      return { success: false, error: `textbee error ${res.status}: ${text}` };
+    }
+
+    const data = await res.json();
+    const sid: string =
+      data?.data?._id ?? data?.data?.id ?? data?._id ?? `textbee-${Date.now()}`;
+    return { success: true, sid };
   } catch (err: any) {
     console.error("[sms] Send failed:", err?.message ?? err);
     return { success: false, error: err?.message ?? "Unknown error" };
@@ -108,3 +130,56 @@ export async function sendVendorRejectionSms(
 
 // Kept for callers that send from the operator side
 export { sendVendorRejectionSms as sendRejectionSms };
+
+export async function sendVendorEnrouteNotification(
+  operatorPhone: string,
+  refNumber: string,
+  propertyName: string,
+  vendorName: string
+): Promise<SMSResult> {
+  const body = `DispatchToGo: Your vendor (${vendorName}) is on the way to ${propertyName}. Ref: ${refNumber}.`;
+  return sendSMS(operatorPhone, body);
+}
+
+export async function sendWorkPausedNotification(
+  operatorPhone: string,
+  refNumber: string,
+  propertyName: string,
+  pauseReason: string | null,
+  estimatedReturn: Date | null
+): Promise<SMSResult> {
+  const reason = pauseReason ? ` Reason: ${pauseReason.length > 100 ? pauseReason.slice(0, 97) + "..." : pauseReason}.` : "";
+  const eta = estimatedReturn
+    ? ` Est. return: ${estimatedReturn.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}.`
+    : "";
+  const body = `DispatchToGo: Work has been paused at ${propertyName} (Ref: ${refNumber}).${reason}${eta} Log in for details.`;
+  return sendSMS(operatorPhone, body);
+}
+
+export async function sendWorkResumedNotification(
+  operatorPhone: string,
+  refNumber: string,
+  propertyName: string
+): Promise<SMSResult> {
+  const body = `DispatchToGo: Work has resumed at ${propertyName} (Ref: ${refNumber}).`;
+  return sendSMS(operatorPhone, body);
+}
+
+export async function sendJobDeclinedNotification(
+  operatorPhone: string,
+  refNumber: string,
+  propertyName: string,
+  vendorName: string
+): Promise<SMSResult> {
+  const body = `DispatchToGo: Vendor ${vendorName} declined job ${refNumber} at ${propertyName}. Re-dispatch is required – log in to assign another vendor.`;
+  return sendSMS(operatorPhone, body);
+}
+
+export async function sendJobCancelledToVendorSms(
+  vendorPhone: string,
+  refNumber: string,
+  propertyName: string
+): Promise<SMSResult> {
+  const body = `DispatchToGo: Job ${refNumber} at ${propertyName} has been cancelled by the operator. No further action is required.`;
+  return sendSMS(vendorPhone, body);
+}

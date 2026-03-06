@@ -179,7 +179,7 @@ export default function PricingPage() {
                 </div>
 
                 <div className="mt-8 inline-flex items-center justify-center w-full bg-gray-200 text-gray-500 text-base font-semibold px-6 py-3.5 rounded-xl cursor-not-allowed">
-                  Notify Me When Available
+                  Coming Soon
                 </div>
 
                 <div className="mt-8 border-t border-gray-200 pt-6">
@@ -200,16 +200,6 @@ export default function PricingPage() {
 
           </div>
 
-          {/* Volume note */}
-          <p className="text-center text-sm text-gray-500 mt-8">
-            Managing 50+ completions per month?{" "}
-            <a
-              href="mailto:oleg@dispatchtogo.com"
-              className="text-blue-600 hover:text-blue-700 font-medium"
-            >
-              Contact us for volume pricing
-            </a>
-          </p>
         </div>
       </section>
 

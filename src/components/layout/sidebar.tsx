@@ -26,6 +26,7 @@ import {
   Heart,
   CreditCard,
   Settings,
+  SlidersHorizontal,
 } from "lucide-react";
 
 interface NavItem {
@@ -42,6 +43,7 @@ const OPERATOR_NAV: NavItem[] = [
   { href: "/app/operator/invoices", label: "Invoices", icon: FileText },
   { href: "/app/operator/proof-packets", label: "Proof Packets", icon: ShieldCheck },
   { href: "/app/operator/billing", label: "Billing", icon: CreditCard },
+  { href: "/app/operator/account", label: "Account Settings", icon: SlidersHorizontal },
 ];
 
 const VENDOR_NAV: NavItem[] = [
@@ -65,9 +67,10 @@ const ADMIN_NAV: NavItem[] = [
 interface SidebarProps {
   role: "OPERATOR" | "VENDOR" | "ADMIN";
   userName?: string | null;
+  smsRedirectEnabled?: boolean;
 }
 
-export function Sidebar({ role, userName }: SidebarProps) {
+export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -113,7 +116,13 @@ export function Sidebar({ role, userName }: SidebarProps) {
               )}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {smsRedirectEnabled && item.href === "/app/admin/notifications" && (
+                <span
+                  title="SMS redirect is active"
+                  className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"
+                />
+              )}
             </Link>
           );
         })}

@@ -45,7 +45,21 @@ const authMiddleware = withAuth({
 export default async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   // Strip port so "app.dispatchtogo.com:3000" matches the same as "app.dispatchtogo.com"
-  const host = (request.headers.get("host") ?? "").split(":")[0];
+  const host = (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "").split(":")[0];
+  const isDev = process.env.NODE_ENV === "development";
+
+  // ── API subdomain restriction ───────────────────────────────────────────────
+  // All /api/* routes are only accessible from the APP_HOSTNAME (app subdomain).
+  // In development, this check is bypassed so localhost works normally.
+  //
+  // Vercel: configure the path in vercel.json cron to use https://app.yourdomain.com/...
+  // Dokploy: add a cron job calling POST https://app.yourdomain.com/api/cron/digest
+  //          with header "Authorization: Bearer $CRON_SECRET" — no code change needed.
+  if (pathname.startsWith("/api/") && !isDev) {
+    if (!APP_HOSTS.includes(host)) {
+      return new NextResponse(null, { status: 404 });
+    }
+  }
 
   // On the www/marketing host, redirect all /app and /app/* paths to the app subdomain
   if (!APP_HOSTS.includes(host) && (pathname === "/app" || pathname.startsWith("/app/"))) {
@@ -78,9 +92,11 @@ export const config = {
      * Match:
      * - / and /pricing (for app-subdomain redirect)
      * - /app/operator/*, /app/vendor/*, /app/admin/* (for auth)
+     * - /api/* (for subdomain restriction)
      */
     "/",
     "/pricing/:path*",
     "/app/:path*",
+    "/api/:path*",
   ],
 };

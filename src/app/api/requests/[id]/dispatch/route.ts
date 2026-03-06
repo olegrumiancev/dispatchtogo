@@ -78,7 +78,7 @@ export async function POST(
     }),
   ]);
 
-  // Fire-and-forget SMS + email to vendor
+  // Fire-and-forget SMS + email + in-app notification to vendor
   if (NOTIFICATION_SETTINGS.notifyVendorOnDispatch) {
     const property = (job.serviceRequest as any).property;
     const details = {
@@ -98,6 +98,22 @@ export async function POST(
         if (!r.success) console.error(`[dispatch] Email to vendor ${vendor.companyName} failed:`, r.error);
       });
     }
+
+    // In-app notification for the vendor's user account(s)
+    prisma.user.findMany({ where: { vendorId: vendor.id }, select: { id: true } })
+      .then((vendorUsers) => {
+        if (!vendorUsers.length) return;
+        return prisma.notification.createMany({
+          data: vendorUsers.map((u) => ({
+            userId: u.id,
+            title: `New job dispatched – ${serviceRequest.referenceNumber}`,
+            body: `A new job at ${details.propertyName} (${details.category}) has been dispatched to you. Please log in to accept or decline.`,
+            type: "JOB_DISPATCHED",
+            link: `/app/vendor/jobs/${job.id}`,
+          })),
+        });
+      })
+      .catch((e) => console.error("[dispatch] In-app notification failed:", e));
   }
 
   return NextResponse.json(job, { status: 201 });

@@ -9,6 +9,8 @@ import VendorProfileForm from "@/components/forms/vendor-profile-form";
 import VendorCredentialsForm from "@/components/forms/vendor-credentials-form";
 import VendorCompanyProfileCard from "@/components/forms/vendor-company-profile-card";
 import { VendorAvailabilityToggle } from "@/components/forms/vendor-availability-toggle";
+import AccountNotificationSettings from "@/components/forms/account-notification-settings";
+import { getOrCreatePreferences } from "@/lib/user-preferences";
 
 export const metadata = {
   title: "My Profile | DispatchToGo",
@@ -27,7 +29,7 @@ export default async function VendorProfilePage() {
 
   if (!vendorId) redirect("/app/vendor/jobs");
 
-  const [vendor, totalJobs, completedJobs] = await Promise.all([
+  const [vendor, totalJobs, completedJobs, notifPrefs] = await Promise.all([
     prisma.vendor.findUnique({
       where: { id: vendorId },
       include: {
@@ -37,6 +39,7 @@ export default async function VendorProfilePage() {
     }),
     prisma.job.count({ where: { vendorId } }),
     prisma.job.count({ where: { vendorId, completedAt: { not: null } } }),
+    getOrCreatePreferences(user.id),
   ]);
 
   if (!vendor) redirect("/app/vendor/jobs");
@@ -141,6 +144,16 @@ export default async function VendorProfilePage() {
           />
         </CardContent>
       </Card>
+
+      {/* Notification Preferences */}
+      <AccountNotificationSettings
+        initialPrefs={{
+          digestEnabled: notifPrefs.digestEnabled,
+          digestFrequency: notifPrefs.digestFrequency,
+          smsOptOut: notifPrefs.smsOptOut,
+          emailOptOut: notifPrefs.emailOptOut,
+        }}
+      />
     </div>
   );
 }

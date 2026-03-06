@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Orange background to signal non-production -->
+  <rect width="32" height="32" rx="6" fill="#f97316"/>
+  <!-- "D" for DispatchToGo, white -->
+  <text x="16" y="23" font-family="Arial,sans-serif" font-size="20" font-weight="bold"
+        fill="white" text-anchor="middle">D</text>
+  <!-- Small yellow dot indicator in top-right corner -->
+  <circle cx="26" cy="6" r="5" fill="#facc15" stroke="white" stroke-width="1.5"/>
+</svg>

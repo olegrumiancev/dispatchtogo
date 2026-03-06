@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { sendJobCancelledToVendorSms } from "@/lib/sms";
+import { sendJobCancelledToVendorEmail } from "@/lib/email";
+import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 
-const PRE_DISPATCH_STATUSES = ["SUBMITTED", "TRIAGING", "NEEDS_CLARIFICATION", "READY_TO_DISPATCH"];
+// Statuses where a human vendor may already be assigned and on-site
+const ACTIVE_JOB_STATUSES = ["DISPATCHED", "ACCEPTED", "IN_PROGRESS"];
+const PRE_DISPATCH_STATUSES = ["SUBMITTED", "TRIAGING", "NEEDS_CLARIFICATION", "READY_TO_DISPATCH", ...ACTIVE_JOB_STATUSES];
 
 /**
  * POST /api/requests/[id]/cancel
@@ -33,14 +38,20 @@ export async function POST(
     where.organizationId = user.organizationId;
   }
 
-  const current = await prisma.serviceRequest.findFirst({ where });
+  const current = await prisma.serviceRequest.findFirst({
+    where,
+    include: {
+      property: true,
+      job: { include: { vendor: true } },
+    },
+  });
   if (!current) {
     return NextResponse.json({ error: "Service request not found" }, { status: 404 });
   }
 
   if (!PRE_DISPATCH_STATUSES.includes(current.status)) {
     return NextResponse.json(
-      { error: `Cannot cancel a request with status "${current.status}". Only pre-dispatch requests can be cancelled by operators.` },
+      { error: `Cannot cancel a request with status "${current.status}". Only pre-dispatch or active requests can be cancelled.` },
       { status: 422 }
     );
   }
@@ -52,6 +63,40 @@ export async function POST(
       resolvedAt: new Date(),
     },
   });
+
+  // If a vendor was assigned, notify them
+  const job = current.job as any;
+  const vendor = job?.vendor;
+  if (vendor && ACTIVE_JOB_STATUSES.includes(current.status)) {
+    const propertyName = (current.property as any)?.name ?? "your assigned property";
+    const refNum = (current as any).referenceNumber ?? id;
+
+    // SMS to vendor (fire-and-forget)
+    sendJobCancelledToVendorSms(vendor.phone, refNum, propertyName)
+      .catch((e) => console.error("[cancel] SMS to vendor failed:", e));
+
+    // Email to vendor (fire-and-forget)
+    if (NOTIFICATION_SETTINGS.emailEnabled && vendor.email) {
+      sendJobCancelledToVendorEmail(vendor.email, vendor.companyName, refNum, propertyName)
+        .catch((e) => console.error("[cancel] Email to vendor failed:", e));
+    }
+
+    // In-app notification for the vendor's user account(s)
+    prisma.user.findMany({ where: { vendorId: vendor.id }, select: { id: true } })
+      .then((vendorUsers) => {
+        if (!vendorUsers.length) return;
+        return prisma.notification.createMany({
+          data: vendorUsers.map((u) => ({
+            userId: u.id,
+            title: `Job cancelled – ${refNum}`,
+            body: `Job ${refNum} at ${propertyName} has been cancelled by the operator. No further action required.`,
+            type: "REQUEST_CANCELLED",
+            link: `/app/vendor/jobs`,
+          })),
+        });
+      })
+      .catch((e) => console.error("[cancel] In-app notification failed:", e));
+  }
 
   return NextResponse.json(updated);
 }

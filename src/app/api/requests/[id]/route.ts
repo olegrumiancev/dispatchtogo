@@ -8,7 +8,9 @@ import {
 import {
   sendVendorRejectionEmail,
   sendAdminRejectionEmail,
+  sendWorkVerifiedToVendorEmail,
 } from "@/lib/email";
+import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 
 // Valid status transitions map
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -128,6 +130,36 @@ export async function PATCH(
       },
     });
 
+    // Notify the vendor: their work has been approved
+    const job = updated.job as any;
+    const vendor = job?.vendor;
+    const propertyName = (updated.property as any)?.name ?? "the property";
+    const refNum = (updated as any).referenceNumber ?? id;
+
+    if (vendor && job) {
+      // In-app notification
+      prisma.user.findFirst({ where: { vendorId: vendor.id }, select: { id: true } })
+        .then((vendorUser) => {
+          if (!vendorUser) return;
+          return prisma.notification.create({
+            data: {
+              userId: vendorUser.id,
+              title: `Work approved – ${refNum}`,
+              body: `Your completed work on job ${refNum} at ${propertyName} has been reviewed and approved.`,
+              type: "WORK_VERIFIED",
+              link: `/app/vendor/jobs/${job.id}`,
+            },
+          });
+        })
+        .catch((e) => console.error("[verify] In-app notification failed:", e));
+
+      // Email to vendor
+      if (NOTIFICATION_SETTINGS.emailEnabled && vendor.email) {
+        sendWorkVerifiedToVendorEmail(vendor.email, vendor.companyName, refNum, propertyName)
+          .catch((e) => console.error("[verify] Email to vendor failed:", e));
+      }
+    }
+
     return NextResponse.json(updated);
   }
 
@@ -232,7 +264,7 @@ export async function PATCH(
             ? `Your assignment on job ${refNum} has been removed and will be re-dispatched. Reason: ${rejectionReason.trim()}`
             : `Job ${refNum} has been escalated to an administrator for review. Reason: ${rejectionReason.trim()}`;
         await prisma.notification.create({
-          data: { userId: vendorUser.id, title: notifTitle, body: notifBody },
+          data: { userId: vendorUser.id, title: notifTitle, body: notifBody, type: "WORK_REJECTED", link: `/app/vendor/jobs/${current.job.id}` },
         });
       }
     }

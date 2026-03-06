@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
+import { sendVendorDispatchNotification } from "@/lib/sms";
+import { sendVendorDispatchEmail } from "@/lib/email";
 
 /**
  * Culture- and case-invariant equality check for category strings.
@@ -128,7 +131,7 @@ export async function autoDispatch(
     }
 
     // Create job and update request status in a transaction
-    await prisma.$transaction([
+    const [createdJob] = await prisma.$transaction([
       prisma.job.create({
         data: {
           serviceRequestId,
@@ -142,6 +145,56 @@ export async function autoDispatch(
         data: { status: "DISPATCHED" },
       }),
     ]);
+
+    // Fire-and-forget: notify the assigned vendor (SMS + email + in-app)
+    // Mirrors the same logic in /api/requests/[id]/dispatch/route.ts
+    if (NOTIFICATION_SETTINGS.notifyVendorOnDispatch) {
+      const [vendor, property, fullRequest] = await Promise.all([
+        prisma.vendor.findUnique({ where: { id: chosenVendorId } }),
+        prisma.property.findUnique({ where: { id: propertyId ?? "" } }),
+        prisma.serviceRequest.findUnique({
+          where: { id: serviceRequestId },
+          select: { urgency: true, description: true, referenceNumber: true },
+        }),
+      ]);
+
+      if (vendor && fullRequest) {
+        const notifDetails = {
+          category: request.category,
+          propertyName: property?.name ?? "Unknown Property",
+          urgency: fullRequest.urgency,
+          description: fullRequest.description,
+          refNumber: fullRequest.referenceNumber,
+        };
+
+        sendVendorDispatchNotification(vendor.phone, vendor.companyName, notifDetails).then((r) => {
+          if (!r.success) console.error("[auto-dispatch] SMS to vendor failed:", r.error);
+        });
+
+        if (NOTIFICATION_SETTINGS.emailEnabled) {
+          sendVendorDispatchEmail(vendor.email, vendor.companyName, notifDetails).then((r) => {
+            if (!r.success) console.error("[auto-dispatch] Email to vendor failed:", r.error);
+          });
+        }
+
+        // In-app notification for the vendor's user account(s)
+        prisma.user.findMany({
+          where: { vendorId: chosenVendorId },
+          select: { id: true },
+        }).then((vendorUsers) => {
+          if (vendorUsers.length === 0) return;
+          return prisma.notification.createMany({
+            data: vendorUsers.map((u) => ({
+              userId: u.id,
+              title: `New job dispatched – ${fullRequest.referenceNumber}`,
+              body: `A new job at ${property?.name ?? "your assigned property"} (${request.category}) has been dispatched to you. Please log in to accept or decline.`,
+              type: "JOB_DISPATCHED",
+              link: `/app/vendor/jobs/${createdJob.id}`,
+            })),
+          });
+        }).catch((e) => console.error("[auto-dispatch] In-app notification failed:", e));
+      }
+    }
 
     return true;
   } catch (error) {

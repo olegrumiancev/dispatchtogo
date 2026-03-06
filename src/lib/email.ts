@@ -238,6 +238,210 @@ export async function sendVendorRejectionEmail(
   return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailVendorRejection" });
 }
 
+export async function sendVendorDeclinedOperatorEmail(
+  operatorEmail: string,
+  refNumber: string,
+  propertyName: string,
+  vendorName: string,
+  declineReason?: string | null
+): Promise<EmailResult> {
+  const subject = `Vendor Declined – Job ${refNumber} Needs Re-Dispatch`;
+  const reasonHtml = declineReason
+    ? `<p style="margin:0 0 8px"><strong>Reason given:</strong></p><p style="background:#fef9c3;border-left:4px solid #ca8a04;padding:12px;border-radius:0 6px 6px 0">${declineReason}</p>`
+    : "";
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#d97706;color:#fff;padding:20px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
+      </div>
+      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+        <h2 style="margin:0 0 16px">Vendor Declined – Re-Dispatch Required</h2>
+        <p><strong>${vendorName}</strong> has declined job <strong>${refNumber}</strong> at <strong>${propertyName}</strong>.</p>
+        <p>This job is now back in the dispatch queue and requires assignment to another vendor.</p>
+        ${reasonHtml}
+        <a href="https://app.dispatchtogo.com/app/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Request</a>
+      </div>
+    </div>`;
+  return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailOperatorStatusUpdate" });
+}
+
+export async function sendJobCancelledToVendorEmail(
+  vendorEmail: string,
+  vendorCompanyName: string,
+  refNumber: string,
+  propertyName: string
+): Promise<EmailResult> {
+  const subject = `Job Cancelled – ${refNumber}`;
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#6b7280;color:#fff;padding:20px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
+      </div>
+      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+        <h2 style="margin:0 0 16px">Job Cancelled</h2>
+        <p>Hi ${vendorCompanyName},</p>
+        <p>Job <strong>${refNumber}</strong> at <strong>${propertyName}</strong> has been cancelled by the operator. No further action is required on your part.</p>
+        <a href="https://app.dispatchtogo.com/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View My Jobs</a>
+      </div>
+    </div>`;
+  return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailVendorDispatch" });
+}
+
+export async function sendWorkVerifiedToVendorEmail(
+  vendorEmail: string,
+  vendorCompanyName: string,
+  refNumber: string,
+  propertyName: string
+): Promise<EmailResult> {
+  const subject = `Work Approved – Job ${refNumber}`;
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#16a34a;color:#fff;padding:20px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
+      </div>
+      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+        <h2 style="margin:0 0 16px">Work Approved ✓</h2>
+        <p>Hi ${vendorCompanyName},</p>
+        <p>Your work on job <strong>${refNumber}</strong> at <strong>${propertyName}</strong> has been reviewed and approved by the operator.</p>
+        <p style="color:#16a34a;font-weight:bold">Great work — the job is now fully verified.</p>
+        <a href="https://app.dispatchtogo.com/app/vendor/jobs" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View My Jobs</a>
+      </div>
+    </div>`;
+  return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailJobCompletion" });
+}
+
+// ── Digest email templates ───────────────────────────────────────────────────
+
+export interface DigestJobEntry {
+  refNumber: string;
+  propertyName: string;
+  category: string;
+  status: string;
+  vendorName: string | null;
+  isPaused?: boolean;
+}
+
+export async function sendOperatorDailyDigest(
+  operatorEmail: string,
+  orgName: string,
+  jobs: DigestJobEntry[],
+  unsubscribeToken: string,
+  appUrl?: string
+): Promise<EmailResult> {
+  const base = appUrl || "https://app.dispatchtogo.com";
+  const subject = `Daily Activity Summary – ${new Date().toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric" })}`;
+
+  const statusBadge = (s: string, paused?: boolean) => {
+    if (paused) return `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:12px">PAUSED</span>`;
+    const map: Record<string, string> = {
+      DISPATCHED: "background:#dbeafe;color:#1e40af",
+      ACCEPTED: "background:#ede9fe;color:#5b21b6",
+      IN_PROGRESS: "background:#dcfce7;color:#166534",
+      COMPLETED: "background:#d1fae5;color:#065f46",
+      VERIFIED: "background:#bbf7d0;color:#14532d",
+      READY_TO_DISPATCH: "background:#fef9c3;color:#713f12",
+    };
+    const style = map[s] || "background:#f3f4f6;color:#374151";
+    return `<span style="${style};padding:2px 8px;border-radius:12px;font-size:12px">${s.replace(/_/g, " ")}</span>`;
+  };
+
+  const rows = jobs.map(j => `
+    <tr>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-size:13px">${j.refNumber}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-size:13px">${j.propertyName}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-size:13px">${j.category}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-size:13px">${j.vendorName ?? "—"}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb">${statusBadge(j.status, j.isPaused)}</td>
+    </tr>`).join("");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto">
+      <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;font-size:20px">DispatchToGo – Daily Summary</h1>
+      </div>
+      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+        <p style="margin:0 0 4px;color:#6b7280;font-size:13px">${orgName}</p>
+        <h2 style="margin:0 0 20px;font-size:18px">Activity in the last 24 hours</h2>
+        ${jobs.length === 0
+          ? `<p style="color:#6b7280">No job activity in the last 24 hours.</p>`
+          : `<table style="width:100%;border-collapse:collapse">
+              <thead>
+                <tr style="background:#f9fafb">
+                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">REF</th>
+                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">PROPERTY</th>
+                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">CATEGORY</th>
+                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">VENDOR</th>
+                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">STATUS</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>`}
+        <a href="${base}/app/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:20px 0 12px">View All Requests</a>
+        <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">You're receiving this because daily digest emails are enabled for your account.
+          <a href="${base}/api/unsubscribe?token=${unsubscribeToken}" style="color:#9ca3af">Unsubscribe</a></p>
+      </div>
+    </div>`;
+  return sendEmail(operatorEmail, subject, html);
+}
+
+export interface VendorOpenJob {
+  refNumber: string;
+  propertyName: string;
+  category: string;
+  urgency: string;
+  jobId: string;
+}
+
+export async function sendVendorOpenJobsReminder(
+  vendorEmail: string,
+  vendorName: string,
+  openJobs: VendorOpenJob[],
+  unsubscribeToken: string,
+  appUrl?: string
+): Promise<EmailResult> {
+  const base = appUrl || "https://app.dispatchtogo.com";
+  const count = openJobs.length;
+  const subject = `You have ${count} pending job offer${count === 1 ? "" : "s"} – DispatchToGo`;
+
+  const rows = openJobs.map(j => `
+    <tr>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-size:13px">${j.refNumber}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-size:13px">${j.propertyName}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-size:13px">${j.category}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;font-size:13px">${j.urgency}</td>
+      <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb">
+        <a href="${base}/app/vendor/jobs/${j.jobId}" style="color:#1e40af;font-size:13px">View →</a>
+      </td>
+    </tr>`).join("");
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto">
+      <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;font-size:20px">DispatchToGo – Open Jobs</h1>
+      </div>
+      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+        <h2 style="margin:0 0 8px;font-size:18px">Hi ${vendorName},</h2>
+        <p>You have <strong>${count} pending job offer${count === 1 ? "" : "s"}</strong> waiting for your response:</p>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr style="background:#f9fafb">
+              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">REF</th>
+              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">PROPERTY</th>
+              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">CATEGORY</th>
+              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">URGENCY</th>
+              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb"></th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <a href="${base}/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:20px 0 12px">View & Accept Jobs</a>
+        <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">You're receiving this reminder because daily digest emails are enabled for your account.
+          <a href="${base}/api/unsubscribe?token=${unsubscribeToken}" style="color:#9ca3af">Unsubscribe</a></p>
+      </div>
+    </div>`;
+  return sendEmail(vendorEmail, subject, html);
+}
+
 export async function sendAdminRejectionEmail(
   adminEmail: string,
   adminName: string,
