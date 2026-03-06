@@ -71,6 +71,8 @@ export async function sendVendorDispatchNotification(
     refNumber: string;
   }
 ): Promise<SMSResult> {
+  const appBase =
+    process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const body = [
     `DispatchToGo: New job dispatched to ${vendorCompanyName}.`,
     `Ref: ${details.refNumber}`,
@@ -79,7 +81,7 @@ export async function sendVendorDispatchNotification(
     details.description.length > 120
       ? details.description.slice(0, 117) + "..."
       : details.description,
-    `Please log in to accept the job.`,
+    `Accept or decline: ${appBase}/app/vendor/jobs`,
   ].join("\n");
 
   return sendSMS(vendorPhone, body);
@@ -101,7 +103,8 @@ export async function sendJobCompletionNotification(
   refNumber: string,
   vendorName: string
 ): Promise<SMSResult> {
-  const body = `DispatchToGo: Job ${refNumber} has been completed by ${vendorName}. Log in to review the proof packet.`;
+  const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
+  const body = `DispatchToGo: Job ${refNumber} has been completed by ${vendorName}. Review the proof packet: ${appBase}/app/operator/requests`;
   return sendSMS(operatorPhone, body);
 }
 
@@ -119,11 +122,12 @@ export async function sendVendorRejectionSms(
   reason: string,
   rejectionType: string
 ): Promise<SMSResult> {
+  const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const label = REJECTION_TYPE_LABELS[rejectionType] ?? "rejected";
   const body = [
     `DispatchToGo: Work on job ${refNumber} has been ${label}.`,
     `Reason: ${reason.length > 120 ? reason.slice(0, 117) + "..." : reason}`,
-    `Please log in for details.`,
+    `View details: ${appBase}/app/vendor/jobs`,
   ].join("\n");
   return sendSMS(vendorPhone, body);
 }
@@ -148,11 +152,12 @@ export async function sendWorkPausedNotification(
   pauseReason: string | null,
   estimatedReturn: Date | null
 ): Promise<SMSResult> {
+  const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const reason = pauseReason ? ` Reason: ${pauseReason.length > 100 ? pauseReason.slice(0, 97) + "..." : pauseReason}.` : "";
   const eta = estimatedReturn
     ? ` Est. return: ${estimatedReturn.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}.`
     : "";
-  const body = `DispatchToGo: Work has been paused at ${propertyName} (Ref: ${refNumber}).${reason}${eta} Log in for details.`;
+  const body = `DispatchToGo: Work has been paused at ${propertyName} (Ref: ${refNumber}).${reason}${eta} View details: ${appBase}/app/operator/requests`;
   return sendSMS(operatorPhone, body);
 }
 
@@ -171,7 +176,8 @@ export async function sendJobDeclinedNotification(
   propertyName: string,
   vendorName: string
 ): Promise<SMSResult> {
-  const body = `DispatchToGo: Vendor ${vendorName} declined job ${refNumber} at ${propertyName}. Re-dispatch is required – log in to assign another vendor.`;
+  const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
+  const body = `DispatchToGo: Vendor ${vendorName} declined job ${refNumber} at ${propertyName}. Re-dispatch required: ${appBase}/app/operator/requests`;
   return sendSMS(operatorPhone, body);
 }
 
