@@ -25,7 +25,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 # Install Prisma CLI + all its deps for migrate deploy at startup
 COPY package.json package-lock.json* ./
-RUN npm install prisma --no-save --ignore-scripts
+RUN npm install prisma --no-save && \
+    chown -R nextjs:nodejs /app/node_modules/@prisma /app/node_modules/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
 COPY --chown=nextjs:nodejs start.sh ./start.sh
