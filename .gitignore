@@ -7,5 +7,4 @@ public/uploads/*
 !public/uploads/.gitkeep
 .vscode/settings.json
 .gitignore
-package-lock.json
 dev-server.log
