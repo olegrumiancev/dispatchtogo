@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { Truck, AlertCircle, Mail } from "lucide-react";
 
 export default function ForgotPasswordPage() {
@@ -11,6 +12,8 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState("");
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,7 +24,7 @@ export default function ForgotPasswordPage() {
       const res = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), captchaToken }),
       });
 
       const data = await res.json();
@@ -34,6 +37,7 @@ export default function ForgotPasswordPage() {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+      turnstileRef.current?.reset();
     }
   };
 
@@ -100,11 +104,20 @@ export default function ForgotPasswordPage() {
             required
             autoComplete="email"
           />
+          <Turnstile
+            ref={turnstileRef}
+            siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+            onSuccess={setCaptchaToken}
+            onError={() => setCaptchaToken("")}
+            onExpire={() => setCaptchaToken("")}
+            options={{ theme: "light" }}
+          />
           <Button
             type="submit"
             variant="primary"
             size="lg"
             loading={loading}
+            disabled={loading || !captchaToken}
             className="w-full"
           >
             Send Reset Link

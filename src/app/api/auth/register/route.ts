@@ -5,11 +5,17 @@ import { prisma } from "@/lib/prisma";
 import { SERVICE_CATEGORIES, ORGANIZATION_TYPES } from "@/lib/constants";
 import { sendEmail } from "@/lib/email";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, role, organizationName, organizationType, companyName, phone, categories } = body;
+    const { name, email, password, role, organizationName, organizationType, companyName, phone, categories, captchaToken } = body;
+
+    const captchaOk = await verifyTurnstile(captchaToken);
+    if (!captchaOk) {
+      return NextResponse.json({ error: "CAPTCHA verification failed. Please try again." }, { status: 400 });
+    }
 
     if (!email || !password || !role) {
       return NextResponse.json(

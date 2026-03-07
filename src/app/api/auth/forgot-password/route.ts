@@ -2,10 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json();
+    const { email, captchaToken } = await request.json();
+
+    const captchaOk = await verifyTurnstile(captchaToken);
+    if (!captchaOk) {
+      return NextResponse.json({ error: "CAPTCHA verification failed. Please try again." }, { status: 400 });
+    }
 
     if (!email) {
       return NextResponse.json(

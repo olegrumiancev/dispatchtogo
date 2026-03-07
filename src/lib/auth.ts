@@ -3,6 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import NextAuth from "next-auth";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 export const authOptions: NextAuthOptions = {
   providers: [
@@ -11,10 +12,16 @@ export const authOptions: NextAuthOptions = {
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        turnstileToken: { label: "Turnstile Token", type: "text" },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
           return null;
+        }
+
+        const captchaOk = await verifyTurnstile(credentials.turnstileToken);
+        if (!captchaOk) {
+          throw new Error("CAPTCHA_FAILED");
         }
 
         const normalizedEmail = credentials.email.trim().toLowerCase();
