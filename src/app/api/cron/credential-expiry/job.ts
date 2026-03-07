@@ -39,7 +39,7 @@ export async function runCredentialExpiryJob(): Promise<{ invalidated: number }>
         select: {
           id: true,
           companyName: true,
-          users: {
+          user: {
             where: { isDisabled: false },
             select: { email: true, name: true },
           },
@@ -79,7 +79,7 @@ export async function runCredentialExpiryJob(): Promise<{ invalidated: number }>
         )
         .join("");
 
-      for (const user of vendor.users) {
+      for (const user of vendor.user) {
         if (!user.email) continue;
         sendEmail(
           user.email,
