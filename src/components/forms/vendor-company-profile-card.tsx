@@ -27,6 +27,7 @@ interface VendorCompanyProfileCardProps {
     address: string;
     serviceRadiusKm: number;
     categories: string[];
+    multipleTeams: boolean;
   };
 }
 

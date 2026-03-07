@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, X, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Trash2, X, CheckCircle, XCircle, Upload, FileText, ExternalLink } from "lucide-react";
 
 const CREDENTIAL_TYPES = [
   { value: "TRADE_LICENSE", label: "Trade License" },
@@ -21,6 +21,8 @@ interface Credential {
   credentialNumber: string;
   expiresAt: string | null;
   verified: boolean;
+  verifiedAt: string | null;
+  documentUrl: string | null;
 }
 
 interface VendorCredentialsFormProps {
@@ -34,6 +36,10 @@ function getCredentialTypeLabel(type: string) {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-CA");
+}
+
+function wsibLookupUrl(accountNumber: string) {
+  return `https://www.wsib.ca/en/clearance-certificate?accountNumber=${encodeURIComponent(accountNumber)}`;
 }
 
 export default function VendorCredentialsForm({
@@ -51,6 +57,12 @@ export default function VendorCredentialsForm({
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Upload state: keyed by credentialId
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [pendingUploadCredentialId, setPendingUploadCredentialId] = useState<string | null>(null);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -115,8 +127,55 @@ export default function VendorCredentialsForm({
     }
   }
 
+  function triggerUpload(credentialId: string) {
+    setPendingUploadCredentialId(credentialId);
+    setUploadError(null);
+    fileInputRef.current?.click();
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !pendingUploadCredentialId) return;
+
+    setUploadError(null);
+    setUploadingId(pendingUploadCredentialId);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("credentialId", pendingUploadCredentialId);
+
+      const res = await fetch(`/api/vendors/${vendorId}/credentials/upload`, {
+        method: "POST",
+        body: form,
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setUploadError(data.error ?? "Upload failed.");
+        return;
+      }
+
+      router.refresh();
+    } catch {
+      setUploadError("An unexpected error occurred during upload.");
+    } finally {
+      setUploadingId(null);
+      setPendingUploadCredentialId(null);
+    }
+  }
+
   return (
     <div>
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,application/pdf"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+
       {/* Add credential button */}
       <div className="px-6 pt-4 pb-2 flex items-center justify-between">
         <span className="text-sm text-gray-500">
@@ -234,8 +293,8 @@ export default function VendorCredentialsForm({
       {/* Credentials table */}
       {credentials.length > 0 ? (
         <div className="overflow-x-auto">
-          {deleteError && (
-            <p className="px-6 py-2 text-sm text-red-600">{deleteError}</p>
+          {(deleteError || uploadError) && (
+            <p className="px-6 py-2 text-sm text-red-600">{deleteError ?? uploadError}</p>
           )}
           <table className="w-full text-sm">
             <thead>
@@ -250,7 +309,10 @@ export default function VendorCredentialsForm({
                   Expiry Date
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Verified
+                  Status
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                  Document
                 </th>
                 <th className="px-6 py-3" />
               </tr>
@@ -259,11 +321,24 @@ export default function VendorCredentialsForm({
               {credentials.map((cred) => (
                 <tr key={cred.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 font-medium text-gray-900">
-                    {getCredentialTypeLabel(cred.type)}
+                    <div className="flex items-center gap-1.5">
+                      {getCredentialTypeLabel(cred.type)}
+                      {cred.type === "WSIB" && cred.credentialNumber && (
+                        <a
+                          href={wsibLookupUrl(cred.credentialNumber)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Look up on WSIB website"
+                          className="text-blue-500 hover:text-blue-700"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 text-gray-600 hidden sm:table-cell">
                     {cred.credentialNumber || (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-gray-400">â€”</span>
                     )}
                   </td>
                   <td className="px-6 py-4 text-gray-600 hidden lg:table-cell">
@@ -278,20 +353,52 @@ export default function VendorCredentialsForm({
                         {formatDate(cred.expiresAt)}
                       </span>
                     ) : (
-                      <span className="text-gray-400">—</span>
+                      <span className="text-gray-400">â€”</span>
                     )}
                   </td>
                   <td className="px-6 py-4">
                     {cred.verified ? (
-                      <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
-                        <CheckCircle className="w-4 h-4" />
-                        Verified
-                      </span>
+                      <div>
+                        <span className="flex items-center gap-1 text-emerald-600 text-xs font-medium">
+                          <CheckCircle className="w-4 h-4" />
+                          Verified
+                        </span>
+                        {cred.verifiedAt && (
+                          <span className="text-xs text-gray-400 block mt-0.5">
+                            {formatDate(cred.verifiedAt)}
+                          </span>
+                        )}
+                      </div>
                     ) : (
-                      <span className="flex items-center gap-1 text-gray-400 text-xs">
+                      <span className="flex items-center gap-1 text-amber-600 text-xs">
                         <XCircle className="w-4 h-4" />
-                        Pending
+                        Pending review
                       </span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 hidden md:table-cell">
+                    {cred.documentUrl ? (
+                      <a
+                        href={cred.documentUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        View
+                      </a>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={uploadingId === cred.id}
+                        onClick={() => triggerUpload(cred.id)}
+                        className="text-gray-400 hover:text-blue-600 text-xs px-0"
+                        title="Upload supporting document"
+                      >
+                        <Upload className="w-3.5 h-3.5 mr-1" />
+                        Upload
+                      </Button>
                     )}
                   </td>
                   <td className="px-6 py-4 text-right">

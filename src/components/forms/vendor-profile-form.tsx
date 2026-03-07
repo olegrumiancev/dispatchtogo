@@ -16,6 +16,7 @@ interface VendorProfileFormProps {
     address: string;
     serviceRadiusKm: number;
     categories: string[];
+    multipleTeams: boolean;
   };
   onSaved?: () => void;
 }
@@ -29,6 +30,7 @@ export default function VendorProfileForm({ vendor, onSaved }: VendorProfileForm
     address: vendor.address,
     serviceRadiusKm: String(vendor.serviceRadiusKm),
     categories: vendor.categories,
+    multipleTeams: vendor.multipleTeams,
   });
   const [saving, setSaving] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -74,6 +76,7 @@ export default function VendorProfileForm({ vendor, onSaved }: VendorProfileForm
           address: form.address,
           serviceRadiusKm: parseInt(form.serviceRadiusKm, 10) || 50,
           categories: form.categories,
+          multipleTeams: form.multipleTeams,
         }),
       });
       if (!res.ok) {
@@ -167,6 +170,34 @@ export default function VendorProfileForm({ vendor, onSaved }: VendorProfileForm
             className={inputClass}
             placeholder="Street address, city, province..."
           />
+        </div>
+
+        <div className="sm:col-span-2">
+          <p className={labelClass}>Capacity</p>
+          <label className="flex items-center gap-3 rounded-md border border-gray-200 px-3 py-2.5 cursor-pointer hover:border-gray-300 transition-colors">
+            <div className="relative">
+              <input
+                type="checkbox"
+                checked={form.multipleTeams}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, multipleTeams: e.target.checked }));
+                  setSuccessMsg("");
+                  setErrorMsg("");
+                }}
+                className="sr-only peer"
+              />
+              <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-blue-500 transition-colors" />
+              <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Multiple teams</p>
+              <p className="text-xs text-gray-500">
+                {form.multipleTeams
+                  ? "You can accept multiple jobs at once. Availability status won\u2019t auto-update."
+                  : "Single team \u2014 your availability will automatically switch to Busy when you accept a job, and back to Available when it\u2019s complete."}
+              </p>
+            </div>
+          </label>
         </div>
 
         <div className="sm:col-span-2">

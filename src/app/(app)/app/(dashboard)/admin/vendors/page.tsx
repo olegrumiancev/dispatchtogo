@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SERVICE_CATEGORIES, VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
-import { Phone, Mail, Building2, CheckCircle, XCircle, Clock, Moon } from "lucide-react";
+import { Phone, Mail, Building2, CheckCircle, XCircle, Clock, Moon, ShieldCheck, AlertTriangle } from "lucide-react";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 
 const PAGE_SIZE = 24;
@@ -44,6 +45,7 @@ export default async function AdminVendorsPage({
       take: PAGE_SIZE,
       include: {
         skills: true,
+        credentials: { select: { id: true, verified: true } },
         _count: { select: { jobs: true } },
       },
       orderBy: { companyName: "asc" },
@@ -82,6 +84,7 @@ export default async function AdminVendorsPage({
           {vendors.map((vendor) => {
             const availConfig = getAvailabilityConfig(vendor.availabilityStatus);
             const activeJobs = activeJobMap.get(vendor.id) ?? 0;
+            const pendingCreds = vendor.credentials.filter((c) => !c.verified).length;
 
             return (
               <Card key={vendor.id}>
@@ -139,15 +142,40 @@ export default async function AdminVendorsPage({
                     </div>
                   )}
 
-                  {/* Stats */}
-                  <div className="pt-2 border-t border-gray-100 flex items-center justify-between">
-                    <p className="text-xs text-gray-500">
-                      {vendor._count.jobs} job{vendor._count.jobs !== 1 ? "s" : ""} total
-                    </p>
-                    {activeJobs > 0 && (
-                      <p className="text-xs font-medium text-blue-600">
-                        {activeJobs} active
+                  {/* Stats + credential review */}
+                  <div className="pt-2 border-t border-gray-100 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-gray-500">
+                        {vendor._count.jobs} job{vendor._count.jobs !== 1 ? "s" : ""} total
                       </p>
+                      {activeJobs > 0 && (
+                        <p className="text-xs font-medium text-blue-600">
+                          {activeJobs} active
+                        </p>
+                      )}
+                    </div>
+                    {vendor.credentials.length > 0 && (
+                      <Link
+                        href={`/app/admin/vendors/${vendor.id}`}
+                        className="flex items-center gap-1.5 text-xs font-medium rounded-md px-2 py-1.5 transition-colors"
+                        style={pendingCreds > 0
+                          ? { background: "#fef3c7", color: "#b45309" }
+                          : { background: "#d1fae5", color: "#065f46" }}
+                      >
+                        {pendingCreds > 0 ? (
+                          <><AlertTriangle className="w-3.5 h-3.5" /> {pendingCreds} credential{pendingCreds !== 1 ? "s" : ""} pending review</>
+                        ) : (
+                          <><ShieldCheck className="w-3.5 h-3.5" /> All credentials verified</>
+                        )}
+                      </Link>
+                    )}
+                    {vendor.credentials.length === 0 && (
+                      <Link
+                        href={`/app/admin/vendors/${vendor.id}`}
+                        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600"
+                      >
+                        <ShieldCheck className="w-3.5 h-3.5" /> No credentials on file
+                      </Link>
                     )}
                   </div>
                 </CardContent>

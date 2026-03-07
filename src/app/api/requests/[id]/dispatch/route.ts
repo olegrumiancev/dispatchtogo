@@ -33,7 +33,7 @@ export async function POST(
     return NextResponse.json({ error: "Service request not found" }, { status: 404 });
   }
 
-  // Ensure not already dispatched with an active job
+  // Ensure not already dispatched with an active (non-declined) job
   if (serviceRequest.status === "CANCELLED") {
     return NextResponse.json(
       { error: "Cannot dispatch a cancelled request" },
@@ -41,8 +41,11 @@ export async function POST(
     );
   }
 
-  const existingJob = await prisma.job.findUnique({
-    where: { serviceRequestId: id },
+  const existingJob = await prisma.job.findFirst({
+    where: {
+      serviceRequestId: id,
+      status: { not: "DECLINED" },
+    },
   });
   if (existingJob) {
     return NextResponse.json(
@@ -57,21 +60,48 @@ export async function POST(
     return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
   }
 
-  // Create job and update request status in a transaction
+  // Check for a previously declined job record to reuse
+  // (serviceRequestId is @unique on Job, so we must update rather than create)
+  const declinedJob = await prisma.job.findFirst({
+    where: { serviceRequestId: id, status: "DECLINED" },
+  });
+
+  // Create/reset job and update request status in a transaction
+  const jobInclude = {
+    vendor: true,
+    serviceRequest: {
+      include: { property: true },
+    },
+  };
+
   const [job] = await prisma.$transaction([
-    prisma.job.create({
-      data: {
-        serviceRequestId: id,
-        vendorId,
-        organizationId: serviceRequest.organizationId,
-      },
-      include: {
-        vendor: true,
-        serviceRequest: {
-          include: { property: true },
-        },
-      },
-    }),
+    declinedJob
+      ? prisma.job.update({
+          where: { id: declinedJob.id },
+          data: {
+            vendorId,
+            status: "OFFERED",
+            acceptedAt: null,
+            enRouteAt: null,
+            arrivedAt: null,
+            completedAt: null,
+            declineReason: null,
+            isPaused: false,
+            pauseReason: null,
+            pausedAt: null,
+            estimatedReturnDate: null,
+            vendorNotes: null,
+          },
+          include: jobInclude,
+        })
+      : prisma.job.create({
+          data: {
+            serviceRequestId: id,
+            vendorId,
+            organizationId: serviceRequest.organizationId,
+          },
+          include: jobInclude,
+        }),
     prisma.serviceRequest.update({
       where: { id },
       data: { status: "DISPATCHED" },

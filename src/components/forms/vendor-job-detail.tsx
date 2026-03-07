@@ -114,7 +114,7 @@ function getCategoryLabel(category: string) {
 interface NewMaterial {
   tempId: string;
   description: string;
-  qty: number;
+  qty: string;      // stored as string so decimals like "0.5" can be typed freely
   unitCost: number;
 }
 
@@ -378,7 +378,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const addNewMaterial = () => {
     setNewMaterials((prev) => [
       ...prev,
-      { tempId: Date.now().toString(), description: "", qty: 1, unitCost: 0 },
+      { tempId: Date.now().toString(), description: "", qty: "1", unitCost: 0 },
     ]);
   };
 
@@ -406,7 +406,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
             body: JSON.stringify({
               type: "material",
               description: m.description,
-              quantity: m.qty,
+              quantity: parseFloat(m.qty) || 1,
               unitCost: m.unitCost,
             }),
           })
@@ -425,7 +425,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     (sum, m) => sum + m.unitCost * m.quantity,
     0
   );
-  const newMaterialsTotal = newMaterials.reduce((sum, m) => sum + m.qty * m.unitCost, 0);
+  const newMaterialsTotal = newMaterials.reduce((sum, m) => sum + (parseFloat(m.qty) || 0) * m.unitCost, 0);
 
   // Tomorrow's date for the min on the return date picker
   const tomorrow = new Date();
@@ -869,47 +869,86 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           ) : null}
 
           {newMaterials.length > 0 && (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {materialError && (
                 <p className="text-xs text-red-600">{materialError}</p>
               )}
-              {newMaterials.map((m) => (
-                <div key={m.tempId} className="flex flex-col sm:flex-row gap-2 items-start">
-                  <input
-                    type="text"
-                    placeholder="Description"
-                    value={m.description}
-                    onChange={(e) => updateNewMaterial(m.tempId, "description", e.target.value)}
-                    className="w-full sm:flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <input
-                      type="number"
-                      placeholder="Qty"
-                      value={m.qty}
-                      min={1}
-                      onChange={(e) => updateNewMaterial(m.tempId, "qty", Number(e.target.value))}
-                      className="w-20 sm:w-16 rounded-md border border-gray-300 px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <input
-                      type="number"
-                      placeholder="Cost"
-                      value={m.unitCost}
-                      min={0}
-                      step={0.01}
-                      onChange={(e) => updateNewMaterial(m.tempId, "unitCost", Number(e.target.value))}
-                      className="flex-1 sm:w-24 rounded-md border border-gray-300 px-2 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                      onClick={() => removeNewMaterial(m.tempId)}
-                      className="p-2 min-h-[44px] min-w-[44px] text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors flex items-center justify-center"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+
+              {/* Column headers */}
+              <div className="hidden sm:grid sm:grid-cols-[1fr_80px_120px_80px_44px] gap-2 px-1">
+                <span className="text-xs font-medium text-gray-500">Description</span>
+                <span className="text-xs font-medium text-gray-500 text-center">Qty</span>
+                <span className="text-xs font-medium text-gray-500 text-right">Unit Price</span>
+                <span className="text-xs font-medium text-gray-500 text-right">Line Total</span>
+                <span />
+              </div>
+
+              {newMaterials.map((m) => {
+                const lineTotal = (parseFloat(m.qty) || 0) * m.unitCost;
+                return (
+                  <div key={m.tempId} className="flex flex-col sm:grid sm:grid-cols-[1fr_80px_120px_80px_44px] gap-2 items-start sm:items-center">
+                    {/* Description */}
+                    <div className="w-full">
+                      <label className="sm:hidden block text-xs font-medium text-gray-500 mb-0.5">Description</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 1/2&quot; PVC pipe"
+                        value={m.description}
+                        onChange={(e) => updateNewMaterial(m.tempId, "description", e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Qty — stored as string so fractions like 0.5 can be typed */}
+                    <div className="w-full sm:w-auto">
+                      <label className="sm:hidden block text-xs font-medium text-gray-500 mb-0.5">Qty (fractions OK)</label>
+                      <input
+                        type="number"
+                        placeholder="1"
+                        value={m.qty}
+                        min={0}
+                        step="any"
+                        onChange={(e) => updateNewMaterial(m.tempId, "qty", e.target.value)}
+                        className="w-full sm:w-20 rounded-md border border-gray-300 px-2 py-2 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    {/* Unit Price */}
+                    <div className="w-full sm:w-auto">
+                      <label className="sm:hidden block text-xs font-medium text-gray-500 mb-0.5">Unit Price ($)</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-gray-400 pointer-events-none">$</span>
+                        <input
+                          type="number"
+                          placeholder="0.00"
+                          value={m.unitCost === 0 ? "" : m.unitCost}
+                          min={0}
+                          step={0.01}
+                          onChange={(e) => updateNewMaterial(m.tempId, "unitCost", Number(e.target.value))}
+                          className="w-full rounded-md border border-gray-300 pl-6 pr-2 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Line total (read-only) */}
+                    <div className="hidden sm:flex items-center justify-end">
+                      <span className="text-sm font-medium text-gray-700">{formatCurrency(lineTotal)}</span>
+                    </div>
+
+                    {/* Delete */}
+                    <div className="flex sm:justify-center">
+                      <button
+                        onClick={() => removeNewMaterial(m.tempId)}
+                        className="p-2 min-h-[44px] min-w-[44px] text-red-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors flex items-center justify-center"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
-              <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                );
+              })}
+
+              <div className="flex items-center justify-between pt-3 border-t border-gray-200">
                 <p className="text-sm font-semibold text-gray-900">
                   New items total: {formatCurrency(newMaterialsTotal)}
                 </p>

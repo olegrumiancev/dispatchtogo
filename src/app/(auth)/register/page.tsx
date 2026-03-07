@@ -80,8 +80,8 @@ export default function RegisterPage() {
           role: form.role,
           organizationName: form.role === "OPERATOR" ? form.organizationName : undefined,
           organizationType: form.role === "OPERATOR" ? form.organizationType : undefined,
+          phone: form.phone || undefined,
           companyName: form.role === "VENDOR" ? form.companyName : undefined,
-          phone: form.role === "VENDOR" ? form.phone : undefined,
           categories: form.role === "VENDOR" ? form.categories : undefined,
           captchaToken,
         }),
@@ -243,6 +243,14 @@ export default function RegisterPage() {
                 placeholder="Cornwall Properties Inc."
                 value={form.organizationName}
                 onChange={(e) => set("organizationName", e.target.value)}
+                required
+              />
+              <Input
+                label="Phone Number"
+                type="tel"
+                placeholder="613-555-0000"
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
                 required
               />
               <div className="space-y-1">

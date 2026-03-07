@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SERVICE_CATEGORIES, ORGANIZATION_TYPES } from "@/lib/constants";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { Truck, AlertCircle, Mail, Globe } from "lucide-react";
 
 type Role = "OPERATOR" | "VENDOR" | "";
@@ -15,6 +16,8 @@ export default function RegisterPage() {
   const [success, setSuccess] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState("");
   const [registeredCategories, setRegisteredCategories] = useState<string[]>([]);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -77,9 +80,10 @@ export default function RegisterPage() {
           role: form.role,
           organizationName: form.role === "OPERATOR" ? form.organizationName : undefined,
           organizationType: form.role === "OPERATOR" ? form.organizationType : undefined,
+          phone: form.phone || undefined,
           companyName: form.role === "VENDOR" ? form.companyName : undefined,
-          phone: form.role === "VENDOR" ? form.phone : undefined,
           categories: form.role === "VENDOR" ? form.categories : undefined,
+          captchaToken,
         }),
       });
 
@@ -103,6 +107,7 @@ export default function RegisterPage() {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+      turnstileRef.current?.reset();
     }
   };
 
@@ -240,6 +245,14 @@ export default function RegisterPage() {
                 onChange={(e) => set("organizationName", e.target.value)}
                 required
               />
+              <Input
+                label="Phone Number"
+                type="tel"
+                placeholder="613-555-0000"
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
+                required
+              />
               <div className="space-y-1">
                 <p className="text-sm font-medium text-gray-700">Property Type</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -317,11 +330,20 @@ export default function RegisterPage() {
             </div>
           )}
 
+          <Turnstile
+            ref={turnstileRef}
+            siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+            onSuccess={setCaptchaToken}
+            onError={() => setCaptchaToken("")}
+            onExpire={() => setCaptchaToken("")}
+            options={{ theme: "light" }}
+          />
           <Button
             type="submit"
             variant="primary"
             size="lg"
             loading={loading}
+            disabled={loading || !captchaToken}
             className="w-full"
           >
             Create Account

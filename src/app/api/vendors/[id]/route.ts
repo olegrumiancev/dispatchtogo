@@ -64,7 +64,7 @@ export async function PATCH(
   }
 
   // Only allow specific fields to be updated
-  const { companyName, contactName, phone, address, serviceRadiusKm, availabilityStatus, availabilityNote, categories } = body;
+  const { companyName, contactName, phone, address, serviceRadiusKm, availabilityStatus, availabilityNote, categories, multipleTeams } = body;
 
   const updateData: Record<string, any> = {};
   if (companyName !== undefined) updateData.companyName = String(companyName).trim();
@@ -75,6 +75,7 @@ export async function PATCH(
     const radius = parseInt(serviceRadiusKm, 10);
     if (!isNaN(radius) && radius > 0) updateData.serviceRadiusKm = radius;
   }
+  if (multipleTeams !== undefined) updateData.multipleTeams = Boolean(multipleTeams);
 
   if (availabilityStatus !== undefined) {
     if (!VALID_AVAILABILITY_STATUSES.includes(availabilityStatus)) {

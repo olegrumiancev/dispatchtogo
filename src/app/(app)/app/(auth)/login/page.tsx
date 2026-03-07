@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { signIn, getSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { Truck, AlertCircle, CheckCircle, Mail, Globe } from "lucide-react";
 
 function getDashboardUrl(role: string): string {
@@ -31,6 +32,8 @@ function LoginForm() {
   const [showResendVerification, setShowResendVerification] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSent, setResendSent] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState("");
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   useEffect(() => {
     if (searchParams.get("verified") === "true") {
@@ -60,11 +63,14 @@ function LoginForm() {
       const result = await signIn("credentials", {
         email: email.trim().toLowerCase(),
         password,
+        turnstileToken: captchaToken,
         redirect: false,
       });
 
       if (result?.error) {
-        if (result.error === "EMAIL_NOT_VERIFIED") {
+        if (result.error === "CAPTCHA_FAILED") {
+          setError("CAPTCHA verification failed. Please try again.");
+        } else if (result.error === "EMAIL_NOT_VERIFIED") {
           setError("Please verify your email before signing in.");
           setShowResendVerification(true);
         } else if (result.error === "ACCOUNT_PENDING_APPROVAL") {
@@ -108,22 +114,25 @@ function LoginForm() {
       setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+      turnstileRef.current?.reset();
     }
   };
 
   const handleResendVerification = async () => {
+    if (!captchaToken) return;
     setResendLoading(true);
     try {
       await fetch("/api/auth/resend-verification", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase() }),
+        body: JSON.stringify({ email: email.trim().toLowerCase(), captchaToken }),
       });
       setResendSent(true);
     } catch {
       // silent fail
     } finally {
       setResendLoading(false);
+      turnstileRef.current?.reset();
     }
   };
 
@@ -160,10 +169,14 @@ function LoginForm() {
                 <button
                   type="button"
                   onClick={handleResendVerification}
-                  disabled={resendLoading}
-                  className="mt-2 text-blue-600 hover:text-blue-700 font-medium underline text-xs"
+                  disabled={resendLoading || !captchaToken}
+                  className="mt-2 text-blue-600 hover:text-blue-700 font-medium underline text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {resendLoading ? "Sending..." : "Resend verification email"}
+                  {resendLoading
+                    ? "Sending..."
+                    : !captchaToken
+                    ? "Complete the CAPTCHA below to resend"
+                    : "Resend verification email"}
                 </button>
               )}
               {resendSent && (
@@ -194,11 +207,20 @@ function LoginForm() {
             required
             autoComplete="current-password"
           />
+          <Turnstile
+            ref={turnstileRef}
+            siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
+            onSuccess={setCaptchaToken}
+            onError={() => setCaptchaToken("")}
+            onExpire={() => setCaptchaToken("")}
+            options={{ theme: "light" }}
+          />
           <Button
             type="submit"
             variant="primary"
             size="lg"
             loading={loading}
+            disabled={loading || !captchaToken}
             className="w-full"
           >
             Sign In

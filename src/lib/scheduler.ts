@@ -1,20 +1,26 @@
 /**
  * Scheduler abstraction layer.
  *
- * Current platform: Vercel Cron (configured in vercel.json).
- * No in-process scheduling is needed — Vercel calls /api/cron/digest via HTTP.
+ * Platform: Dokploy HTTP Cron (vercel.json crons are ignored on Dokploy).
  *
- * ── Switching to Dokploy ────────────────────────────────────────────────────
+ * ── Dokploy HTTP Cron setup (Option A — recommended) ───────────────────────
  *
- * Option A — Dokploy HTTP Cron (recommended, zero code changes):
- *   In Dokploy → Application → Cron Jobs, add:
- *     Name:     Daily Digest
- *     Schedule: 0 17 * * *   (5 PM UTC daily)
- *     Command:  curl -X POST https://app.yourdomain.com/api/cron/digest \
- *                    -H "Authorization: Bearer $CRON_SECRET"
- *   This is identical to how Vercel calls the route. No code changes needed.
+ * In Dokploy → Application → Cron Jobs, add one entry per job:
  *
- * Option B — In-process node-cron (single-container, no external HTTP trigger):
+ *   1. Daily Digest
+ *      Schedule: 0 17 * * *
+ *      Command:  curl -s -X POST https://app.yourdomain.com/api/cron/digest \
+ *                     -H "Authorization: Bearer $CRON_SECRET"
+ *
+ *   2. Credential Expiry Invalidation
+ *      Schedule: 0 8 * * *
+ *      Command:  curl -s -X POST https://app.yourdomain.com/api/cron/credential-expiry \
+ *                     -H "Authorization: Bearer $CRON_SECRET"
+ *
+ * CRON_SECRET must be set in your Dokploy environment variables.
+ * All cron routes validate it via isCronAuthorized() in lib/cron-guard.ts.
+ *
+ * ── Option B — In-process node-cron (single-container alternative) ──────────
  *   1. Run:  npm install node-cron
  *            npm install --save-dev @types/node-cron
  *   2. Set:  CRON_MODE=inprocess  in your .env
@@ -25,8 +31,8 @@
  *        }
  *   4. Uncomment the initInProcessScheduler export below.
  *
- * The digest logic itself lives in src/app/api/cron/digest/route.ts and is
- * platform-agnostic — it runs identically whether called via HTTP or in-process.
+ * All job logic is platform-agnostic and lives in the job.ts files alongside
+ * each route, so it runs identically whether triggered via HTTP or in-process.
  */
 
 export const SCHEDULER_INFO = {
@@ -42,6 +48,7 @@ export const SCHEDULER_INFO = {
  * export async function initInProcessScheduler(): Promise<void> {
  *   const cron = await import("node-cron");
  *   const { runDigestJob } = await import("@/app/api/cron/digest/job");
+ *   const { runCredentialExpiryJob } = await import("@/app/api/cron/credential-expiry/job");
  *
  *   cron.schedule(SCHEDULER_INFO.cronExpression, async () => {
  *     console.log("[scheduler] Running in-process digest job...");
@@ -50,6 +57,17 @@ export const SCHEDULER_INFO = {
  *       console.log("[scheduler] Digest job complete.");
  *     } catch (err) {
  *       console.error("[scheduler] Digest job failed:", err);
+ *     }
+ *   }, { timezone: "UTC" });
+ *
+ *   // Credential expiry: run daily at 08:00 UTC
+ *   cron.schedule("0 8 * * *", async () => {
+ *     console.log("[scheduler] Running credential expiry job...");
+ *     try {
+ *       await runCredentialExpiryJob();
+ *       console.log("[scheduler] Credential expiry job complete.");
+ *     } catch (err) {
+ *       console.error("[scheduler] Credential expiry job failed:", err);
  *     }
  *   }, { timezone: "UTC" });
  *

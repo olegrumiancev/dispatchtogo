@@ -53,6 +53,7 @@ export default async function VendorProfilePage() {
     address: vendor.address ?? "",
     serviceRadiusKm: vendor.serviceRadiusKm ?? 0,
     categories: vendor.skills.map((s) => s.category),
+    multipleTeams: vendor.multipleTeams,
   };
 
   const availConfig = getAvailabilityConfig(vendor.availabilityStatus);
@@ -140,6 +141,8 @@ export default async function VendorProfilePage() {
               credentialNumber: c.credentialNumber,
               expiresAt: c.expiresAt ? c.expiresAt.toISOString() : null,
               verified: c.verified,
+              verifiedAt: c.verifiedAt ? c.verifiedAt.toISOString() : null,
+              documentUrl: c.documentUrl ?? null,
             }))}
           />
         </CardContent>

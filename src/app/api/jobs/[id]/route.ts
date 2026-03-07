@@ -174,6 +174,38 @@ export async function PATCH(
     await prisma.job.update({ where: { id }, data: jobData });
   }
 
+  // Auto-flip vendor availability based on job lifecycle
+  if (action === "accept" || action === "complete" || action === "decline") {
+    const vendor = await prisma.vendor.findUnique({
+      where: { id: job.vendorId },
+      select: { multipleTeams: true, availabilityStatus: true },
+    });
+    if (vendor && !vendor.multipleTeams) {
+      if (action === "accept" && vendor.availabilityStatus === "AVAILABLE") {
+        // Single-team vendor just accepted a job → mark Busy
+        await prisma.vendor.update({
+          where: { id: job.vendorId },
+          data: { availabilityStatus: "BUSY" },
+        });
+      } else if ((action === "complete" || action === "decline") && vendor.availabilityStatus === "BUSY") {
+        // Check if they have any remaining open jobs
+        const openJobCount = await prisma.job.count({
+          where: {
+            vendorId: job.vendorId,
+            completedAt: null,
+            status: { notIn: ["DECLINED", "COMPLETED"] },
+          },
+        });
+        if (openJobCount === 0) {
+          await prisma.vendor.update({
+            where: { id: job.vendorId },
+            data: { availabilityStatus: "AVAILABLE" },
+          });
+        }
+      }
+    }
+  }
+
   const updated = await prisma.job.findUnique({
     where: { id },
     include: JOB_INCLUDE,

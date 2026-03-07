@@ -131,6 +131,7 @@ model Vendor {
   isActive             Boolean  @default(true)
   availabilityStatus   String   @default("AVAILABLE")
   availabilityNote     String?
+  multipleTeams        Boolean  @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -179,6 +180,9 @@ model VendorCredential {
   credentialNumber String
   expiresAt        DateTime?
   verified         Boolean   @default(false)
+  verifiedAt       DateTime?
+  verifiedByUserId String?
+  documentUrl      String?
 
   vendor Vendor @relation(fields: [vendorId], references: [id])
 
