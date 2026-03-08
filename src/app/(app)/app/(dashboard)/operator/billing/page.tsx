@@ -72,7 +72,12 @@ export default async function OperatorBillingPage({
   const totalPages = Math.ceil(billsTotal / PAGE_SIZE);
 
   const planConfig = BILLING_PLANS[org.plan] ?? BILLING_PLANS["FREE"];
-  const usagePercent = Math.min(100, Math.round((usage.completedRequests / planConfig.includedRequests) * 100));
+
+  // For orgs WITHOUT a payment method, the gate is based on submitted requests this month.
+  // For orgs WITH a payment method, billing is based on completed requests — show that instead.
+  const gateCount = org.hasPaymentMethod ? usage.completedRequests : usage.submittedRequests;
+  const usagePercent = Math.min(100, Math.round((gateCount / planConfig.includedRequests) * 100));
+  const isNearLimit = !org.hasPaymentMethod && usage.submittedRequests >= planConfig.includedRequests - 2;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -128,7 +133,7 @@ export default async function OperatorBillingPage({
                 {planConfig.label}
               </Badge>
               <span className="text-sm text-gray-500">
-                {planConfig.includedRequests} completed requests / month
+                {planConfig.includedRequests} free dispatches / month
               </span>
             </div>
             <div className="text-sm text-gray-600 flex items-center gap-1.5">
@@ -141,7 +146,7 @@ export default async function OperatorBillingPage({
             </div>
             <div className="text-sm text-gray-600 flex items-center gap-1.5">
               <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-              ${planConfig.ratePerRequest.toFixed(2)} CAD per additional completed request
+              ${planConfig.ratePerRequest.toFixed(2)} CAD per completed request above {planConfig.includedRequests}
             </div>
           </CardContent>
         </Card>
@@ -149,7 +154,7 @@ export default async function OperatorBillingPage({
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              This Month's Usage
+              This Month&apos;s Usage
               <span className="text-xs font-normal text-gray-500">
                 ({formatMonth(currentPeriodStart())})
               </span>
@@ -159,38 +164,81 @@ export default async function OperatorBillingPage({
             <div>
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-gray-600">
-                  {usage.completedRequests} of {planConfig.includedRequests} included
+                  {org.hasPaymentMethod ? (
+                    <>{usage.completedRequests} of {planConfig.includedRequests} completed</>
+                  ) : (
+                    <>{usage.submittedRequests} of {planConfig.includedRequests} submitted</>
+                  )}
                 </span>
-                <span className={`font-medium ${usage.isOverLimit ? "text-amber-600" : "text-emerald-600"}`}>
+                <span className={`font-medium ${
+                  usage.isOverLimit || (!org.hasPaymentMethod && usage.submittedRequests >= planConfig.includedRequests)
+                    ? "text-amber-600"
+                    : isNearLimit
+                    ? "text-yellow-600"
+                    : "text-emerald-600"
+                }`}>
                   {usagePercent}%
                 </span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-2.5">
                 <div
                   className={`h-2.5 rounded-full transition-all ${
-                    usage.isOverLimit ? "bg-amber-500" : "bg-emerald-500"
+                    usage.isOverLimit || (!org.hasPaymentMethod && usage.submittedRequests >= planConfig.includedRequests)
+                      ? "bg-amber-500"
+                      : isNearLimit
+                      ? "bg-yellow-400"
+                      : "bg-emerald-500"
                   }`}
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
             </div>
 
-            {usage.isOverLimit ? (
-              <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
-                <TrendingUp className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className="font-medium text-amber-800">Pay-as-you-go active</p>
-                  <p className="text-amber-700 mt-0.5">
-                    {usage.billableRequests} extra request{usage.billableRequests !== 1 ? "s" : ""} ×
-                    ${planConfig.ratePerRequest.toFixed(2)} = <strong>${usage.amountCad.toFixed(2)} CAD</strong> estimated this month
+            {/* No payment method — show gate-based status */}
+            {!org.hasPaymentMethod && (
+              usage.submittedRequests >= planConfig.includedRequests ? (
+                <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-amber-800">Free limit reached — new requests are held</p>
+                    <p className="text-amber-700 mt-0.5">
+                      You&apos;ve submitted {usage.submittedRequests} of {planConfig.includedRequests} free requests this month.
+                      Add a payment method to dispatch held and future requests.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  <p className="text-sm text-gray-500">
+                    {planConfig.includedRequests - usage.submittedRequests} free dispatch{planConfig.includedRequests - usage.submittedRequests !== 1 ? "es" : ""} remaining
+                    this month before a payment method is required.
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    {usage.completedRequests} completed · {usage.submittedRequests - usage.completedRequests} in progress
                   </p>
                 </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">
-                {planConfig.includedRequests - usage.completedRequests} requests remaining this month
-                at no extra charge.
-              </p>
+              )
+            )}
+
+            {/* Has payment method — show billing-based status */}
+            {org.hasPaymentMethod && (
+              usage.isOverLimit ? (
+                <div className="rounded-md bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
+                  <TrendingUp className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <p className="font-medium text-amber-800">Pay-as-you-go active</p>
+                    <p className="text-amber-700 mt-0.5">
+                      {usage.billableRequests} extra request{usage.billableRequests !== 1 ? "s" : ""} ×
+                      ${planConfig.ratePerRequest.toFixed(2)} = <strong>${usage.amountCad.toFixed(2)} CAD</strong> estimated this month
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500">
+                  {planConfig.includedRequests - usage.completedRequests} completed requests remaining
+                  in your included {planConfig.includedRequests} this month.
+                </p>
+              )
             )}
           </CardContent>
         </Card>

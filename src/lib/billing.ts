@@ -9,6 +9,9 @@ import type { Organization } from "@prisma/client";
 export interface OrgUsage {
   plan: string;
   includedRequests: number;
+  /** Requests submitted this month — the payment-gate threshold for orgs without a payment method. */
+  submittedRequests: number;
+  /** Jobs completed/verified this month — the billing basis for orgs with a payment method. */
   completedRequests: number;
   billableRequests: number;
   ratePerRequest: number;
@@ -56,13 +59,21 @@ export async function getOrganizationUsageForPeriod(
 
   const plan = BILLING_PLANS[org.plan] ?? BILLING_PLANS["FREE"];
 
-  const completedRequests = await prisma.job.count({
-    where: {
-      organizationId: orgId,
-      status: { in: [...BILLED_JOB_STATUSES] },
-      completedAt: { gte: periodStart, lte: periodEnd },
-    },
-  });
+  const [completedRequests, submittedRequests] = await Promise.all([
+    prisma.job.count({
+      where: {
+        organizationId: orgId,
+        status: { in: [...BILLED_JOB_STATUSES] },
+        completedAt: { gte: periodStart, lte: periodEnd },
+      },
+    }),
+    prisma.serviceRequest.count({
+      where: {
+        organizationId: orgId,
+        createdAt: { gte: periodStart, lte: periodEnd },
+      },
+    }),
+  ]);
 
   const billableRequests = Math.max(0, completedRequests - plan.includedRequests);
   const amountCad = parseFloat((billableRequests * plan.ratePerRequest).toFixed(2));
@@ -70,6 +81,7 @@ export async function getOrganizationUsageForPeriod(
   return {
     plan: org.plan,
     includedRequests: plan.includedRequests,
+    submittedRequests,
     completedRequests,
     billableRequests,
     ratePerRequest: plan.ratePerRequest,
