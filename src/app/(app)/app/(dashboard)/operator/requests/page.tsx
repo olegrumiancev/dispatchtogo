@@ -5,10 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES, BILLING_PLANS } from "@/lib/constants";
 import { Plus, Eye, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Archive, CheckCircle2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
+import { currentPeriodStart, currentPeriodEnd } from "@/lib/billing";
 
 const PAGE_SIZE = 20;
 
@@ -96,7 +97,10 @@ export default async function RequestsPage({
   };
   const orderBy = orderByMap[sortBy] ?? { createdAt: "desc" };
 
-  const [total, requests] = await Promise.all([
+  const periodStart = currentPeriodStart();
+  const periodEnd = currentPeriodEnd();
+
+  const [total, requests, org, submittedThisMonth] = await Promise.all([
     prisma.serviceRequest.count({ where }),
     prisma.serviceRequest.findMany({
       where,
@@ -115,9 +119,17 @@ export default async function RequestsPage({
         _count: { select: { photos: true } },
       },
     }),
+    prisma.organization.findUniqueOrThrow({
+      where: { id: orgId },
+      select: { plan: true },
+    }),
+    prisma.serviceRequest.count({
+      where: { organizationId: orgId, createdAt: { gte: periodStart, lte: periodEnd } },
+    }),
   ]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
+  const planIncluded = (BILLING_PLANS[org.plan] ?? BILLING_PLANS["FREE"]).includedRequests;
 
   // Compute new-activity flag per request
   const requestsWithActivity = requests.map((req) => {
@@ -175,6 +187,10 @@ export default async function RequestsPage({
           <h1 className="text-2xl font-bold text-gray-900">Service Requests</h1>
           <p className="text-sm text-gray-500 mt-1">
             {total} total request{total !== 1 ? "s" : ""}
+            {" · "}
+            <span className={submittedThisMonth >= planIncluded ? "text-amber-600 font-medium" : ""}>
+              {submittedThisMonth} of {planIncluded} free this month
+            </span>
           </p>
         </div>
         <Link href="/app/operator/requests/new">
