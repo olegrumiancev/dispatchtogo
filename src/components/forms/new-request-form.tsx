@@ -283,6 +283,9 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       }
 
       const created = await res.json();
+      // Invalidate the router cache so the requests list and dashboard re-fetch
+      // fresh data (Server Components would otherwise serve a stale cached render).
+      router.refresh();
       if (created.paymentRequired) {
         router.push(`/app/operator/billing?held=1`);
       } else {
