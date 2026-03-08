@@ -279,6 +279,12 @@ export default function PricingPage() {
               <Link href="/app/register" className="hover:text-white transition-colors">
                 Register
               </Link>
+              <Link href="/terms" className="hover:text-white transition-colors">
+                Terms
+              </Link>
+              <Link href="/privacy" className="hover:text-white transition-colors">
+                Privacy
+              </Link>
             </div>
             <p className="text-sm">
               &copy; {new Date().getFullYear()} DispatchToGo. Cornwall &amp; SDG, Ontario.

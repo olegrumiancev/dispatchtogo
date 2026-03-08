@@ -373,3 +373,58 @@ export async function voidPlatformBill(platformBillId: string): Promise<void> {
     data: { status: "VOID" },
   });
 }
+
+// ─── Payment Gate ─────────────────────────────────────────────────────────────
+
+/**
+ * Returns true when an org has consumed all of their free included dispatches
+ * AND has not yet added a payment method.
+ *
+ * "Dispatches" for gating purposes = all ServiceRequests submitted this month
+ * (not just completed jobs, so operators feel the limit before overage accrues).
+ */
+export async function isOrgPaymentGated(orgId: string): Promise<boolean> {
+  const org = await prisma.organization.findUnique({
+    where: { id: orgId },
+    select: { plan: true, hasPaymentMethod: true },
+  });
+  if (!org) return false;
+  if (org.hasPaymentMethod) return false;
+
+  const plan = BILLING_PLANS[org.plan] ?? BILLING_PLANS["FREE"];
+  const periodStart = currentPeriodStart();
+  const periodEnd = currentPeriodEnd();
+
+  const submittedCount = await prisma.serviceRequest.count({
+    where: {
+      organizationId: orgId,
+      createdAt: { gte: periodStart, lte: periodEnd },
+    },
+  });
+
+  return submittedCount >= plan.includedRequests;
+}
+
+/**
+ * Dispatch all service requests for an org that are sitting at READY_TO_DISPATCH
+ * (held because the org was payment-gated). Called after payment method is saved.
+ */
+export async function releaseHeldRequestsForOrg(orgId: string): Promise<void> {
+  const { autoDispatch } = await import("@/lib/auto-dispatch");
+
+  const held = await prisma.serviceRequest.findMany({
+    where: {
+      organizationId: orgId,
+      status: "READY_TO_DISPATCH",
+    },
+    select: { id: true },
+  });
+
+  for (const req of held) {
+    try {
+      await autoDispatch(req.id, null);
+    } catch (err) {
+      console.error(`[releaseHeldRequests] Failed to dispatch request ${req.id}:`, err);
+    }
+  }
+}

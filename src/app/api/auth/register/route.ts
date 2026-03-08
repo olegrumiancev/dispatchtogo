@@ -10,12 +10,21 @@ import { verifyTurnstile } from "@/lib/turnstile";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, password, role, organizationName, organizationType, companyName, phone, categories, captchaToken } = body;
+    const { name, email, password, role, organizationName, organizationType, companyName, phone, categories, captchaToken, tosAccepted } = body;
 
     const captchaOk = await verifyTurnstile(captchaToken);
     if (!captchaOk) {
       return NextResponse.json({ error: "CAPTCHA verification failed. Please try again." }, { status: 400 });
     }
+
+    if (role === "OPERATOR" && !tosAccepted) {
+      return NextResponse.json({ error: "You must accept the Terms of Service to create an account." }, { status: 400 });
+    }
+
+    const clientIp =
+      request.headers.get("cf-connecting-ip") ??
+      request.headers.get("x-forwarded-for")?.split(",")[0].trim() ??
+      null;
 
     if (!email || !password || !role) {
       return NextResponse.json(
@@ -72,6 +81,8 @@ export async function POST(request: NextRequest) {
           type: orgType,
           contactEmail: normalizedEmail,
           contactPhone: phone ?? null,
+          termsAcceptedAt: tosAccepted ? new Date() : null,
+          termsAcceptedIp: tosAccepted ? (clientIp ?? null) : null,
         },
       });
 

@@ -17,6 +17,7 @@ export default function RegisterPage() {
   const [registeredEmail, setRegisteredEmail] = useState("");
   const [registeredCategories, setRegisteredCategories] = useState<string[]>([]);
   const [captchaToken, setCaptchaToken] = useState("");
+  const [tosAccepted, setTosAccepted] = useState(false);
   const turnstileRef = useRef<TurnstileInstance>(null);
 
   const [form, setForm] = useState({
@@ -67,6 +68,10 @@ export default function RegisterPage() {
       setError("Please select a property type.");
       return;
     }
+    if (!tosAccepted) {
+      setError("You must accept the Terms of Service to create an account.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -84,6 +89,7 @@ export default function RegisterPage() {
           companyName: form.role === "VENDOR" ? form.companyName : undefined,
           categories: form.role === "VENDOR" ? form.categories : undefined,
           captchaToken,
+          tosAccepted,
         }),
       });
 
@@ -338,12 +344,40 @@ export default function RegisterPage() {
             onExpire={() => setCaptchaToken("")}
             options={{ theme: "light" }}
           />
+          <label className="flex items-start gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={tosAccepted}
+              onChange={(e) => setTosAccepted(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-blue-600"
+            />
+            <span className="text-xs text-gray-600">
+              I agree to the{" "}
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                Privacy Policy
+              </a>
+            </span>
+          </label>
           <Button
             type="submit"
             variant="primary"
             size="lg"
             loading={loading}
-            disabled={loading || !captchaToken}
+            disabled={loading || !captchaToken || !tosAccepted}
             className="w-full"
           >
             Create Account

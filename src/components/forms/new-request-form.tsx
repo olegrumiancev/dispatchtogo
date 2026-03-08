@@ -283,7 +283,11 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
       }
 
       const created = await res.json();
-      router.push(`/app/operator/requests/${created.id}`);
+      if (created.paymentRequired) {
+        router.push(`/app/operator/billing?held=1`);
+      } else {
+        router.push(`/app/operator/requests/${created.id}`);
+      }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {

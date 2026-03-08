@@ -93,11 +93,7 @@ prisma/
 
 ## Demo Accounts (after seeding)
 
-| Role     | Email                    | Password  |
-|----------|--------------------------|-----------|
-| Admin    | admin@dispatchtogo.com   | password  |
-| Operator | operator@dispatchtogo.com| password  |
-| Vendor   | vendor@dispatchtogo.com  | password  |
+See `prisma/seed.ts` for the seeded demo account credentials.
 
 ## Environment Variables
 

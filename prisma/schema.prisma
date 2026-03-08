@@ -59,11 +59,15 @@ model Organization {
   phone            String?
   email            String?
   address          String?
-  plan             String   @default("FREE")
-  stripeCustomerId String?
-  billingEmail     String?
-  planUpdatedAt    DateTime?
-  createdAt        DateTime @default(now())
+  plan                    String   @default("FREE")
+  stripeCustomerId        String?
+  billingEmail            String?
+  planUpdatedAt           DateTime?
+  hasPaymentMethod        Boolean  @default(false)
+  termsAcceptedAt         DateTime?
+  termsAcceptedIp         String?
+  billingTermsAcceptedAt  DateTime?
+  createdAt               DateTime @default(now())
 
   users            User[]
   properties       Property[]

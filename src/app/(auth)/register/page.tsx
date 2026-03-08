@@ -30,6 +30,7 @@ export default function RegisterPage() {
     companyName: "",
     phone: "",
     categories: [] as string[],
+    agreedToTerms: false,
   });
 
   const set = (field: string, value: string) =>
@@ -65,6 +66,10 @@ export default function RegisterPage() {
     }
     if (form.role === "OPERATOR" && !form.organizationType) {
       setError("Please select a property type.");
+      return;
+    }
+    if (!form.agreedToTerms) {
+      setError("You must agree to the Terms of Service and Privacy Policy.");
       return;
     }
 
@@ -330,6 +335,38 @@ export default function RegisterPage() {
             </div>
           )}
 
+          {/* Terms & Privacy consent */}
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={form.agreedToTerms}
+              onChange={(e) =>
+                setForm((prev) => ({ ...prev, agreedToTerms: e.target.checked }))
+              }
+              className="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="text-sm text-gray-600">
+              I agree to the{" "}
+              <a
+                href={`${process.env.NEXT_PUBLIC_WWW_BASE_URL ?? "https://www.dispatchtogo.com"}/terms`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a
+                href={`${process.env.NEXT_PUBLIC_WWW_BASE_URL ?? "https://www.dispatchtogo.com"}/privacy`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                Privacy Policy
+              </a>
+            </span>
+          </label>
+
           <Turnstile
             ref={turnstileRef}
             siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY!}
@@ -343,7 +380,7 @@ export default function RegisterPage() {
             variant="primary"
             size="lg"
             loading={loading}
-            disabled={loading || !captchaToken}
+            disabled={loading || !captchaToken || !form.agreedToTerms}
             className="w-full"
           >
             Create Account

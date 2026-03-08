@@ -5,8 +5,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getOrganizationUsageForPeriod, currentPeriodStart, currentPeriodEnd } from "@/lib/billing";
 import { BILLING_PLANS, PLATFORM_BILL_STATUSES } from "@/lib/constants";
-import { TrendingUp, CheckCircle2, ExternalLink, Receipt } from "lucide-react";
+import { TrendingUp, CheckCircle2, ExternalLink, Receipt, AlertCircle } from "lucide-react";
 import { PaginationControls } from "@/components/ui/pagination-controls";
+import { BillingActions } from "@/components/forms/billing-actions";
 
 export const metadata = {
   title: "Billing | DispatchToGo",
@@ -32,7 +33,7 @@ function formatDate(date: Date) {
 export default async function OperatorBillingPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; held?: string; setup?: string }>;
 }) {
   const session = await auth();
   if (!session) redirect("/app/login");
@@ -43,11 +44,13 @@ export default async function OperatorBillingPage({
 
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const showHeldNotice = sp.held === "1";
+  const setupResult = sp.setup; // "success" | "cancelled" | undefined
 
-  const [org, billsTotal, bills, usage] = await Promise.all([
+  const [org, billsTotal, bills, usage, heldCount] = await Promise.all([
     prisma.organization.findUniqueOrThrow({
       where: { id: user.organizationId },
-      select: { name: true, plan: true },
+      select: { name: true, plan: true, hasPaymentMethod: true },
     }),
     prisma.platformBill.count({ where: { organizationId: user.organizationId } }),
     prisma.platformBill.findMany({
@@ -61,6 +64,9 @@ export default async function OperatorBillingPage({
       currentPeriodStart(),
       currentPeriodEnd()
     ),
+    prisma.serviceRequest.count({
+      where: { organizationId: user.organizationId, status: "READY_TO_DISPATCH" },
+    }),
   ]);
 
   const totalPages = Math.ceil(billsTotal / PAGE_SIZE);
@@ -76,6 +82,39 @@ export default async function OperatorBillingPage({
           Your plan, current usage, and billing history
         </p>
       </div>
+
+      {/* Held-request redirect notice */}
+      {showHeldNotice && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-amber-800">Your request was saved but is on hold</p>
+            <p className="text-amber-700 mt-0.5">
+              You&apos;ve reached your free plan limit. Add a payment method below to dispatch it
+              and any other held requests.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Stripe setup result notice */}
+      {setupResult === "success" && (
+        <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 flex items-start gap-3">
+          <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0 mt-0.5" />
+          <div className="text-sm">
+            <p className="font-semibold text-emerald-800">Payment method added successfully</p>
+            <p className="text-emerald-700 mt-0.5">
+              Your held requests are being dispatched now.
+            </p>
+          </div>
+        </div>
+      )}
+      {setupResult === "cancelled" && (
+        <div className="rounded-md bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-600">
+          Payment setup was cancelled. Your held requests remain on hold until a payment method
+          is added.
+        </div>
+      )}
 
       {/* Current plan + usage */}
       <div className="grid sm:grid-cols-2 gap-4">
@@ -156,6 +195,21 @@ export default async function OperatorBillingPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* Payment method & plan upgrade actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Payment &amp; Plan</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BillingActions
+            hasPaymentMethod={org.hasPaymentMethod}
+            currentPlan={org.plan}
+            isOverLimit={usage.isOverLimit}
+            heldRequestsCount={heldCount}
+          />
+        </CardContent>
+      </Card>
 
       {/* Billing history */}
       <Card>

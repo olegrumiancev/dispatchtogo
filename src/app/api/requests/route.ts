@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateReferenceNumber } from "@/lib/utils";
 import { autoDispatch } from "@/lib/auto-dispatch";
+import { isOrgPaymentGated } from "@/lib/billing";
 import {
   triageServiceRequest,
   storePreClassification,
@@ -141,12 +142,25 @@ export async function POST(request: NextRequest) {
     console.error("[ai-triage] Error:", err);
   }
 
-  // Auto-dispatch: try to find a matching vendor and assign automatically
-  // Must await on serverless (Vercel) — fire-and-forget won't survive function teardown
-  try {
-    await autoDispatch(serviceRequest.id, preferredVendorId || null);
-  } catch (err) {
-    console.error("[auto-dispatch] Error:", err);
+  // Check if this org is payment-gated (free plan limit hit, no payment method)
+  const paymentGated = await isOrgPaymentGated(user.organizationId);
+
+  let paymentRequired = false;
+  if (paymentGated) {
+    // Hold the request at READY_TO_DISPATCH — it will be released after payment is added
+    await prisma.serviceRequest.update({
+      where: { id: serviceRequest.id },
+      data: { status: "READY_TO_DISPATCH" },
+    });
+    paymentRequired = true;
+  } else {
+    // Auto-dispatch: try to find a matching vendor and assign automatically
+    // Must await on serverless (Vercel) — fire-and-forget won't survive function teardown
+    try {
+      await autoDispatch(serviceRequest.id, preferredVendorId || null);
+    } catch (err) {
+      console.error("[auto-dispatch] Error:", err);
+    }
   }
 
   // Re-fetch with updated status after triage + dispatch
@@ -159,5 +173,9 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(updated ?? serviceRequest, { status: 201 });
+  const responseBody = updated ?? serviceRequest;
+  return NextResponse.json(
+    { ...responseBody, paymentRequired },
+    { status: 201 }
+  );
 }
