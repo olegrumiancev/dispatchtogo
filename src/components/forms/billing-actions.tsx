@@ -21,18 +21,25 @@ export function BillingActions({
   const router = useRouter();
   const [loadingCheckout, setLoadingCheckout] = useState(false);
   const [loadingUpgrade, setLoadingUpgrade] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
   const [upgradeError, setUpgradeError] = useState("");
 
   const handleAddPaymentMethod = async () => {
+    setCheckoutError("");
     setLoadingCheckout(true);
     try {
       const res = await fetch("/api/stripe/setup-checkout", { method: "POST" });
       const data = await res.json();
       if (!res.ok || !data.url) {
+        const message = data?.error ?? "Failed to start payment setup. Please try again.";
         console.error("Failed to create checkout session", data);
+        setCheckoutError(message);
         return;
       }
       window.location.href = data.url;
+    } catch (err) {
+      console.error("Checkout session request failed", err);
+      setCheckoutError("Network error — please check your connection and try again.");
     } finally {
       setLoadingCheckout(false);
     }
@@ -40,6 +47,7 @@ export function BillingActions({
 
   const handleUpgrade = async () => {
     setUpgradeError("");
+    setCheckoutError("");
     if (!hasPaymentMethod) {
       // Redirect through payment method first
       await handleAddPaymentMethod();
@@ -113,6 +121,9 @@ export function BillingActions({
               <><CreditCard className="w-4 h-4 mr-2" /> Add Payment Method &amp; Release Requests</>
             )}
           </Button>
+          {checkoutError && (
+            <p className="text-xs text-red-600 mt-1">{checkoutError}</p>
+          )}
         </div>
       )}
 
@@ -135,6 +146,9 @@ export function BillingActions({
               <><CreditCard className="w-4 h-4 mr-2" /> Add Payment Method</>
             )}
           </Button>
+          {checkoutError && (
+            <p className="text-xs text-red-600 mt-1">{checkoutError}</p>
+          )}
         </div>
       )}
 
@@ -155,8 +169,8 @@ export function BillingActions({
             onClick={handleUpgrade}
             disabled={loadingUpgrade || loadingCheckout}
           >
-            {loadingUpgrade ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Upgrading…</>
+            {loadingUpgrade || loadingCheckout ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {loadingCheckout ? "Redirecting to Stripe…" : "Upgrading…"}</>
             ) : (
               <><ArrowUpCircle className="w-4 h-4 mr-2" /> Upgrade to Value Plan (100 included/month)</>
             )}
