@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
+import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES, BILLING_JOB_TAG_STYLES } from "@/lib/constants";
 import { Clock, MapPin, User, AlertTriangle } from "lucide-react";
 import AssignModal from "./assign-modal";
 import { formatDate } from "@/lib/utils";
@@ -268,6 +268,15 @@ export default async function DispatchBoardPage() {
                           <Badge variant={getUrgencyColor(sr.urgency)}>
                             {sr.urgency}
                           </Badge>
+                          {(job as any).billingStatus && (() => {
+                            const tag = (job as any).billingStatus as "FREE" | "BILLABLE";
+                            const style = BILLING_JOB_TAG_STYLES[tag];
+                            return (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${style.className}`}>
+                                {style.label}
+                              </span>
+                            );
+                          })()}
                         </div>
                         <div className="flex items-center gap-1 text-sm text-gray-700">
                           <MapPin className="w-3.5 h-3.5 text-gray-400" />

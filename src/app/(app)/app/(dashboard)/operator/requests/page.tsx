@@ -5,11 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES, BILLING_PLANS } from "@/lib/constants";
+import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES, BILLING_PLANS, BILLING_JOB_TAG_STYLES } from "@/lib/constants";
 import { Plus, Eye, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Archive, CheckCircle2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
-import { currentPeriodStart, currentPeriodEnd } from "@/lib/billing";
+import { currentPeriodStart, currentPeriodEnd, getOrgBillingRankMap } from "@/lib/billing";
 
 const PAGE_SIZE = 20;
 
@@ -27,6 +27,16 @@ function getStatusLabel(status: string) {
 
 function getCategoryLabel(category: string) {
   return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
+}
+
+const BILLED_STATUSES = new Set(["COMPLETED", "VERIFIED"]);
+
+function getBillingTag(
+  job: { id: string; billingStatus: string | null; status: string } | null,
+  rankMap: Map<string, "FREE" | "BILLABLE">
+): "FREE" | "BILLABLE" | null {
+  if (!job || !BILLED_STATUSES.has(job.status)) return null;
+  return (job.billingStatus as "FREE" | "BILLABLE" | null) ?? rankMap.get(job.id) ?? null;
 }
 
 interface SearchParams {
@@ -100,7 +110,7 @@ export default async function RequestsPage({
   const periodStart = currentPeriodStart();
   const periodEnd = currentPeriodEnd();
 
-  const [total, requests, org, submittedThisMonth] = await Promise.all([
+  const [total, requests, org, submittedThisMonth, billingRankMap] = await Promise.all([
     prisma.serviceRequest.count({ where }),
     prisma.serviceRequest.findMany({
       where,
@@ -126,6 +136,7 @@ export default async function RequestsPage({
     prisma.serviceRequest.count({
       where: { organizationId: orgId, createdAt: { gte: periodStart, lte: periodEnd } },
     }),
+    getOrgBillingRankMap(orgId, periodStart, periodEnd),
   ]);
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -436,12 +447,24 @@ export default async function RequestsPage({
                       </Link>
                     </td>
                     <td className="px-6 py-4">
-                      <Link
-                        href={buildUrl({ status: req.status, page: "1" })}
-                        title={`Filter by status: ${getStatusLabel(req.status)}`}
-                      >
-                        <Badge variant={getStatusColor(req.status)} className="cursor-pointer hover:opacity-80 transition-opacity">{getStatusLabel(req.status)}</Badge>
-                      </Link>
+                      <div className="flex flex-col gap-1 items-start">
+                        <Link
+                          href={buildUrl({ status: req.status, page: "1" })}
+                          title={`Filter by status: ${getStatusLabel(req.status)}`}
+                        >
+                          <Badge variant={getStatusColor(req.status)} className="cursor-pointer hover:opacity-80 transition-opacity">{getStatusLabel(req.status)}</Badge>
+                        </Link>
+                        {(() => {
+                          const tag = getBillingTag(req.job, billingRankMap);
+                          if (!tag) return null;
+                          const style = BILLING_JOB_TAG_STYLES[tag];
+                          return (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${style.className}`}>
+                              {style.label}
+                            </span>
+                          );
+                        })()}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 hidden lg:table-cell">
                       {formatDate(req.createdAt)}

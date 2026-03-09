@@ -72,6 +72,12 @@ export const BILLING_PLANS: Record<
   VALUE: { label: "Value", includedRequests: 100, ratePerRequest: 0.25 },
 };
 
+/** Visual styles for per-job billing tags shown on request lists and billing page. */
+export const BILLING_JOB_TAG_STYLES = {
+  FREE:     { label: "Free",             className: "bg-green-100 text-green-700" },
+  BILLABLE: { label: "Billable · $0.25", className: "bg-amber-100 text-amber-700" },
+} as const;
+
 export const ORGANIZATION_TYPES = [
   { value: "HOTEL", label: "Hotel" },
   { value: "CAMPGROUND", label: "Campground" },
@@ -81,8 +87,9 @@ export const ORGANIZATION_TYPES = [
 ] as const;
 
 export const PLATFORM_BILL_STATUSES = [
-  { value: "DRAFT", label: "Draft", color: "bg-gray-100 text-gray-800" },
-  { value: "SENT", label: "Sent", color: "bg-blue-100 text-blue-800" },
-  { value: "PAID", label: "Paid", color: "bg-green-100 text-green-800" },
-  { value: "VOID", label: "Void", color: "bg-gray-200 text-gray-500" },
+  { value: "DRAFT",    label: "Draft",    color: "bg-gray-100 text-gray-800" },
+  { value: "SENT",     label: "Sent",     color: "bg-blue-100 text-blue-800" },
+  { value: "PAID",     label: "Paid",     color: "bg-green-100 text-green-800" },
+  { value: "VOID",     label: "Void",     color: "bg-gray-200 text-gray-500" },
+  { value: "PAST_DUE", label: "Past Due", color: "bg-red-100 text-red-800" },
 ] as const;

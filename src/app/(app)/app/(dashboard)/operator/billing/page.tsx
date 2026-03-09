@@ -3,11 +3,12 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { getOrganizationUsageForPeriod, currentPeriodStart, currentPeriodEnd } from "@/lib/billing";
-import { BILLING_PLANS, PLATFORM_BILL_STATUSES } from "@/lib/constants";
+import { getOrganizationUsageForPeriod, currentPeriodStart, currentPeriodEnd, releaseHeldRequestsForOrg, getOrgCompletedJobsWithBillingTag } from "@/lib/billing";
+import { BILLING_PLANS, PLATFORM_BILL_STATUSES, BILLING_JOB_TAG_STYLES } from "@/lib/constants";
 import { TrendingUp, CheckCircle2, ExternalLink, Receipt, AlertCircle } from "lucide-react";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { BillingActions } from "@/components/forms/billing-actions";
+import { stripe } from "@/lib/stripe";
 
 export const metadata = {
   title: "Billing | DispatchToGo",
@@ -47,10 +48,68 @@ export default async function OperatorBillingPage({
   const showHeldNotice = sp.held === "1";
   const setupResult = sp.setup; // "success" | "cancelled" | undefined
 
-  const [org, billsTotal, bills, usage, heldCount] = await Promise.all([
+  // When Stripe redirects back with ?setup=success, proactively sync the payment method
+  // from Stripe rather than waiting for the webhook (which can be delayed or misconfigured).
+  if (setupResult === "success") {
+    try {
+      const orgForSync = await prisma.organization.findUnique({
+        where: { id: user.organizationId },
+        select: { stripeCustomerId: true, hasPaymentMethod: true, stripePaymentMethodId: true },
+      });
+
+      if (orgForSync?.stripeCustomerId) {
+        // List the customer's saved cards
+        const pmList = await stripe.paymentMethods.list({
+          customer: orgForSync.stripeCustomerId,
+          type: "card",
+          limit: 1,
+        });
+
+        const pm = pmList.data[0];
+        if (pm) {
+          const card = pm.card;
+          const wasAlreadySet = orgForSync.hasPaymentMethod;
+
+          await prisma.organization.update({
+            where: { id: user.organizationId },
+            data: {
+              hasPaymentMethod: true,
+              stripePaymentMethodId: pm.id,
+              stripeCardBrand: card?.brand ?? null,
+              stripeCardLast4: card?.last4 ?? null,
+              stripeCardExpMonth: card?.exp_month ?? null,
+              stripeCardExpYear: card?.exp_year ?? null,
+            },
+          });
+
+          // Set as default invoice payment method
+          await stripe.customers.update(orgForSync.stripeCustomerId, {
+            invoice_settings: { default_payment_method: pm.id },
+          }).catch(() => {/* non-critical */});
+
+          // Release held requests only if this is a newly added payment method
+          if (!wasAlreadySet) {
+            await releaseHeldRequestsForOrg(user.organizationId);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("[billing-page] Failed to sync payment method from Stripe:", err);
+    }
+  }
+
+  const [org, billsTotal, bills, usage, heldCount, completedJobsWithTags] = await Promise.all([
     prisma.organization.findUniqueOrThrow({
       where: { id: user.organizationId },
-      select: { name: true, plan: true, hasPaymentMethod: true },
+      select: {
+        name: true,
+        plan: true,
+        hasPaymentMethod: true,
+        stripeCardBrand: true,
+        stripeCardLast4: true,
+        stripeCardExpMonth: true,
+        stripeCardExpYear: true,
+      },
     }),
     prisma.platformBill.count({ where: { organizationId: user.organizationId } }),
     prisma.platformBill.findMany({
@@ -67,15 +126,17 @@ export default async function OperatorBillingPage({
     prisma.serviceRequest.count({
       where: { organizationId: user.organizationId, status: "READY_TO_DISPATCH" },
     }),
+    getOrgCompletedJobsWithBillingTag(user.organizationId, currentPeriodStart(), currentPeriodEnd(), 20),
   ]);
 
   const totalPages = Math.ceil(billsTotal / PAGE_SIZE);
 
   const planConfig = BILLING_PLANS[org.plan] ?? BILLING_PLANS["FREE"];
 
-  // For orgs WITHOUT a payment method, the gate is based on submitted requests this month.
-  // For orgs WITH a payment method, billing is based on completed requests — show that instead.
-  const gateCount = org.hasPaymentMethod ? usage.completedRequests : usage.submittedRequests;
+  // Always gate on submitted requests — this matches isOrgPaymentGated() and avoids the
+  // counter jumping to 0 when a FREE-plan operator adds a payment method (at which point
+  // completedRequests is 0 because the held jobs haven't run yet).
+  const gateCount = usage.submittedRequests;
   const usagePercent = Math.min(100, Math.round((gateCount / planConfig.includedRequests) * 100));
   const isNearLimit = !org.hasPaymentMethod && usage.submittedRequests >= planConfig.includedRequests - 2;
 
@@ -164,11 +225,7 @@ export default async function OperatorBillingPage({
             <div>
               <div className="flex justify-between text-sm mb-1.5">
                 <span className="text-gray-600">
-                  {org.hasPaymentMethod ? (
-                    <>{usage.completedRequests} of {planConfig.includedRequests} completed</>
-                  ) : (
-                    <>{usage.submittedRequests} of {planConfig.includedRequests} submitted</>
-                  )}
+                  {usage.submittedRequests} of {planConfig.includedRequests} dispatched
                 </span>
                 <span className={`font-medium ${
                   usage.isOverLimit || (!org.hasPaymentMethod && usage.submittedRequests >= planConfig.includedRequests)
@@ -240,6 +297,43 @@ export default async function OperatorBillingPage({
                 </p>
               )
             )}
+
+            {/* Completed requests breakdown with billing tags */}
+            {completedJobsWithTags.length > 0 && (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                  Completed this month
+                </p>
+                <div className="divide-y divide-gray-100 rounded-md border border-gray-100 overflow-hidden">
+                  {completedJobsWithTags.map((entry) => {
+                    const tagStyle = BILLING_JOB_TAG_STYLES[entry.billingTag];
+                    return (
+                      <a
+                        key={entry.jobId}
+                        href={`/app/operator/requests/${entry.serviceRequestId}`}
+                        className="flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-medium text-blue-600 shrink-0">{entry.referenceNumber}</span>
+                          <span className="text-gray-500 truncate hidden sm:block">{entry.propertyName}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-xs text-gray-400">{formatDate(entry.completedAt)}</span>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${tagStyle.className}`}>
+                            {tagStyle.label}
+                          </span>
+                        </div>
+                      </a>
+                    );
+                  })}
+                </div>
+                {usage.completedRequests > completedJobsWithTags.length && (
+                  <p className="text-xs text-gray-400 text-right pt-1">
+                    Showing {completedJobsWithTags.length} of {usage.completedRequests} completed
+                  </p>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -255,6 +349,10 @@ export default async function OperatorBillingPage({
             currentPlan={org.plan}
             isOverLimit={usage.isOverLimit}
             heldRequestsCount={heldCount}
+            cardBrand={org.stripeCardBrand}
+            cardLast4={org.stripeCardLast4}
+            cardExpMonth={org.stripeCardExpMonth}
+            cardExpYear={org.stripeCardExpYear}
           />
         </CardContent>
       </Card>
@@ -303,7 +401,7 @@ export default async function OperatorBillingPage({
                       </td>
                       <td className="px-4 py-4 text-center">
                         <Badge className={getBillStatusColor(bill.status)}>
-                          {bill.status}
+                          {PLATFORM_BILL_STATUSES.find((s) => s.value === bill.status)?.label ?? bill.status}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 text-right">

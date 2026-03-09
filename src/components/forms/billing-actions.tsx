@@ -3,13 +3,17 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { CreditCard, ArrowUpCircle, Loader2, CheckCircle2 } from "lucide-react";
+import { CreditCard, ArrowUpCircle, Loader2, CheckCircle2, ExternalLink, Trash2 } from "lucide-react";
 
 interface BillingActionsProps {
   hasPaymentMethod: boolean;
   currentPlan: string;
   isOverLimit: boolean;
   heldRequestsCount: number;
+  cardBrand?: string | null;
+  cardLast4?: string | null;
+  cardExpMonth?: number | null;
+  cardExpYear?: number | null;
 }
 
 export function BillingActions({
@@ -17,12 +21,19 @@ export function BillingActions({
   currentPlan,
   isOverLimit,
   heldRequestsCount,
+  cardBrand,
+  cardLast4,
+  cardExpMonth,
+  cardExpYear,
 }: BillingActionsProps) {
   const router = useRouter();
   const [loadingCheckout, setLoadingCheckout] = useState(false);
   const [loadingUpgrade, setLoadingUpgrade] = useState(false);
+  const [loadingPortal, setLoadingPortal] = useState(false);
+  const [loadingRemove, setLoadingRemove] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
   const [upgradeError, setUpgradeError] = useState("");
+  const [removeError, setRemoveError] = useState("");
 
   const handleAddPaymentMethod = async () => {
     setCheckoutError("");
@@ -74,6 +85,51 @@ export function BillingActions({
       setLoadingUpgrade(false);
     }
   };
+
+  const handleOpenPortal = async () => {
+    setLoadingPortal(true);
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.url) {
+        console.error("Failed to open billing portal", data);
+        return;
+      }
+      window.location.href = data.url;
+    } catch (err) {
+      console.error("Portal request failed", err);
+    } finally {
+      setLoadingPortal(false);
+    }
+  };
+
+  const handleRemovePaymentMethod = async () => {
+    if (!window.confirm("Remove your payment method? New requests will be held if you reach the free plan limit.")) return;
+    setRemoveError("");
+    setLoadingRemove(true);
+    try {
+      const res = await fetch("/api/stripe/payment-method", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        setRemoveError(data.error ?? "Failed to remove payment method.");
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      setRemoveError("Network error — please try again.");
+    } finally {
+      setLoadingRemove(false);
+    }
+  };
+
+  // Format card label e.g. "Visa ending 4242 · Exp 04/28"
+  const cardLabel = cardLast4
+    ? `${cardBrand ? cardBrand.charAt(0).toUpperCase() + cardBrand.slice(1) : "Card"} ending ${cardLast4}${
+        cardExpMonth && cardExpYear
+          ? ` · Exp ${String(cardExpMonth).padStart(2, "0")}/${String(cardExpYear).slice(-2)}`
+          : ""
+      }`
+    : "Payment method on file";
 
   return (
     <div className="space-y-3">
@@ -154,9 +210,51 @@ export function BillingActions({
 
       {/* Payment method confirmed */}
       {hasPaymentMethod && (
-        <div className="flex items-center gap-2 text-sm text-emerald-700">
-          <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-          Payment method on file
+        <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 space-y-2">
+          <div className="flex items-center gap-2 text-sm text-emerald-700 font-medium">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+            {cardLabel}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleAddPaymentMethod}
+              disabled={loadingCheckout}
+            >
+              {loadingCheckout ? (
+                <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Redirecting…</>
+              ) : (
+                <><CreditCard className="w-3 h-3 mr-1" /> Update card</>
+              )}
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleOpenPortal}
+              disabled={loadingPortal}
+            >
+              {loadingPortal ? (
+                <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Opening…</>
+              ) : (
+                <><ExternalLink className="w-3 h-3 mr-1" /> Manage billing</>
+              )}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRemovePaymentMethod}
+              disabled={loadingRemove}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            >
+              {loadingRemove ? (
+                <><Loader2 className="w-3 h-3 mr-1 animate-spin" /> Removing…</>
+              ) : (
+                <><Trash2 className="w-3 h-3 mr-1" /> Remove</>
+              )}
+            </Button>
+          </div>
+          {removeError && <p className="text-xs text-red-600">{removeError}</p>}
         </div>
       )}
 

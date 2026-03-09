@@ -17,6 +17,11 @@
  *      Command:  curl -s -X POST https://app.yourdomain.com/api/cron/credential-expiry \
  *                     -H "Authorization: Bearer $CRON_SECRET"
  *
+ *   3. Monthly Billing — generates DRAFT bills for the previous month
+ *      Schedule: 0 2 1 * *
+ *      Command:  curl -s -X POST https://app.yourdomain.com/api/cron/billing \
+ *                     -H "Authorization: Bearer $CRON_SECRET"
+ *
  * CRON_SECRET must be set in your Dokploy environment variables.
  * All cron routes validate it via isCronAuthorized() in lib/cron-guard.ts.
  *
@@ -49,6 +54,7 @@ export const SCHEDULER_INFO = {
  *   const cron = await import("node-cron");
  *   const { runDigestJob } = await import("@/app/api/cron/digest/job");
  *   const { runCredentialExpiryJob } = await import("@/app/api/cron/credential-expiry/job");
+ *   const { runBillingJob } = await import("@/app/api/cron/billing/job");
  *
  *   cron.schedule(SCHEDULER_INFO.cronExpression, async () => {
  *     console.log("[scheduler] Running in-process digest job...");
@@ -68,6 +74,17 @@ export const SCHEDULER_INFO = {
  *       console.log("[scheduler] Credential expiry job complete.");
  *     } catch (err) {
  *       console.error("[scheduler] Credential expiry job failed:", err);
+ *     }
+ *   }, { timezone: "UTC" });
+ *
+ *   // Monthly billing drafts: run at 02:00 UTC on the 1st of each month
+ *   cron.schedule("0 2 1 * *", async () => {
+ *     console.log("[scheduler] Running monthly billing job...");
+ *     try {
+ *       await runBillingJob();
+ *       console.log("[scheduler] Billing job complete.");
+ *     } catch (err) {
+ *       console.error("[scheduler] Billing job failed:", err);
  *     }
  *   }, { timezone: "UTC" });
  *

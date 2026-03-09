@@ -477,3 +477,38 @@ export async function sendAdminRejectionEmail(
     </div>`;
   return sendEmail(adminEmail, subject, html, undefined, { eventKey: "emailAdminRejection" });
 }
+
+export async function sendPaymentFailedEmail(
+  to: string,
+  orgName: string,
+  amountCad: number,
+  invoiceUrl: string | null | undefined
+): Promise<EmailResult> {
+  const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
+  const billingUrl = `${appBase}/app/operator/billing`;
+  const subject = "Payment failed for your DispatchToGo invoice";
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
+      <div style="background:#dc2626;color:#fff;padding:20px;border-radius:8px 8px 0 0">
+        <h1 style="margin:0;font-size:20px">DispatchToGo — Payment Failed</h1>
+      </div>
+      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
+        <h2 style="margin:0 0 16px;color:#dc2626">We couldn&apos;t collect your payment</h2>
+        <p>Hi ${orgName},</p>
+        <p>We were unable to process your DispatchToGo platform invoice for
+          <strong>$${amountCad.toFixed(2)} CAD</strong>.
+          Your service will continue uninterrupted, but please update your payment method
+          as soon as possible to avoid any disruption.</p>
+        ${invoiceUrl ? `<p><a href="${invoiceUrl}" style="color:#1e40af">View invoice →</a></p>` : ""}
+        <a href="${billingUrl}" style="display:inline-block;background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">
+          Update Payment Method
+        </a>
+        <p style="color:#6b7280;font-size:13px;margin-top:24px">
+          If you believe this is an error, please contact
+          <a href="mailto:support@dispatchtogo.com" style="color:#1e40af">support@dispatchtogo.com</a>.
+        </p>
+      </div>
+    </div>`;
+  const text = `Payment failed for your DispatchToGo invoice.\n\nAmount: $${amountCad.toFixed(2)} CAD\n\nPlease update your payment method at: ${billingUrl}`;
+  return sendEmail(to, subject, html, text);
+}

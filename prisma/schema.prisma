@@ -64,6 +64,11 @@ model Organization {
   billingEmail            String?
   planUpdatedAt           DateTime?
   hasPaymentMethod        Boolean  @default(false)
+  stripePaymentMethodId   String?
+  stripeCardBrand         String?
+  stripeCardLast4         String?
+  stripeCardExpMonth      Int?
+  stripeCardExpYear       Int?
   termsAcceptedAt         DateTime?
   termsAcceptedIp         String?
   billingTermsAcceptedAt  DateTime?
@@ -246,6 +251,7 @@ model Job {
   estimatedReturnDate DateTime?
   pausedAt           DateTime?
   declineReason      String?
+  billingStatus      String?           // "FREE" | "BILLABLE" — locked by monthly billing cron
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 

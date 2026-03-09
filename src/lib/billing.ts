@@ -90,6 +90,122 @@ export async function getOrganizationUsageForPeriod(
   };
 }
 
+// ─── Billing rank helpers ────────────────────────────────────────────────────
+
+/**
+ * Returns a Map<jobId, "FREE" | "BILLABLE"> for all completed/verified jobs for
+ * an org in a billing period, ordered by completedAt ascending.
+ * The first N jobs (N = plan.includedRequests) are FREE; the rest are BILLABLE.
+ *
+ * Used for the live/dynamic display path (within the current billing month).
+ * For past months, use the locked `billingStatus` field on Job instead.
+ */
+export async function getOrgBillingRankMap(
+  orgId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<Map<string, "FREE" | "BILLABLE">> {
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: orgId },
+    select: { plan: true },
+  });
+  const plan = BILLING_PLANS[org.plan] ?? BILLING_PLANS["FREE"];
+
+  const jobs = await prisma.job.findMany({
+    where: {
+      organizationId: orgId,
+      status: { in: [...BILLED_JOB_STATUSES] },
+      completedAt: { gte: periodStart, lte: periodEnd },
+    },
+    select: { id: true },
+    orderBy: { completedAt: "asc" },
+  });
+
+  const map = new Map<string, "FREE" | "BILLABLE">();
+  jobs.forEach((job, index) => {
+    map.set(job.id, index < plan.includedRequests ? "FREE" : "BILLABLE");
+  });
+  return map;
+}
+
+/**
+ * Fetches recently completed jobs for an org in the period with rank context,
+ * suitable for display on the billing page breakdown list.
+ */
+export async function getOrgCompletedJobsWithBillingTag(
+  orgId: string,
+  periodStart: Date,
+  periodEnd: Date,
+  limit = 20
+): Promise<Array<{ jobId: string; serviceRequestId: string; referenceNumber: string; propertyName: string; completedAt: Date; billingTag: "FREE" | "BILLABLE" }>> {
+  const org = await prisma.organization.findUniqueOrThrow({
+    where: { id: orgId },
+    select: { plan: true },
+  });
+  const plan = BILLING_PLANS[org.plan] ?? BILLING_PLANS["FREE"];
+
+  const jobs = await prisma.job.findMany({
+    where: {
+      organizationId: orgId,
+      status: { in: [...BILLED_JOB_STATUSES] },
+      completedAt: { gte: periodStart, lte: periodEnd },
+    },
+    select: {
+      id: true,
+      billingStatus: true,
+      completedAt: true,
+      serviceRequest: {
+        select: {
+          id: true,
+          referenceNumber: true,
+          property: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { completedAt: "asc" },
+  });
+
+  return jobs.slice(0, limit).map((job, index) => ({
+    jobId: job.id,
+    serviceRequestId: job.serviceRequest.id,
+    referenceNumber: job.serviceRequest.referenceNumber,
+    propertyName: job.serviceRequest.property.name,
+    completedAt: job.completedAt!,
+    // Use locked DB field when available; fall back to live rank
+    billingTag: (job.billingStatus as "FREE" | "BILLABLE" | null) ?? (index < plan.includedRequests ? "FREE" : "BILLABLE"),
+  }));
+}
+
+/**
+ * Writes billingStatus to all completed/verified jobs for an org in a period.
+ * Called during monthly bill generation to permanently lock the tags.
+ */
+export async function lockJobBillingStatuses(
+  orgId: string,
+  periodStart: Date,
+  periodEnd: Date,
+  includedRequests: number
+): Promise<void> {
+  const jobs = await prisma.job.findMany({
+    where: {
+      organizationId: orgId,
+      status: { in: [...BILLED_JOB_STATUSES] },
+      completedAt: { gte: periodStart, lte: periodEnd },
+    },
+    select: { id: true },
+    orderBy: { completedAt: "asc" },
+  });
+
+  await Promise.all(
+    jobs.map((job, index) =>
+      prisma.job.update({
+        where: { id: job.id },
+        data: { billingStatus: index < includedRequests ? "FREE" : "BILLABLE" },
+      })
+    )
+  );
+}
+
 // ─── Stripe customer ─────────────────────────────────────────────────────────
 
 /**
@@ -163,6 +279,9 @@ export async function generatePlatformBills(
       });
       created++;
     }
+
+    // Lock billingStatus on all completed/verified jobs for this org in this period
+    await lockJobBillingStatuses(org.id, periodStart, periodEnd, plan.includedRequests);
   }
 
   return { created, updated };
