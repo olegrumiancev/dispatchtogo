@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { optimizeImageFileForUpload } from "@/lib/client-image";
 import { SERVICE_CATEGORIES, URGENCY_LEVELS } from "@/lib/constants";
 import {
   ImagePlus,
@@ -229,12 +230,17 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
 
     try {
       // Upload photos to S3 first (if any), collect URLs
-      const photoUrls: string[] = [];
+      const photoUploads: Array<{
+        url: string;
+        fullUrl?: string | null;
+        thumbnailUrl?: string | null;
+      }> = [];
       if (files.length > 0) {
         for (let i = 0; i < files.length; i++) {
           setUploadProgress(`Uploading photo ${i + 1} of ${files.length}…`);
+          const optimizedFile = await optimizeImageFileForUpload(files[i]);
           const formData = new FormData();
-          formData.append("file", files[i]);
+          formData.append("file", optimizedFile);
           const uploadRes = await fetch("/api/upload", {
             method: "POST",
             body: formData,
@@ -243,8 +249,12 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
             const data = await uploadRes.json().catch(() => ({}));
             throw new Error(data.error ?? `Failed to upload photo ${i + 1}`);
           }
-          const { url } = await uploadRes.json();
-          photoUrls.push(url);
+          const uploaded = await uploadRes.json();
+          photoUploads.push({
+            url: uploaded.url,
+            fullUrl: uploaded.fullUrl ?? null,
+            thumbnailUrl: uploaded.thumbnailUrl ?? null,
+          });
         }
         setUploadProgress(null);
       }
@@ -257,7 +267,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
           description: description.trim(),
           category: editCategory || "GENERAL",
           urgency: editUrgency || "MEDIUM",
-          photoUrls,
+          photoUploads,
           preferredVendorId: selectedVendorId || undefined,
           aiClassification: classification
             ? {

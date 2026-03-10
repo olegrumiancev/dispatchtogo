@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Download, Package } from "lucide-react";
+import { FileText, Download, Package, Eye } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 
@@ -122,7 +122,12 @@ export default async function AdminProofPacketsPage({
                   {requests.map((req) => (
                     <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
-                        <span className="font-medium text-gray-900">{req.referenceNumber}</span>
+                        <Link
+                          href={`/app/admin/dispatch/${req.id}`}
+                          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {req.referenceNumber}
+                        </Link>
                       </td>
                       <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">
                         {req.organization.name}
@@ -156,17 +161,26 @@ export default async function AdminProofPacketsPage({
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {req.job && (
-                          <a
-                            href={`/api/proof-packets/${req.job.id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 transition-colors"
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/app/admin/dispatch/${req.id}`}
+                            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50"
                           >
-                            <Download className="w-3.5 h-3.5" />
-                            Download PDF
-                          </a>
-                        )}
+                            <Eye className="w-3.5 h-3.5" />
+                            View details
+                          </Link>
+                          {req.job && (
+                            <a
+                              href={`/api/proof-packets/${req.job.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Download PDF
+                            </a>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

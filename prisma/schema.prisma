@@ -294,6 +294,8 @@ model JobPhoto {
   jobId     String
   type      String
   url       String
+  fullUrl   String?
+  thumbnailUrl String?
   caption   String?
   takenAt   DateTime @default(now())
   createdAt DateTime @default(now())
@@ -307,6 +309,8 @@ model Photo {
   id               String   @id @default(cuid())
   serviceRequestId String
   url              String
+  fullUrl          String?
+  thumbnailUrl     String?
   type             String   @default("INTAKE")
   latitude         Float?
   longitude        Float?

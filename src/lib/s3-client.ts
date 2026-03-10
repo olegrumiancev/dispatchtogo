@@ -117,6 +117,12 @@ export async function deleteFile(key: string): Promise<void> {
   );
 }
 
+export function extractStorageKeyFromUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const match = url.match(/^\/api\/photos\/(.+)$/);
+  return match ? match[1] : null;
+}
+
 /**
  * Check if the storage bucket is reachable.
  * Returns null on success, or an error string on failure.

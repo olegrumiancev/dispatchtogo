@@ -22,6 +22,16 @@ import AssignModal from "../assign-modal";
 import { TriageSection } from "@/components/forms/triage-section";
 import type { AiTriageData } from "@/components/ui/ai-triage-badge";
 
+interface DisplayPhoto {
+  id: string;
+  url: string;
+  fullUrl?: string | null;
+  thumbnailUrl?: string | null;
+  type: string;
+  caption?: string | null;
+  takenAt?: Date | string | null;
+}
+
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
 }
@@ -73,6 +83,64 @@ function StatusTimeline({ currentStatus }: { currentStatus: string }) {
   );
 }
 
+function PhotoGallery({
+  title,
+  emptyLabel,
+  photos,
+}: {
+  title: string;
+  emptyLabel: string;
+  photos: DisplayPhoto[];
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Image className="w-4 h-4 text-gray-400" />
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">
+          {title}
+        </p>
+      </div>
+      {photos.length === 0 ? (
+        <p className="text-sm text-gray-400">{emptyLabel}</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {photos.map((photo) => (
+            <a
+              key={photo.id}
+              href={photo.fullUrl ?? photo.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group overflow-hidden rounded-lg border border-gray-200 bg-white"
+            >
+              <img
+                src={photo.thumbnailUrl ?? photo.url}
+                alt={photo.caption || `${title} photo`}
+                className="h-32 w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+              />
+              <div className="space-y-1 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-gray-700">{photo.type}</span>
+                  <span className="text-xs text-blue-600 group-hover:text-blue-700">
+                    Open
+                  </span>
+                </div>
+                {photo.caption && (
+                  <p className="line-clamp-2 text-xs text-gray-500">{photo.caption}</p>
+                )}
+                {photo.takenAt && (
+                  <p className="text-[11px] text-gray-400">
+                    {formatDate(photo.takenAt)}
+                  </p>
+                )}
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default async function AdminDispatchDetailPage({
   params,
 }: {
@@ -99,9 +167,30 @@ export default async function AdminDispatchDetailPage({
               include: { author: { select: { name: true, role: true } } },
               orderBy: { createdAt: "asc" },
             },
-            photos: { select: { id: true } },
+            photos: {
+              select: {
+                id: true,
+                url: true,
+                fullUrl: true,
+                thumbnailUrl: true,
+                type: true,
+                caption: true,
+                takenAt: true,
+              },
+            },
             proofPacket: { select: { id: true } },
           },
+        },
+        photos: {
+          select: {
+            id: true,
+            url: true,
+            fullUrl: true,
+            thumbnailUrl: true,
+            type: true,
+            takenAt: true,
+          },
+          orderBy: { createdAt: "asc" },
         },
         aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
       },
@@ -301,6 +390,19 @@ export default async function AdminDispatchDetailPage({
               <p className="text-sm text-rose-800">{req.rejectionReason}</p>
             </div>
           )}
+
+          <PhotoGallery
+            title="Intake Photos"
+            emptyLabel="No intake photos attached."
+            photos={(req.photos ?? []).map((photo: any) => ({
+              id: photo.id,
+              url: photo.url,
+              fullUrl: photo.fullUrl ?? null,
+              thumbnailUrl: photo.thumbnailUrl ?? null,
+              type: photo.type,
+              takenAt: photo.takenAt,
+            }))}
+          />
         </CardContent>
       </Card>
 
@@ -487,13 +589,19 @@ export default async function AdminDispatchDetailPage({
               </div>
             )}
 
-            {/* Photo count */}
-            {job.photos?.length > 0 && (
-              <div className="flex items-center gap-2 text-sm text-gray-500 pt-1">
-                <Image className="w-4 h-4" />
-                {job.photos.length} vendor photo{job.photos.length !== 1 ? "s" : ""} attached
-              </div>
-            )}
+            <PhotoGallery
+              title="Vendor Photos"
+              emptyLabel="No vendor photos attached."
+              photos={(job.photos ?? []).map((photo: any) => ({
+                id: photo.id,
+                url: photo.url,
+                fullUrl: photo.fullUrl ?? null,
+                thumbnailUrl: photo.thumbnailUrl ?? null,
+                type: photo.type,
+                caption: photo.caption,
+                takenAt: photo.takenAt,
+              }))}
+            />
 
             {/* Job notes */}
             {job.notes?.length > 0 && (
@@ -508,7 +616,7 @@ export default async function AdminDispatchDetailPage({
                       </span>
                       <span className="text-xs text-gray-400">{formatDate(note.createdAt)}</span>
                     </div>
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{note.content}</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{note.text}</p>
                   </div>
                 ))}
               </div>

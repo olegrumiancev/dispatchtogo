@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
+import { optimizeImageFileForUpload } from "@/lib/client-image";
 import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
 import {
   MapPin,
@@ -54,6 +55,7 @@ interface JobNote {
 interface JobPhoto {
   id: string;
   url: string;
+  fullUrl?: string | null;
   type: string;
   thumbnailUrl?: string | null;
 }
@@ -222,18 +224,25 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     try {
       for (const file of filesToUpload) {
         try {
+          const optimizedFile = await optimizeImageFileForUpload(file);
           const fd = new FormData();
-          fd.append("file", file);
+          fd.append("file", optimizedFile);
           const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
           if (!uploadRes.ok) {
             const d = await uploadRes.json().catch(() => ({}));
             throw new Error(d.error ?? "Upload failed");
           }
-          const { url } = await uploadRes.json();
+          const uploaded = await uploadRes.json();
           const saveRes = await fetch(`/api/jobs/${job.id}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ type: "photo", url, photoType }),
+            body: JSON.stringify({
+              type: "photo",
+              url: uploaded.url,
+              fullUrl: uploaded.fullUrl ?? null,
+              thumbnailUrl: uploaded.thumbnailUrl ?? null,
+              photoType,
+            }),
           });
           if (!saveRes.ok) {
             const d = await saveRes.json().catch(() => ({}));
@@ -244,10 +253,11 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           setPhotos((prev) => [
             ...prev,
             {
-              id: createdPhoto.id,
-              url: createdPhoto.url,
-              type: createdPhoto.type,
-              thumbnailUrl: createdPhoto.thumbnailUrl ?? null,
+                id: createdPhoto.id,
+                url: createdPhoto.url,
+                fullUrl: createdPhoto.fullUrl ?? null,
+                type: createdPhoto.type,
+                thumbnailUrl: createdPhoto.thumbnailUrl ?? null,
             },
           ]);
         } catch (fileErr: any) {
@@ -994,10 +1004,10 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                   <div className="grid grid-cols-3 gap-3">
                     {photos.map((photo) => (
                       <div key={photo.id} className="relative group">
-                        <a href={photo.url} target="_blank" rel="noopener noreferrer">
+                        <a href={photo.fullUrl ?? photo.url} target="_blank" rel="noopener noreferrer">
                           <div className="aspect-square rounded-md overflow-hidden bg-gray-100">
                             <img
-                              src={photo.url}
+                              src={photo.thumbnailUrl ?? photo.url}
                               alt={`${type} photo`}
                               className="w-full h-full object-cover hover:opacity-90 transition-opacity"
                             />

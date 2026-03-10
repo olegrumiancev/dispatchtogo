@@ -576,7 +576,7 @@ export default async function RequestDetailPage({
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {req.photos.map((photo: any) => (
-                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer">
+                <a key={photo.id} href={photo.fullUrl ?? photo.url} target="_blank" rel="noopener noreferrer">
                   <div className="aspect-square rounded-md overflow-hidden bg-gray-100">
                     <img
                       src={photo.thumbnailUrl ?? photo.url}
@@ -588,7 +588,7 @@ export default async function RequestDetailPage({
                 </a>
               ))}
               {req.job?.photos.map((photo: any) => (
-                <a key={photo.id} href={photo.url} target="_blank" rel="noopener noreferrer">
+                <a key={photo.id} href={photo.fullUrl ?? photo.url} target="_blank" rel="noopener noreferrer">
                   <div className="aspect-square rounded-md overflow-hidden bg-gray-100">
                     <img
                       src={photo.thumbnailUrl ?? photo.url}

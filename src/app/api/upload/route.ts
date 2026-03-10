@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isStorageConfigured, uploadFile } from "@/lib/s3-client";
+import { generateImageVariants } from "@/lib/image-processing";
 import crypto from "crypto";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -44,12 +45,34 @@ export async function POST(request: NextRequest) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const ext = file.name.split(".").pop() ?? "jpg";
-    const key = `photos/${crypto.randomUUID()}.${ext}`;
+    const imageId = crypto.randomUUID();
+    const variants = await generateImageVariants(buffer, file.type);
 
-    const url = await uploadFile(key, buffer, file.type);
+    const fullKey = `photos/${imageId}-full.${variants.outputExtension}`;
+    const displayKey = `photos/${imageId}-display.${variants.outputExtension}`;
+    const thumbnailKey = variants.thumbnail
+      ? `photos/${imageId}-thumb.${variants.outputExtension}`
+      : null;
 
-    return NextResponse.json({ url, key }, { status: 201 });
+    const [fullUrl, url, thumbnailUrl] = await Promise.all([
+      uploadFile(fullKey, variants.full, variants.outputContentType),
+      uploadFile(displayKey, variants.display, variants.outputContentType),
+      thumbnailKey && variants.thumbnail
+        ? uploadFile(thumbnailKey, variants.thumbnail, variants.outputContentType)
+        : Promise.resolve(null),
+    ]);
+
+    return NextResponse.json(
+      {
+        url,
+        fullUrl,
+        thumbnailUrl,
+        key: displayKey,
+        fullKey,
+        thumbnailKey,
+      },
+      { status: 201 }
+    );
   } catch (err) {
     console.error("[upload] Error:", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });

@@ -448,7 +448,7 @@ export async function POST(
   }
 
   if (type === "photo") {
-    const { url, photoType, latitude, longitude } = body;
+    const { url, fullUrl, thumbnailUrl, photoType, latitude, longitude } = body;
     if (!url) {
       return NextResponse.json({ error: "url is required for photo type" }, { status: 400 });
     }
@@ -469,6 +469,8 @@ export async function POST(
       data: {
         jobId: id,
         url,
+        fullUrl: fullUrl ?? null,
+        thumbnailUrl: thumbnailUrl ?? null,
         type: photoType ?? "DURING",
       },
     });

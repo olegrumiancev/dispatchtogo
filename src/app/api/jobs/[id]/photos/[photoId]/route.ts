@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { deleteFile, isStorageConfigured } from "@/lib/s3-client";
+import { deleteFile, extractStorageKeyFromUrl, isStorageConfigured } from "@/lib/s3-client";
 import { ensureVendorIsActiveForMutation } from "@/lib/vendor-lifecycle";
 
 const LOCKED_STATUSES = ["COMPLETED", "VERIFIED", "CANCELLED"];
@@ -41,9 +41,10 @@ export async function DELETE(
   // Delete from S3 (best effort — don't fail the request if S3 is unavailable)
   if (isStorageConfigured()) {
     try {
-      // URL is /api/photos/<key> — extract the key from the path
-      const match = photo.url.match(/^\/api\/photos\/(.+)$/);
-      if (match) await deleteFile(match[1]);
+      const keys = [photo.url, (photo as any).fullUrl, (photo as any).thumbnailUrl]
+        .map((url) => extractStorageKeyFromUrl(url))
+        .filter((key, index, arr): key is string => !!key && arr.indexOf(key) === index);
+      await Promise.all(keys.map((key) => deleteFile(key)));
     } catch (err) {
       console.error("[job photo DELETE] S3 delete failed (continuing):", err);
     }

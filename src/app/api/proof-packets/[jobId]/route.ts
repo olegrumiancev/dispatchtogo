@@ -72,12 +72,12 @@ export async function GET(
   // Combine all photos (request intake + job photos)
   const allPhotos = [
     ...req.photos.map((p) => ({
-      url: p.url,
+      url: p.fullUrl ?? p.url,
       type: p.type as string,
       takenAt: p.takenAt,
     })),
     ...job.photos.map((p) => ({
-      url: p.url,
+      url: p.fullUrl ?? p.url,
       type: p.type as string,
       takenAt: p.takenAt,
     })),

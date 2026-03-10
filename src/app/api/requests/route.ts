@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { generateReferenceNumber } from "@/lib/utils";
 import { autoDispatch } from "@/lib/auto-dispatch";
 import { isOrgPaymentGated } from "@/lib/billing";
+import { normalizeUploadedPhotoPayload } from "@/lib/photo-payload";
 import {
   triageServiceRequest,
   storePreClassification,
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
     urgency,
     aiClassification,
     photoUrls,
+    photoUploads,
     preferredVendorId,
   } = body;
 
@@ -126,12 +128,23 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  if (Array.isArray(photoUrls) && photoUrls.length > 0) {
+  const normalizedPhotos = [
+    ...(Array.isArray(photoUploads) ? photoUploads : []),
+    ...(Array.isArray(photoUrls) ? photoUrls : []),
+  ]
+    .map((photo) => normalizeUploadedPhotoPayload(photo))
+    .filter((photo): photo is NonNullable<typeof photo> => !!photo);
+
+  if (normalizedPhotos.length > 0) {
     await prisma.photo.createMany({
-      data: photoUrls.map((url: string) => ({
+      data: normalizedPhotos.map((photo) => ({
         serviceRequestId: serviceRequest.id,
-        url,
-        type: "INTAKE",
+        url: photo.url,
+        fullUrl: photo.fullUrl ?? null,
+        thumbnailUrl: photo.thumbnailUrl ?? null,
+        type: photo.type ?? "INTAKE",
+        latitude: photo.latitude ?? null,
+        longitude: photo.longitude ?? null,
       })),
     });
   }

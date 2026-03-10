@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus } from "lucide-react";
+import { optimizeImageFileForUpload } from "@/lib/client-image";
 
 interface AddPhotosButtonProps {
   requestId: string;
@@ -24,26 +25,37 @@ export function AddPhotosButton({ requestId }: AddPhotosButtonProps) {
     const fileArr = Array.from(files);
 
     try {
-      const urls: string[] = [];
+      const uploads: Array<{
+        url: string;
+        fullUrl?: string | null;
+        thumbnailUrl?: string | null;
+        type: string;
+      }> = [];
 
       for (let i = 0; i < fileArr.length; i++) {
         setProgress(`Uploading ${i + 1} of ${fileArr.length}…`);
+        const optimizedFile = await optimizeImageFileForUpload(fileArr[i]);
         const fd = new FormData();
-        fd.append("file", fileArr[i]);
+        fd.append("file", optimizedFile);
         const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
         if (!uploadRes.ok) {
           const data = await uploadRes.json().catch(() => ({}));
           throw new Error(data.error ?? `Failed to upload photo ${i + 1}`);
         }
-        const { url } = await uploadRes.json();
-        urls.push(url);
+        const uploaded = await uploadRes.json();
+        uploads.push({
+          url: uploaded.url,
+          fullUrl: uploaded.fullUrl ?? null,
+          thumbnailUrl: uploaded.thumbnailUrl ?? null,
+          type: "INTAKE",
+        });
       }
 
       setProgress("Saving…");
       const saveRes = await fetch(`/api/requests/${requestId}/photos`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photos: urls.map((url) => ({ url, type: "INTAKE" })) }),
+          body: JSON.stringify({ photos: uploads }),
       });
 
       if (!saveRes.ok) {

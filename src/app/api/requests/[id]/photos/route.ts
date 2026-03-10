@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { normalizeUploadedPhotoPayload } from "@/lib/photo-payload";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(
@@ -24,14 +25,15 @@ export async function POST(
     );
   }
 
-  // Validate each photo has a URL
-  for (const photo of photos) {
-    if (!photo.url) {
-      return NextResponse.json(
-        { error: "Each photo must have a url" },
-        { status: 400 }
-      );
-    }
+  const normalizedPhotos = photos
+    .map((photo: unknown) => normalizeUploadedPhotoPayload(photo))
+    .filter((photo): photo is NonNullable<typeof photo> => !!photo);
+
+  if (normalizedPhotos.length !== photos.length) {
+    return NextResponse.json(
+      { error: "Each photo must have a valid url" },
+      { status: 400 }
+    );
   }
 
   // Verify the service request exists and the user has access
@@ -49,9 +51,11 @@ export async function POST(
   }
 
   const created = await prisma.photo.createMany({
-    data: photos.map((photo: any) => ({
+    data: normalizedPhotos.map((photo) => ({
       serviceRequestId: id,
       url: photo.url,
+      fullUrl: photo.fullUrl ?? null,
+      thumbnailUrl: photo.thumbnailUrl ?? null,
       type: photo.type ?? "INTAKE",
       latitude: photo.latitude ?? null,
       longitude: photo.longitude ?? null,
