@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Pause,
   Play,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -75,6 +76,7 @@ interface Job {
   enRouteAt: Date | string | null;
   arrivedAt: Date | string | null;
   completedAt: Date | string | null;
+  completionSummary: string | null;
   vendorNotes: string | null;
   totalLabourHours: number | null;
   totalMaterialsCost: number | null;
@@ -91,6 +93,13 @@ interface Job {
 
 interface VendorJobDetailProps {
   job: Job;
+}
+
+interface CompletionAssist {
+  summary: string;
+  proofSummary: string;
+  missingEvidenceFlags: string[];
+  confidence: number;
 }
 
 type JobStatusAction = "accept" | "enroute" | "arrive" | "complete";
@@ -129,9 +138,32 @@ const DECLINE_OPTIONS: { key: DeclineKey; label: string; value: string | null }[
 export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const router = useRouter();
   const sr = job.serviceRequest;
+  const savedMaterialsTotal = job.materials.reduce(
+    (sum, material) => sum + material.unitCost * material.quantity,
+    0
+  );
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [completionSummary, setCompletionSummary] = useState(job.completionSummary ?? "");
+  const [vendorNotesDraft, setVendorNotesDraft] = useState(job.vendorNotes ?? "");
+  const [labourHoursInput, setLabourHoursInput] = useState(
+    job.totalLabourHours != null ? String(job.totalLabourHours) : ""
+  );
+  const [materialsCostInput, setMaterialsCostInput] = useState(
+    job.totalMaterialsCost != null
+      ? String(job.totalMaterialsCost)
+      : savedMaterialsTotal > 0
+      ? String(savedMaterialsTotal)
+      : ""
+  );
+  const [totalCostInput, setTotalCostInput] = useState(
+    job.totalCost != null ? String(job.totalCost) : ""
+  );
+  const [savingCompletion, setSavingCompletion] = useState(false);
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const [completionAssist, setCompletionAssist] = useState<CompletionAssist | null>(null);
+  const [completionAssistLoading, setCompletionAssistLoading] = useState(false);
 
   // Decline flow
   const [showDeclineModal, setShowDeclineModal] = useState(false);
@@ -258,9 +290,17 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   ) => {
     setActionLoading(true);
     setActionError(null);
+    setCompletionError(null);
     try {
-      const body: Record<string, string> = { action };
+      const body: Record<string, string | number | null> = { action };
       if (declineReason) body.declineReason = declineReason;
+      if (action === "complete") {
+        body.completionSummary = completionSummary.trim() || null;
+        body.vendorNotes = vendorNotesDraft.trim() || null;
+        body.totalLabourHours = labourHoursInput.trim() ? Number(labourHoursInput) : null;
+        body.totalMaterialsCost = materialsCostInput.trim() ? Number(materialsCostInput) : null;
+        body.totalCost = totalCostInput.trim() ? Number(totalCostInput) : null;
+      }
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -281,6 +321,58 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     } finally {
       setActionLoading(false);
       setShowDeclineModal(false);
+    }
+  };
+
+  const handleSaveCompletionDraft = async () => {
+    setSavingCompletion(true);
+    setCompletionError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          vendorNotes: vendorNotesDraft.trim() || null,
+          completionSummary: completionSummary.trim() || null,
+          totalLabourHours: labourHoursInput.trim() ? Number(labourHoursInput) : null,
+          totalMaterialsCost: materialsCostInput.trim() ? Number(materialsCostInput) : null,
+          totalCost: totalCostInput.trim() ? Number(totalCostInput) : null,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setCompletionError(data.error ?? "Failed to save completion details.");
+        return;
+      }
+
+      router.refresh();
+    } catch {
+      setCompletionError("Network error. Please try again.");
+    } finally {
+      setSavingCompletion(false);
+    }
+  };
+
+  const handleGenerateCompletionAssist = async () => {
+    setCompletionAssistLoading(true);
+    setCompletionError(null);
+    try {
+      const res = await fetch(`/api/jobs/${job.id}/completion-assist`);
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setCompletionError(data.error ?? "Failed to generate completion draft.");
+        return;
+      }
+
+      const assist = (data.data ?? data) as CompletionAssist;
+      setCompletionAssist(assist);
+      setCompletionSummary((current) => current || assist.summary);
+    } catch {
+      setCompletionError("Network error. Please try again.");
+    } finally {
+      setCompletionAssistLoading(false);
     }
   };
 
@@ -421,10 +513,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     }
   };
 
-  const existingMaterialsTotal = job.materials.reduce(
-    (sum, m) => sum + m.unitCost * m.quantity,
-    0
-  );
+  const existingMaterialsTotal = savedMaterialsTotal;
   const newMaterialsTotal = newMaterials.reduce((sum, m) => sum + (parseFloat(m.qty) || 0) * m.unitCost, 0);
 
   // Tomorrow's date for the min on the return date picker
@@ -590,6 +679,123 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Completion draft */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle>Completion Details</CardTitle>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={completionAssistLoading}
+              onClick={handleGenerateCompletionAssist}
+            >
+              <Sparkles className="w-4 h-4" />
+              Draft With AI
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {completionError && <p className="text-xs text-red-600">{completionError}</p>}
+
+          {completionAssist && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
+              <p className="text-sm font-medium text-blue-900">AI completion review</p>
+              <p className="text-sm text-blue-900">{completionAssist.proofSummary}</p>
+              {completionAssist.missingEvidenceFlags.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-blue-700 mb-1">Missing Evidence Flags</p>
+                  <ul className="space-y-1 text-sm text-blue-900">
+                    {completionAssist.missingEvidenceFlags.map((flag, index) => (
+                      <li key={index}>- {flag}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+              Completion Summary
+            </label>
+            <Textarea
+              placeholder="Summarize what you completed, what was repaired or replaced, and the final result."
+              value={completionSummary}
+              onChange={(e) => setCompletionSummary(e.target.value)}
+              rows={4}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+              Vendor Notes
+            </label>
+            <Textarea
+              placeholder="Add any additional context, follow-up items, or operator-facing notes."
+              value={vendorNotesDraft}
+              onChange={(e) => setVendorNotesDraft(e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+                Labour Hours
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.25"
+                value={labourHoursInput}
+                onChange={(e) => setLabourHoursInput(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+                Materials Cost
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={materialsCostInput}
+                onChange={(e) => setMaterialsCostInput(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+                Total Cost
+              </label>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={totalCostInput}
+                onChange={(e) => setTotalCostInput(e.target.value)}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              variant="secondary"
+              loading={savingCompletion}
+              onClick={handleSaveCompletionDraft}
+            >
+              Save Draft
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Pause modal */}
       {showPauseModal && (

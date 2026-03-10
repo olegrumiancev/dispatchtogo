@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -35,6 +35,8 @@ export function UserActions({
   isAdmin,
 }: UserActionsProps) {
   const router = useRouter();
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -42,6 +44,12 @@ export function UserActions({
   const [rejectionNote, setRejectionNote] = useState("");
   const [showMenu, setShowMenu] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [menuPosition, setMenuPosition] = useState<{
+    top: number;
+    left: number;
+    origin: "top" | "bottom";
+    ready: boolean;
+  } | null>(null);
 
   const displayName = userName || userEmail;
 
@@ -160,6 +168,49 @@ export function UserActions({
     }
   };
 
+  useEffect(() => {
+    if (!showMenu) {
+      setMenuPosition(null);
+      return;
+    }
+
+    const updatePosition = () => {
+      if (!buttonRef.current || !menuRef.current) return;
+
+      const buttonRect = buttonRef.current.getBoundingClientRect();
+      const menuWidth = menuRef.current.offsetWidth;
+      const menuHeight = menuRef.current.offsetHeight;
+      const viewportPadding = 8;
+      const gap = 8;
+
+      let left = buttonRect.right - menuWidth;
+      left = Math.max(viewportPadding, Math.min(left, window.innerWidth - menuWidth - viewportPadding));
+
+      const openUp =
+        buttonRect.bottom + gap + menuHeight > window.innerHeight - viewportPadding &&
+        buttonRect.top - gap - menuHeight >= viewportPadding;
+
+      let top = openUp ? buttonRect.top - menuHeight - gap : buttonRect.bottom + gap;
+      top = Math.max(viewportPadding, Math.min(top, window.innerHeight - menuHeight - viewportPadding));
+
+      setMenuPosition({
+        top,
+        left,
+        origin: openUp ? "bottom" : "top",
+        ready: true,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [showMenu]);
+
   // ── Pending approval state: prominent Approve / Reject buttons ──
   if (isPending) {
     return (
@@ -225,8 +276,9 @@ export function UserActions({
   // ── All other states: dropdown-style menu ──
   return (
     <>
-      <div className="relative inline-block text-left">
+      <div className="inline-block text-left">
         <button
+          ref={buttonRef}
           onClick={() => setShowMenu(!showMenu)}
           className="p-1.5 rounded-md hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-700"
           title="Actions"
@@ -237,9 +289,19 @@ export function UserActions({
         {showMenu && (
           <>
             {/* Backdrop to close menu */}
-            <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+            <div className="fixed inset-0 z-20" onClick={() => setShowMenu(false)} />
 
-            <div className="absolute right-0 z-20 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+            <div
+              ref={menuRef}
+              className={`fixed z-30 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg ${
+                menuPosition?.origin === "bottom" ? "origin-bottom-right" : "origin-top-right"
+              }`}
+              style={{
+                top: menuPosition?.top ?? 0,
+                left: menuPosition?.left ?? 0,
+                visibility: menuPosition?.ready ? "visible" : "hidden",
+              }}
+            >
               {/* Re-approve (for rejected users) */}
               {isRejected && (
                 <button

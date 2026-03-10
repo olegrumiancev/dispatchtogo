@@ -14,7 +14,6 @@ import {
   UserCircle,
   Send,
   Users,
-  Building,
   BarChart3,
   Bell,
   Menu,
@@ -54,9 +53,7 @@ const VENDOR_NAV: NavItem[] = [
 const ADMIN_NAV: NavItem[] = [
   { href: "/app/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/app/admin/dispatch", label: "Dispatch Board", icon: Send },
-  { href: "/app/admin/vendors", label: "Vendors", icon: Users },
-  { href: "/app/admin/organizations", label: "Organizations", icon: Building },
-  { href: "/app/admin/users", label: "Users", icon: UserCog },
+  { href: "/app/admin/accounts", label: "Accounts", icon: UserCog },
   { href: "/app/admin/reports", label: "Reports", icon: BarChart3 },
   { href: "/app/admin/billing", label: "Billing", icon: CreditCard },
   { href: "/app/admin/notifications", label: "Notifications", icon: Bell },
@@ -84,6 +81,11 @@ export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarP
   const isActive = (href: string) => {
     if (href === "/app/operator" || href === "/app/vendor/jobs" || href === "/app/admin") {
       return pathname === href;
+    }
+    if (href === "/app/admin/accounts") {
+      return ["/app/admin/accounts", "/app/admin/organizations", "/app/admin/vendors", "/app/admin/users"].some((path) =>
+        pathname.startsWith(path)
+      );
     }
     return pathname.startsWith(href);
   };

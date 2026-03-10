@@ -36,8 +36,10 @@ export interface AiTriageData {
   urgency: UrgencyLevel;
   requiresLicensedTrade: boolean;
   summary: string;
+  reasoning?: string;
   clarifyingQuestions: string[];
   suggestedVendorCategories: ServiceCategory[];
+  statusSuggestion?: "READY_TO_DISPATCH" | "NEEDS_CLARIFICATION";
   confidence: number;
   aiOffline?: boolean;
 }
@@ -131,6 +133,12 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
               {confLabel} ({Math.round(triage.confidence * 100)}%)
             </Badge>
 
+            {triage.statusSuggestion === "NEEDS_CLARIFICATION" && (
+              <Badge className="bg-amber-100 text-amber-800">
+                Needs clarification
+              </Badge>
+            )}
+
             {/* Licensed trade warning */}
             {triage.requiresLicensedTrade && (
               <Badge className="bg-amber-100 text-amber-800 gap-1">
@@ -142,9 +150,14 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
 
           {/* Summary text */}
           <p className="text-sm text-purple-900">{triage.summary}</p>
+
+          {/* Reasoning — always visible */}
+          {triage.reasoning && (
+            <p className="text-sm text-purple-700 italic">{triage.reasoning}</p>
+          )}
         </div>
 
-        {/* Expand / Re-triage controls */}
+        {/* Re-triage / chevron controls */}
         <div className="flex items-center gap-2 flex-shrink-0">
           {onRetriage && (
             <button
@@ -156,7 +169,7 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
               {retriaging ? "Running…" : "Re-triage"}
             </button>
           )}
-          {(triage.clarifyingQuestions?.length > 0 || triage.suggestedVendorCategories?.length > 0) && (
+          {triage.clarifyingQuestions?.length > 0 && (
             <button
               onClick={() => setExpanded((e) => !e)}
               className="text-purple-500 hover:text-purple-700"
@@ -168,41 +181,20 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
         </div>
       </div>
 
-      {/* Expandable section */}
-      {expanded && (
-        <div className="border-t border-purple-200 px-4 py-3 space-y-3 bg-white">
-          {/* Suggested vendor categories */}
-          {triage.suggestedVendorCategories?.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-                Suggested vendor categories
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {triage.suggestedVendorCategories.map((cat) => (
-                  <Badge key={cat} className="bg-blue-50 text-blue-700">
-                    {getCategoryLabel(cat)}
-                  </Badge>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Clarifying questions */}
-          {triage.clarifyingQuestions?.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
-                Clarifying questions
-              </p>
-              <ul className="space-y-1">
-                {triage.clarifyingQuestions.map((q, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                    <HelpCircle className="w-3.5 h-3.5 text-purple-400 flex-shrink-0 mt-0.5" />
-                    {q}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+      {/* Expandable section — clarifying questions only */}
+      {expanded && triage.clarifyingQuestions?.length > 0 && (
+        <div className="border-t border-purple-200 px-4 py-3 bg-white">
+          <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
+            Clarifying questions
+          </p>
+          <ul className="space-y-1">
+            {triage.clarifyingQuestions.map((q, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
+                <HelpCircle className="w-3.5 h-3.5 text-purple-400 flex-shrink-0 mt-0.5" />
+                {q}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>

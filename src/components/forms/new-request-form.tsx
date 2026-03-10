@@ -48,6 +48,8 @@ interface ClassificationResult {
   confidence: number;
   reasoning: string;
   requiresLicensedTrade: boolean;
+  statusSuggestion: "READY_TO_DISPATCH" | "NEEDS_CLARIFICATION";
+  clarifyingQuestions: string[];
 }
 
 type Step = "describe" | "review";
@@ -265,6 +267,8 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                 confidence: classification.confidence,
                 reasoning: classification.reasoning,
                 requiresLicensedTrade: classification.requiresLicensedTrade,
+                clarifyingQuestions: classification.clarifyingQuestions,
+                statusSuggestion: classification.statusSuggestion,
                 operatorOverrodeCategory:
                   editCategory.trim().toLowerCase() !==
                   classification.category.trim().toLowerCase(),
@@ -644,6 +648,21 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                     {classification.reasoning}
                   </p>
                 </div>
+
+                {classification.statusSuggestion === "NEEDS_CLARIFICATION" && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-sm font-medium text-amber-900">
+                      This request will be held for clarification before dispatch.
+                    </p>
+                    {classification.clarifyingQuestions.length > 0 && (
+                      <ul className="mt-2 space-y-1 text-sm text-amber-800">
+                        {classification.clarifyingQuestions.map((question, index) => (
+                          <li key={index}>- {question}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -717,7 +736,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-gray-500">
-                Leave blank to let the system automatically assign the best available vendor.
+                Leave blank to let the system assign a matching available vendor.
               </p>
               {loadingVendors ? (
                 <p className="text-sm text-gray-400">Loading vendors…</p>

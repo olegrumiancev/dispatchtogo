@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { ensureOrganizationIsActiveForMutation } from "@/lib/organization-lifecycle";
 import { prisma } from "@/lib/prisma";
 import { generateReferenceNumber } from "@/lib/utils";
 import { autoDispatch } from "@/lib/auto-dispatch";
@@ -34,7 +35,6 @@ export async function GET(request: NextRequest) {
     }
     where.job = { vendorId: user.vendorId };
   }
-  // ADMIN sees all
 
   if (status) {
     where.status = status;
@@ -77,9 +77,19 @@ export async function POST(request: NextRequest) {
   if (!user.organizationId) {
     return NextResponse.json({ error: "No organization linked to user" }, { status: 400 });
   }
+  const guard = await ensureOrganizationIsActiveForMutation(user.organizationId);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const body = await request.json();
-  const { propertyId, description, category, urgency, aiClassification, photoUrls, preferredVendorId } = body;
+  const {
+    propertyId,
+    description,
+    category,
+    urgency,
+    aiClassification,
+    photoUrls,
+    preferredVendorId,
+  } = body;
 
   if (!propertyId || !description || !category) {
     return NextResponse.json(
@@ -88,7 +98,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Verify property belongs to the operator's organization
   const property = await prisma.property.findFirst({
     where: { id: propertyId, organizationId: user.organizationId },
   });
@@ -117,7 +126,6 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Save intake photos if provided
   if (Array.isArray(photoUrls) && photoUrls.length > 0) {
     await prisma.photo.createMany({
       data: photoUrls.map((url: string) => ({
@@ -128,42 +136,47 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  // AI triage: store pre-classification if provided, otherwise run fresh
+  let triageResult: Awaited<ReturnType<typeof triageServiceRequest>> | null = null;
   try {
     if (aiClassification) {
-      await storePreClassification(
+      triageResult = await storePreClassification(
         serviceRequest.id,
         aiClassification as PreClassificationData
       );
     } else {
-      await triageServiceRequest(serviceRequest.id);
+      triageResult = await triageServiceRequest(serviceRequest.id);
     }
   } catch (err) {
     console.error("[ai-triage] Error:", err);
   }
 
-  // Check if this org is payment-gated (free plan limit hit, no payment method)
-  const paymentGated = await isOrgPaymentGated(user.organizationId);
+  const needsClarification =
+    triageResult?.statusSuggestion === "NEEDS_CLARIFICATION";
 
   let paymentRequired = false;
-  if (paymentGated) {
-    // Hold the request at READY_TO_DISPATCH — it will be released after payment is added
+  if (needsClarification) {
     await prisma.serviceRequest.update({
       where: { id: serviceRequest.id },
-      data: { status: "READY_TO_DISPATCH" },
+      data: { status: "NEEDS_CLARIFICATION" },
     });
-    paymentRequired = true;
   } else {
-    // Auto-dispatch: try to find a matching vendor and assign automatically
-    // Must await on serverless (Vercel) — fire-and-forget won't survive function teardown
-    try {
-      await autoDispatch(serviceRequest.id, preferredVendorId || null);
-    } catch (err) {
-      console.error("[auto-dispatch] Error:", err);
+    const paymentGated = await isOrgPaymentGated(user.organizationId);
+
+    if (paymentGated) {
+      await prisma.serviceRequest.update({
+        where: { id: serviceRequest.id },
+        data: { status: "READY_TO_DISPATCH" },
+      });
+      paymentRequired = true;
+    } else {
+      try {
+        await autoDispatch(serviceRequest.id, preferredVendorId || null);
+      } catch (err) {
+        console.error("[auto-dispatch] Error:", err);
+      }
     }
   }
 
-  // Re-fetch with updated status after triage + dispatch
   const updated = await prisma.serviceRequest.findUnique({
     where: { id: serviceRequest.id },
     include: {

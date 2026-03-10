@@ -28,7 +28,7 @@ export const authOptions: NextAuthOptions = {
 
         const user = await prisma.user.findUnique({
           where: { email: normalizedEmail },
-          include: { organization: true },
+          include: { organization: true, vendor: true },
         });
 
         if (!user || !user.passwordHash) {
@@ -52,6 +52,32 @@ export const authOptions: NextAuthOptions = {
         // Check if account is disabled
         if (user.isDisabled) {
           throw new Error("ACCOUNT_DISABLED");
+        }
+
+        if (
+          user.role === "OPERATOR" &&
+          user.organization &&
+          user.organization.status !== "ACTIVE"
+        ) {
+          if (user.organization.status === "SUSPENDED") {
+            throw new Error("ORG_SUSPENDED");
+          }
+          if (user.organization.status === "OFFBOARDED") {
+            throw new Error("ORG_OFFBOARDED");
+          }
+        }
+
+        if (
+          user.role === "VENDOR" &&
+          user.vendor &&
+          user.vendor.status !== "ACTIVE"
+        ) {
+          if (user.vendor.status === "SUSPENDED") {
+            throw new Error("VENDOR_SUSPENDED");
+          }
+          if (user.vendor.status === "OFFBOARDED") {
+            throw new Error("VENDOR_OFFBOARDED");
+          }
         }
 
         // Check admin approval (admins skip this check)

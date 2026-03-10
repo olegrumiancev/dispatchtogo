@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureVendorIsActiveForMutation } from "@/lib/vendor-lifecycle";
 
 const VALID_TYPES = [
   "TRADE_LICENSE",
@@ -25,6 +26,10 @@ export async function POST(
 
   if (user.role !== "ADMIN" && user.vendorId !== id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (user.role === "VENDOR") {
+    const guard = await ensureVendorIsActiveForMutation(id);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
 
   let body: any;
@@ -94,6 +99,10 @@ export async function DELETE(
 
   if (user.role !== "ADMIN" && user.vendorId !== id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (user.role === "VENDOR") {
+    const guard = await ensureVendorIsActiveForMutation(id);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
 
   let body: any;

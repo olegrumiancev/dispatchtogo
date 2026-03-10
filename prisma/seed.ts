@@ -66,7 +66,7 @@ async function main() {
       serviceArea: 'Cornwall & SDG',
       serviceRadiusKm: 50,
       specialties: ['Plumbing', 'HVAC'],
-      isActive: true,
+      status: "ACTIVE",
     },
   })
 
@@ -83,7 +83,7 @@ async function main() {
       serviceArea: 'Cornwall & SDG',
       serviceRadiusKm: 40,
       specialties: ['Electrical'],
-      isActive: true,
+      status: "ACTIVE",
     },
   })
 
@@ -100,7 +100,7 @@ async function main() {
       serviceArea: 'Cornwall & SDG',
       serviceRadiusKm: 60,
       specialties: ['Snow Removal', 'Landscaping', 'General Maintenance'],
-      isActive: true,
+      status: "ACTIVE",
     },
   })
 

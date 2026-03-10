@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { generateCredentialAssist } from "@/lib/ai-assist";
 import { prisma } from "@/lib/prisma";
 import { isStorageConfigured, uploadFile } from "@/lib/s3-client";
+import { ensureVendorIsActiveForMutation } from "@/lib/vendor-lifecycle";
 import crypto from "crypto";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -34,6 +36,10 @@ export async function POST(
 
   if (user.role !== "ADMIN" && user.vendorId !== id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (user.role === "VENDOR") {
+    const guard = await ensureVendorIsActiveForMutation(id);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
 
   if (!isStorageConfigured()) {
@@ -97,6 +103,10 @@ export async function POST(
   const updated = await prisma.vendorCredential.update({
     where: { id: credentialId },
     data: { documentUrl: url },
+  });
+
+  generateCredentialAssist(updated.id).catch((err) => {
+    console.error("[credential-upload] Failed to persist credential assist:", err);
   });
 
   return NextResponse.json({ url: updated.documentUrl }, { status: 200 });

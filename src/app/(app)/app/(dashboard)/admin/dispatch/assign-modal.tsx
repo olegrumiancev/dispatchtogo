@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Send } from "lucide-react";
+import { Send, Sparkles } from "lucide-react";
 import { SERVICE_CATEGORIES, VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
 
 interface Vendor {
@@ -23,6 +23,13 @@ interface AssignModalProps {
   vendors: Vendor[];
 }
 
+interface DispatchAssist {
+  brief: string;
+  siteRisks: string[];
+  calloutPoints: string[];
+  questionsToConfirm: string[];
+}
+
 function getCategoryLabel(category: string) {
   return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
 }
@@ -37,6 +44,45 @@ export default function AssignModal({ requestRef, requestId, vendors }: AssignMo
   const [selectedVendor, setSelectedVendor] = useState<string>("");
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dispatchAssist, setDispatchAssist] = useState<DispatchAssist | null>(null);
+  const [assistLoading, setAssistLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !selectedVendor) {
+      setDispatchAssist(null);
+      setAssistLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAssistLoading(true);
+    fetch(`/api/requests/${requestId}/dispatch-assist?vendorId=${selectedVendor}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data.error ?? "Failed to prepare handoff");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setDispatchAssist(data.data ?? data);
+        }
+      })
+      .catch((err: any) => {
+        if (!cancelled) {
+          setDispatchAssist(null);
+          setError(err.message ?? "Failed to prepare handoff");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAssistLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, requestId, selectedVendor]);
 
   const handleAssign = async () => {
     if (!selectedVendor) return;
@@ -140,6 +186,64 @@ export default function AssignModal({ requestRef, requestId, vendors }: AssignMo
                   </label>
                 );
               })}
+            </div>
+          )}
+
+          {selectedVendor && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-blue-900">
+                <Sparkles className="w-4 h-4" />
+                AI Dispatch Handoff
+              </div>
+              <p className="text-xs text-blue-700">
+                This prepares a neutral handoff for the vendor you selected. It does not rank vendors or influence vendor choice.
+              </p>
+
+              {assistLoading ? (
+                <p className="text-sm text-blue-700">Preparing handoff brief…</p>
+              ) : dispatchAssist ? (
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-blue-700 mb-1">Brief</p>
+                    <p className="text-blue-950">{dispatchAssist.brief}</p>
+                  </div>
+
+                  {dispatchAssist.calloutPoints.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-blue-700 mb-1">Callout Points</p>
+                      <ul className="space-y-1 text-blue-900">
+                        {dispatchAssist.calloutPoints.map((point, index) => (
+                          <li key={index}>- {point}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {dispatchAssist.siteRisks.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-blue-700 mb-1">Site Risks</p>
+                      <ul className="space-y-1 text-blue-900">
+                        {dispatchAssist.siteRisks.map((risk, index) => (
+                          <li key={index}>- {risk}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {dispatchAssist.questionsToConfirm.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium uppercase tracking-wider text-blue-700 mb-1">Questions To Confirm</p>
+                      <ul className="space-y-1 text-blue-900">
+                        {dispatchAssist.questionsToConfirm.map((question, index) => (
+                          <li key={index}>- {question}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-blue-700">No handoff brief available yet.</p>
+              )}
             </div>
           )}
 

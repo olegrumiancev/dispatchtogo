@@ -5,20 +5,16 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import { URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import {
+  getAdminOperatorRequestStatusColor,
+  getAdminOperatorRequestStatusLabel,
+} from "@/lib/admin-operator-request-status";
 import { ClipboardList, Clock, CheckCircle, TrendingUp, Plus } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusColor(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusLabel(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
 function getCategoryLabel(category: string) {
@@ -281,8 +277,8 @@ export default async function OperatorDashboard() {
                       </Badge>
                     </td>
                     <td className="px-6 py-4">
-                      <Badge variant={getStatusColor(req.status)}>
-                        {getStatusLabel(req.status)}
+                      <Badge variant={getAdminOperatorRequestStatusColor(req.status)}>
+                        {getAdminOperatorRequestStatusLabel(req.status)}
                       </Badge>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 hidden lg:table-cell">

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -30,8 +31,8 @@ export interface SerializedUser {
   rejectedAt: string | null;
   rejectionNote: string | null;
   createdAt: string;
-  organization: { name: string } | null;
-  vendor: { companyName: string } | null;
+  organization: { id: string; name: string } | null;
+  vendor: { id: string; companyName: string } | null;
 }
 
 const ROLE_CONFIG: Record<string, { label: string; color: string; icon: React.ElementType }> = {
@@ -51,7 +52,15 @@ function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: 
     : <ChevronDown className="w-3.5 h-3.5 inline ml-1 text-blue-600" />;
 }
 
-export function UserTableClient({ users }: { users: SerializedUser[] }) {
+export function UserTableClient({
+  users,
+  initialOrgId = null,
+  initialVendorId = null,
+}: {
+  users: SerializedUser[];
+  initialOrgId?: string | null;
+  initialVendorId?: string | null;
+}) {
   const [tab, setTab] = useState<TabKey>("active");
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<SortField>("createdAt");
@@ -86,8 +95,13 @@ export function UserTableClient({ users }: { users: SerializedUser[] }) {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return tabUsers;
-    return tabUsers.filter((u) => {
+    const scopedUsers = tabUsers.filter((u) => {
+      if (initialOrgId && u.organization?.id !== initialOrgId) return false;
+      if (initialVendorId && u.vendor?.id !== initialVendorId) return false;
+      return true;
+    });
+    if (!q) return scopedUsers;
+    return scopedUsers.filter((u) => {
       const org = u.organization?.name ?? u.vendor?.companyName ?? "";
       return (
         (u.name ?? "").toLowerCase().includes(q) ||
@@ -96,7 +110,7 @@ export function UserTableClient({ users }: { users: SerializedUser[] }) {
         org.toLowerCase().includes(q)
       );
     });
-  }, [tabUsers, search]);
+  }, [initialOrgId, initialVendorId, tabUsers, search]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -283,11 +297,23 @@ export function UserTableClient({ users }: { users: SerializedUser[] }) {
                         <Badge variant={cfg.color}>{cfg.label}</Badge>
                       </td>
                       <td className="px-6 py-4 hidden md:table-cell">
-                        <p className="text-sm text-gray-600">
-                          {u.organization?.name ?? u.vendor?.companyName ?? (
-                            <span className="text-gray-400">&mdash;</span>
-                          )}
-                        </p>
+                        {u.organization ? (
+                          <Link
+                            href={`/app/admin/organizations?org=${u.organization.id}`}
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {u.organization.name}
+                          </Link>
+                        ) : u.vendor ? (
+                          <Link
+                            href={`/app/admin/vendors/${u.vendor.id}`}
+                            className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {u.vendor.companyName}
+                          </Link>
+                        ) : (
+                          <span className="text-sm text-gray-400">&mdash;</span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         {u.role === "ADMIN" ? (

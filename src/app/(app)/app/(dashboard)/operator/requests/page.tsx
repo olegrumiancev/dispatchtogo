@@ -6,6 +6,10 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES, BILLING_PLANS, BILLING_JOB_TAG_STYLES } from "@/lib/constants";
+import {
+  getAdminOperatorRequestStatusColor,
+  getAdminOperatorRequestStatusLabel,
+} from "@/lib/admin-operator-request-status";
 import { Plus, Eye, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Archive, CheckCircle2, BadgeCheck, Camera } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
@@ -15,14 +19,6 @@ const PAGE_SIZE = 20;
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusColor(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusLabel(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
 function getCategoryLabel(category: string) {
@@ -266,7 +262,7 @@ export default async function RequestsPage({
             >
               <option value="">All Statuses</option>
               {REQUEST_STATUSES.filter((s) => !["CANCELLED", "COMPLETED", "VERIFIED"].includes(s.value)).map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
+                <option key={s.value} value={s.value}>{getAdminOperatorRequestStatusLabel(s.value)}</option>
               ))}
             </select>
           )}
@@ -355,7 +351,7 @@ export default async function RequestsPage({
             )}
             {statusFilter && view === "active" && (
               <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                Status: {getStatusLabel(statusFilter)}
+                Status: {getAdminOperatorRequestStatusLabel(statusFilter)}
                 <Link
                   href={buildUrl({ status: "", page: "1" })}
                   className="hover:text-blue-900 ml-0.5"
@@ -471,9 +467,14 @@ export default async function RequestsPage({
                       <div className="flex flex-col gap-1 items-start">
                         <Link
                           href={buildUrl({ status: req.status, page: "1" })}
-                          title={`Filter by status: ${getStatusLabel(req.status)}`}
+                          title={`Filter by status: ${getAdminOperatorRequestStatusLabel(req.status)}`}
                         >
-                          <Badge variant={getStatusColor(req.status)} className="cursor-pointer hover:opacity-80 transition-opacity">{getStatusLabel(req.status)}</Badge>
+                          <Badge
+                            variant={getAdminOperatorRequestStatusColor(req.status)}
+                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                          >
+                            {getAdminOperatorRequestStatusLabel(req.status)}
+                          </Badge>
                         </Link>
                         {(() => {
                           const tag = getBillingTag(req.job, billingRankMap);

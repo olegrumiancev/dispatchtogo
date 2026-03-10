@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { generateDispatchAssist } from "@/lib/ai-assist";
 import { prisma } from "@/lib/prisma";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 import { sendVendorDispatchNotification } from "@/lib/sms";
@@ -41,6 +42,13 @@ export async function POST(
     );
   }
 
+  if (serviceRequest.status === "NEEDS_CLARIFICATION") {
+    return NextResponse.json(
+      { error: "This request needs clarification before it can be dispatched" },
+      { status: 409 }
+    );
+  }
+
   const existingJob = await prisma.job.findFirst({
     where: {
       serviceRequestId: id,
@@ -54,10 +62,16 @@ export async function POST(
     );
   }
 
-  // Verify vendor exists
+  // Verify vendor exists and is platform-active
   const vendor = await prisma.vendor.findUnique({ where: { id: vendorId } });
   if (!vendor) {
     return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
+  }
+  if (vendor.status !== "ACTIVE") {
+    return NextResponse.json(
+      { error: "This vendor is not active and cannot receive new dispatches." },
+      { status: 409 }
+    );
   }
 
   // Check for a previously declined job record to reuse
@@ -145,6 +159,10 @@ export async function POST(
       })
       .catch((e) => console.error("[dispatch] In-app notification failed:", e));
   }
+
+  generateDispatchAssist(id, vendorId).catch((err) => {
+    console.error("[dispatch] Failed to persist dispatch handoff assist:", err);
+  });
 
   return NextResponse.json(job, { status: 201 });
 }

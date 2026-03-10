@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { getStoredTriageArtifact, type CompletionAssist } from "@/lib/ai-assist";
+import { AI_ARTIFACT_ACTIONS, getLatestAiArtifact } from "@/lib/ai-artifacts";
 import { prisma } from "@/lib/prisma";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import { URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import {
+  getAdminOperatorRequestStatusColor,
+  getAdminOperatorRequestStatusLabel,
+} from "@/lib/admin-operator-request-status";
 import { ArrowLeft, MapPin, Calendar, User, Wrench, CheckCircle, Phone, FileText, Package, Download } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { CompletionReviewActions } from "@/components/forms/completion-review-actions";
@@ -16,14 +22,6 @@ import type { AiTriageData } from "@/components/ui/ai-triage-badge";
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusColor(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusLabel(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
 function getCategoryLabel(category: string) {
@@ -55,7 +53,7 @@ function StatusTimeline({ currentStatus }: TimelineProps) {
       {STATUS_PROGRESSION.map((status, idx) => {
         const isDone = idx < currentIdx;
         const isCurrent = idx === currentIdx;
-        const label = getStatusLabel(status);
+        const label = getAdminOperatorRequestStatusLabel(status);
 
         return (
           <div key={status} className="flex items-center gap-1">
@@ -93,31 +91,44 @@ export default async function RequestDetailPage({
   const orgId: string = user.organizationId!;
   const { id } = await params;
 
-  const req = (await prisma.serviceRequest.findFirst({
-    where: { id, organizationId: orgId },
-    include: {
-      property: true,
-      photos: true,
-      job: {
-        include: {
-          vendor: true,
-          notes: {
-            include: {
-              author: { select: { id: true, name: true, email: true, role: true } },
+  const [req, triageArtifact] = await Promise.all([
+    prisma.serviceRequest.findFirst({
+      where: { id, organizationId: orgId },
+      include: {
+        property: true,
+        photos: true,
+        job: {
+          include: {
+            vendor: true,
+            notes: {
+              include: {
+                author: { select: { id: true, name: true, email: true, role: true } },
+              },
+              orderBy: { createdAt: "asc" },
             },
-            orderBy: { createdAt: "asc" },
+            photos: true,
+            materials: true,
+            proofPacket: true,
           },
-          photos: true,
-          materials: true,
-          proofPacket: true,
         },
+        invoice: true,
+        aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
       },
-      invoice: true,
-      aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
-    },
-  })) as any;
+    }),
+    getStoredTriageArtifact(id),
+  ]);
+
+  const reqAny = req as any;
 
   if (!req) notFound();
+
+  const completionAssistArtifact = req.job
+    ? await getLatestAiArtifact<CompletionAssist>(
+        "JOB",
+        req.job.id,
+        AI_ARTIFACT_ACTIONS.COMPLETION_ASSIST
+      )
+    : null;
 
   const primaryContact = null;
 
@@ -139,8 +150,8 @@ export default async function RequestDetailPage({
           <h1 className="text-2xl font-bold text-gray-900">{req.referenceNumber}</h1>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <Badge variant={getUrgencyColor(req.urgency)}>{req.urgency}</Badge>
-            <Badge variant={getStatusColor(req.status)}>
-              {getStatusLabel(req.status)}
+            <Badge variant={getAdminOperatorRequestStatusColor(req.status)}>
+              {getAdminOperatorRequestStatusLabel(req.status)}
             </Badge>
           </div>
         </div>
@@ -319,18 +330,24 @@ export default async function RequestDetailPage({
 
       {/* AI Triage */}
       {(() => {
-        const reqAny = req as any;
         const aiClass = reqAny.aiClassifications?.[0];
-        const hasTriage = reqAny.aiTriageSummary || aiClass;
+        const hasTriage = reqAny.aiTriageSummary || aiClass || triageArtifact?.data;
         const initialTriage: AiTriageData | null = hasTriage
           ? {
-              category: (aiClass?.suggestedCategory ?? req.category) as AiTriageData["category"],
-              urgency: req.urgency as AiTriageData["urgency"],
-              requiresLicensedTrade: reqAny.requiresLicensedTrade ?? false,
-              summary: reqAny.aiTriageSummary ?? "",
-              clarifyingQuestions: [],
-              suggestedVendorCategories: [req.category as AiTriageData["category"]],
-              confidence: aiClass?.confidence ?? 0.8,
+              category: (triageArtifact?.data.category ?? aiClass?.suggestedCategory ?? req.category) as AiTriageData["category"],
+              urgency: (triageArtifact?.data.urgency ?? req.urgency) as AiTriageData["urgency"],
+              requiresLicensedTrade:
+                triageArtifact?.data.requiresLicensedTrade ??
+                reqAny.requiresLicensedTrade ??
+                false,
+              summary: triageArtifact?.data.summary ?? reqAny.aiTriageSummary ?? "",
+              reasoning: triageArtifact?.data.reasoning ?? aiClass?.reasoning ?? undefined,
+              clarifyingQuestions: triageArtifact?.data.clarifyingQuestions ?? [],
+              suggestedVendorCategories:
+                (triageArtifact?.data.suggestedVendorCategories as AiTriageData["category"][]) ??
+                [req.category as AiTriageData["category"]],
+              statusSuggestion: triageArtifact?.data.statusSuggestion,
+              confidence: triageArtifact?.data.confidence ?? aiClass?.confidence ?? 0.8,
             }
           : null;
         return (
@@ -470,7 +487,32 @@ export default async function RequestDetailPage({
               </div>
             )}
 
-            {req.job.proofPacket && (
+            {completionAssistArtifact?.data && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 space-y-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">
+                    AI Proof Summary
+                  </p>
+                  <p className="text-sm text-emerald-950 whitespace-pre-wrap">
+                    {completionAssistArtifact.data.proofSummary}
+                  </p>
+                </div>
+                {completionAssistArtifact.data.missingEvidenceFlags.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">
+                      Evidence Flags
+                    </p>
+                    <ul className="space-y-1 text-sm text-emerald-900">
+                      {completionAssistArtifact.data.missingEvidenceFlags.map((flag, index) => (
+                        <li key={index}>- {flag}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {req.job.proofPacket?.pdfUrl && (
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
                   Proof Packet

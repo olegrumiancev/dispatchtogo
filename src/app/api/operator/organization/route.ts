@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { ensureOrganizationIsActiveForMutation } from "@/lib/organization-lifecycle";
 import { prisma } from "@/lib/prisma";
 import { ORGANIZATION_TYPES } from "@/lib/constants";
 
@@ -39,6 +40,11 @@ export async function PATCH(request: NextRequest) {
   const user = session.user as any;
   if (user.role !== "OPERATOR") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   if (!user.organizationId) return NextResponse.json({ error: "No organization linked" }, { status: 400 });
+
+  const guard = await ensureOrganizationIsActiveForMutation(user.organizationId);
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  }
 
   const body = await request.json();
   const { name, type, contactEmail, contactPhone, address } = body;

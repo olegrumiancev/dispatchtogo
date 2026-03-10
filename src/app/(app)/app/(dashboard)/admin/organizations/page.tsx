@@ -3,11 +3,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 import { formatDate } from "@/lib/utils";
+import { AdminAccountsSubnav } from "@/components/admin/accounts-subnav";
 import { Building2 } from "lucide-react";
 import { BILLING_PLANS, ORGANIZATION_TYPES } from "@/lib/constants";
+import { getOrganizationStatusMeta } from "@/lib/organization-lifecycle";
 import { ChangePlanButton } from "./change-plan-button";
 import { ChangeTypeButton } from "./change-type-button";
+import { OrganizationLifecycleActions } from "./organization-lifecycle-actions";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 
 export const metadata = {
@@ -31,7 +35,7 @@ const ORG_TYPE_COLORS: Record<string, string> = {
 export default async function AdminOrganizationsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; org?: string }>;
 }) {
   const session = await auth();
   if (!session) redirect("/app/login");
@@ -41,10 +45,14 @@ export default async function AdminOrganizationsPage({
 
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
+  const orgFilter = sp.org ?? "";
+
+  const where = orgFilter ? { id: orgFilter } : undefined;
 
   const [total, organizations] = await Promise.all([
-    prisma.organization.count(),
+    prisma.organization.count({ where }),
     prisma.organization.findMany({
+      where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
@@ -52,6 +60,9 @@ export default async function AdminOrganizationsPage({
         id: true,
         name: true,
         type: true,
+        status: true,
+        suspendedAt: true,
+        offboardedAt: true,
         contactEmail: true,
         contactPhone: true,
         address: true,
@@ -82,6 +93,17 @@ export default async function AdminOrganizationsPage({
         </div>
       </div>
 
+      <AdminAccountsSubnav />
+
+      {orgFilter && (
+        <div className="flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          Showing a linked organization record.
+          <Link href="/app/admin/organizations" className="font-medium text-blue-700 hover:text-blue-900">
+            Clear filter
+          </Link>
+        </div>
+      )}
+
       {/* Table */}
       <Card>
         <div className="overflow-x-auto">
@@ -103,6 +125,9 @@ export default async function AdminOrganizationsPage({
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Plan
                   </th>
+                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
                     Contact Email
                   </th>
@@ -120,6 +145,9 @@ export default async function AdminOrganizationsPage({
                   </th>
                   <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden xl:table-cell">
                     Created
+                  </th>
+                  <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -156,6 +184,23 @@ export default async function AdminOrganizationsPage({
                         <ChangePlanButton orgId={org.id} currentPlan={org.plan} />
                       </div>
                     </td>
+                    <td className="px-6 py-4">
+                      <div className="space-y-1">
+                        <Badge variant={getOrganizationStatusMeta(org.status).color}>
+                          {getOrganizationStatusMeta(org.status).label}
+                        </Badge>
+                        {org.suspendedAt && org.status === "SUSPENDED" && (
+                          <p className="text-xs text-gray-400">
+                            Since {formatDate(org.suspendedAt)}
+                          </p>
+                        )}
+                        {org.offboardedAt && org.status === "OFFBOARDED" && (
+                          <p className="text-xs text-gray-400">
+                            Since {formatDate(org.offboardedAt)}
+                          </p>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-6 py-4 hidden sm:table-cell">
                       <a
                         href={`mailto:${org.contactEmail}`}
@@ -186,13 +231,14 @@ export default async function AdminOrganizationsPage({
                       </span>
                     </td>
                     <td className="px-6 py-4 text-center hidden lg:table-cell">
-                      <span
-                        className={`text-sm font-semibold ${
-                          org._count.users > 0 ? "text-gray-900" : "text-gray-400"
+                      <Link
+                        href={`/app/admin/users?org=${org.id}`}
+                        className={`text-sm font-semibold hover:underline ${
+                          org._count.users > 0 ? "text-blue-600" : "text-gray-400"
                         }`}
                       >
                         {org._count.users}
-                      </span>
+                      </Link>
                     </td>
                     <td className="px-6 py-4 text-center hidden sm:table-cell">
                       <span
@@ -205,6 +251,13 @@ export default async function AdminOrganizationsPage({
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 hidden xl:table-cell">
                       {formatDate(org.createdAt)}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <OrganizationLifecycleActions
+                        orgId={org.id}
+                        orgName={org.name}
+                        status={org.status}
+                      />
                     </td>
                   </tr>
                 ))}

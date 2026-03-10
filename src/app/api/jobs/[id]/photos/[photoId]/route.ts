@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { deleteFile, isStorageConfigured } from "@/lib/s3-client";
+import { ensureVendorIsActiveForMutation } from "@/lib/vendor-lifecycle";
 
 const LOCKED_STATUSES = ["COMPLETED", "VERIFIED", "CANCELLED"];
 
@@ -24,6 +25,8 @@ export async function DELETE(
 
   if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
   if (job.vendorId !== user.vendorId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const guard = await ensureVendorIsActiveForMutation(job.vendorId);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   if (LOCKED_STATUSES.includes(job.serviceRequest.status)) {
     return NextResponse.json(

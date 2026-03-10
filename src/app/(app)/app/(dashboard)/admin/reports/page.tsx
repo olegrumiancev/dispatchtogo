@@ -1,12 +1,16 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { getOrGenerateOpsInsightSummary } from "@/lib/ai-assist";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  REQUEST_STATUSES,
   SERVICE_CATEGORIES,
 } from "@/lib/constants";
+import {
+  getAdminOperatorRequestStatusColor,
+  getAdminOperatorRequestStatusLabel,
+} from "@/lib/admin-operator-request-status";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import {
   ClipboardList,
@@ -20,17 +24,6 @@ import {
 export const metadata = {
   title: "Reports | DispatchToGo Admin",
 };
-
-function getStatusColor(status: string) {
-  return (
-    REQUEST_STATUSES.find((s) => s.value === status)?.color ??
-    "bg-gray-100 text-gray-800"
-  );
-}
-
-function getStatusLabel(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
-}
 
 function getCategoryLabel(category: string) {
   return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
@@ -57,6 +50,8 @@ export default async function AdminReportsPage() {
     requestsByCategory,
     recentRequests,
     completedJobsForAvg,
+    pausedJobs,
+    declinedJobs,
   ] = await Promise.all([
     // Total service requests (all time)
     prisma.serviceRequest.count(),
@@ -70,7 +65,7 @@ export default async function AdminReportsPage() {
     prisma.job.count({ where: { completedAt: { not: null } } }),
 
     // Active vendors
-    prisma.vendor.count({ where: { isActive: true } }),
+    prisma.vendor.count({ where: { status: "ACTIVE" } }),
 
     // Active organizations (have at least one user)
     prisma.organization.count(),
@@ -111,6 +106,8 @@ export default async function AdminReportsPage() {
       take: 500,
       orderBy: { completedAt: "desc" },
     }),
+    prisma.job.count({ where: { isPaused: true } }),
+    prisma.job.count({ where: { status: "DECLINED" } }),
   ]);
 
   // Calculate average resolution time in hours
@@ -126,6 +123,24 @@ export default async function AdminReportsPage() {
   }
 
   const totalInvoiceAmount = invoiceTotal._sum.amount ?? 0;
+  const disputedCount =
+    requestsByStatus.find((row) => row.status === "DISPUTED")?._count.id ?? 0;
+  const opsInsights = await getOrGenerateOpsInsightSummary({
+    totalRequests,
+    requestsThisMonth,
+    requestsByStatus: requestsByStatus.map((row) => ({
+      status: row.status,
+      count: row._count.id,
+    })),
+    requestsByCategory: requestsByCategory.map((row) => ({
+      category: row.category,
+      count: row._count.id,
+    })),
+    avgResolutionHours,
+    disputedCount,
+    pausedCount: pausedJobs,
+    declinedCount: declinedJobs,
+  });
 
   return (
     <div className="space-y-6">
@@ -200,6 +215,59 @@ export default async function AdminReportsPage() {
         </Card>
       </div>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>AI Ops Insights</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-lg font-semibold text-gray-900">{opsInsights.data.headline}</p>
+            <p className="text-xs text-gray-400 mt-1">
+              Generated {formatDate(opsInsights.createdAt)}
+            </p>
+          </div>
+
+          {opsInsights.data.bullets.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                Summary
+              </p>
+              <ul className="space-y-1 text-sm text-gray-700">
+                {opsInsights.data.bullets.map((bullet, index) => (
+                  <li key={index}>- {bullet}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {opsInsights.data.anomalies.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                Anomalies
+              </p>
+              <ul className="space-y-1 text-sm text-amber-800">
+                {opsInsights.data.anomalies.map((anomaly, index) => (
+                  <li key={index}>- {anomaly}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {opsInsights.data.recommendedActions.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
+                Recommended Actions
+              </p>
+              <ul className="space-y-1 text-sm text-gray-700">
+                {opsInsights.data.recommendedActions.map((action, index) => (
+                  <li key={index}>- {action}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Breakdowns row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Requests by Status */}
@@ -233,8 +301,8 @@ export default async function AdminReportsPage() {
                   requestsByStatus.map((row) => (
                     <tr key={row.status} className="hover:bg-gray-50">
                       <td className="px-6 py-3">
-                        <Badge variant={getStatusColor(row.status)}>
-                          {getStatusLabel(row.status)}
+                        <Badge variant={getAdminOperatorRequestStatusColor(row.status)}>
+                          {getAdminOperatorRequestStatusLabel(row.status)}
                         </Badge>
                       </td>
                       <td className="px-6 py-3 text-right font-semibold text-gray-900">
@@ -366,8 +434,8 @@ export default async function AdminReportsPage() {
                             {req.property.name}
                           </td>
                           <td className="px-4 py-3">
-                            <Badge variant={getStatusColor(req.status)}>
-                              {getStatusLabel(req.status)}
+                            <Badge variant={getAdminOperatorRequestStatusColor(req.status)}>
+                              {getAdminOperatorRequestStatusLabel(req.status)}
                             </Badge>
                           </td>
                           <td className="px-4 py-3 text-gray-500 hidden lg:table-cell whitespace-nowrap">

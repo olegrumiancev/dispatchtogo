@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { ensureVendorIsActiveForMutation } from "@/lib/vendor-lifecycle";
 
 const VALID_AVAILABILITY_STATUSES = ["AVAILABLE", "BUSY", "OFF_DUTY"] as const;
 import { SERVICE_CATEGORIES } from "@/lib/constants";
@@ -54,6 +55,10 @@ export async function PATCH(
   // Vendor can only update their own profile; admin can update any
   if (user.role !== "ADMIN" && user.vendorId !== id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (user.role === "VENDOR") {
+    const guard = await ensureVendorIsActiveForMutation(id);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
 
   let body: any;

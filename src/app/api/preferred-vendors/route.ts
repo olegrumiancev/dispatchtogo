@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { ensureOrganizationIsActiveForMutation } from "@/lib/organization-lifecycle";
 import { prisma } from "@/lib/prisma";
 
 /**
@@ -34,7 +35,7 @@ export async function GET() {
   });
 
   const vendors = await prisma.vendor.findMany({
-    where: { isActive: true },
+    where: { status: "ACTIVE" },
     select: { id: true, companyName: true, skills: { select: { category: true } } },
     orderBy: { companyName: "asc" },
   });
@@ -50,6 +51,8 @@ export async function POST(request: NextRequest) {
   if (!user.organizationId) {
     return NextResponse.json({ error: "No organization linked" }, { status: 400 });
   }
+  const guard = await ensureOrganizationIsActiveForMutation(user.organizationId);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const { propertyId, category, vendorId } = await request.json();
 
@@ -68,6 +71,18 @@ export async function POST(request: NextRequest) {
       category: { equals: category, mode: "insensitive" },
     },
   });
+
+  const vendor = await prisma.vendor.findUnique({
+    where: { id: vendorId },
+    select: { id: true, status: true },
+  });
+
+  if (!vendor || vendor.status !== "ACTIVE") {
+    return NextResponse.json(
+      { error: "Preferred vendor must be an active vendor." },
+      { status: 409 }
+    );
+  }
 
   let pref;
   if (existing) {
@@ -105,6 +120,8 @@ export async function DELETE(request: NextRequest) {
   if (!user.organizationId) {
     return NextResponse.json({ error: "No organization linked" }, { status: 400 });
   }
+  const guard = await ensureOrganizationIsActiveForMutation(user.organizationId);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");

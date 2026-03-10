@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { generateCompletionAssist } from "@/lib/ai-assist";
 import { prisma } from "@/lib/prisma";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
+import { ensureVendorIsActiveForMutation } from "@/lib/vendor-lifecycle";
 import {
   sendOperatorStatusUpdate,
   sendJobCompletionNotification,
@@ -82,7 +84,15 @@ export async function PATCH(
   const user = session.user as any;
   const body = await request.json();
 
-  const { action, vendorNotes, totalLabourHours, totalMaterialsCost, totalCost, declineReason } = body;
+  const {
+    action,
+    vendorNotes,
+    completionSummary,
+    totalLabourHours,
+    totalMaterialsCost,
+    totalCost,
+    declineReason,
+  } = body;
 
   const job = await prisma.job.findUnique({
     where: { id },
@@ -97,6 +107,10 @@ export async function PATCH(
   if (user.role === "VENDOR" && job.vendorId !== user.vendorId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+  if (user.role === "VENDOR") {
+    const guard = await ensureVendorIsActiveForMutation(job.vendorId);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  }
   if (user.role === "OPERATOR") {
     return NextResponse.json({ error: "Forbidden: OPERATORs cannot update jobs" }, { status: 403 });
   }
@@ -105,6 +119,7 @@ export async function PATCH(
   const requestData: any = {};
 
   if (vendorNotes !== undefined) jobData.vendorNotes = vendorNotes;
+  if (completionSummary !== undefined) jobData.completionSummary = completionSummary;
   if (totalLabourHours !== undefined) jobData.totalLabourHours = totalLabourHours;
   if (totalMaterialsCost !== undefined) jobData.totalMaterialsCost = totalMaterialsCost;
   if (totalCost !== undefined) jobData.totalCost = totalCost;
@@ -348,6 +363,12 @@ export async function PATCH(
       });
   }
 
+  if (action === "complete") {
+    generateCompletionAssist(id).catch((err) => {
+      console.error("[job PATCH] Failed to persist completion assist:", err);
+    });
+  }
+
   return NextResponse.json(updated);
 }
 
@@ -382,6 +403,10 @@ export async function POST(
   // VENDOR can only add to their own jobs
   if (user.role === "VENDOR" && job.vendorId !== user.vendorId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (user.role === "VENDOR") {
+    const guard = await ensureVendorIsActiveForMutation(job.vendorId);
+    if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
 
   if (type === "note") {

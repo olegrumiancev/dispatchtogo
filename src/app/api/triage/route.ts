@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
+import { getStoredTriageArtifact } from "@/lib/ai-assist";
 import { triageServiceRequest } from "@/lib/ai-triage";
+import { prisma } from "@/lib/prisma";
 
-/**
- * POST /api/triage
- * Admin-only: manually trigger AI triage on an existing service request.
- */
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session) {
@@ -31,7 +28,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Operators are scoped to their own organization
   const where =
     user.role === "OPERATOR"
       ? { id: serviceRequestId, organizationId: user.organizationId as string }
@@ -50,21 +46,23 @@ export async function POST(request: NextRequest) {
 
   if (!triageResult) {
     return NextResponse.json(
-      { error: "AI triage unavailable — check AI_BASE_URL configuration" },
+      { error: "AI triage unavailable - check AI_BASE_URL configuration" },
       { status: 503 }
     );
   }
 
-  // Re-fetch with updated AI data
-  const updated = await prisma.serviceRequest.findUnique({
-    where: { id: serviceRequestId },
-    include: {
-      aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
-    },
-  });
+  const [updated, triageArtifact] = await Promise.all([
+    prisma.serviceRequest.findUnique({
+      where: { id: serviceRequestId },
+      include: {
+        aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
+      },
+    }),
+    getStoredTriageArtifact(serviceRequestId),
+  ]);
 
   return NextResponse.json({
     serviceRequest: updated,
-    triage: triageResult,
+    triage: triageArtifact?.data ?? triageResult,
   });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { ensureOrganizationIsActiveForMutation } from "@/lib/organization-lifecycle";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
@@ -25,6 +26,10 @@ export async function POST(req: NextRequest) {
   }
 
   const orgId = (session.user as any).organizationId as string;
+  const guard = await ensureOrganizationIsActiveForMutation(orgId);
+  if (!guard.ok) {
+    return NextResponse.json({ error: guard.error }, { status: guard.status });
+  }
 
   let body: { name?: string; address?: string; description?: string };
   try {

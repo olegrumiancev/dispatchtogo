@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { ensureOrganizationIsActiveForMutation } from "@/lib/organization-lifecycle";
 import { prisma } from "@/lib/prisma";
 
 // Statuses that are considered "open/active" — the operator must close these before
@@ -37,6 +38,8 @@ export async function PATCH(
 
   const { id } = await params;
   const orgId: string = user.organizationId;
+  const guard = await ensureOrganizationIsActiveForMutation(orgId);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const property = await getPropertyForOperator(id, orgId);
   if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });
@@ -76,6 +79,8 @@ export async function DELETE(
 
   const { id } = await params;
   const orgId: string = user.organizationId;
+  const guard = await ensureOrganizationIsActiveForMutation(orgId);
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const property = await getPropertyForOperator(id, orgId);
   if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });

@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/card";
+import Link from "next/link";
+import { AdminAccountsSubnav } from "@/components/admin/accounts-subnav";
 import { Shield, Building2, Wrench, Clock, Ban } from "lucide-react";
 import { UserTableClient } from "./UserTableClient";
 
@@ -15,20 +17,28 @@ const ROLE_CONFIG: Record<string, { label: string; color: string; icon: React.El
   VENDOR: { label: "Vendor", color: "bg-emerald-100 text-emerald-700", icon: Wrench },
 };
 
-export default async function AdminUsersPage() {
+export default async function AdminUsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ org?: string; vendor?: string }>;
+}) {
   const session = await auth();
   if (!session) redirect("/app/login");
 
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
 
+  const sp = await searchParams;
+  const orgFilter = sp.org ?? "";
+  const vendorFilter = sp.vendor ?? "";
+
   const users = await prisma.user.findMany({
     orderBy: [
       { createdAt: "desc" },
     ],
     include: {
-      organization: { select: { name: true } },
-      vendor: { select: { companyName: true } },
+      organization: { select: { id: true, name: true } },
+      vendor: { select: { id: true, companyName: true } },
     },
   });
 
@@ -60,6 +70,15 @@ export default async function AdminUsersPage() {
 
   const disabledCount = users.filter((u) => u.isDisabled).length;
 
+  const [organizationFilter, vendorFilterRecord] = await Promise.all([
+    orgFilter
+      ? prisma.organization.findUnique({ where: { id: orgFilter }, select: { id: true, name: true } })
+      : Promise.resolve(null),
+    vendorFilter
+      ? prisma.vendor.findUnique({ where: { id: vendorFilter }, select: { id: true, companyName: true } })
+      : Promise.resolve(null),
+  ]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -73,6 +92,27 @@ export default async function AdminUsersPage() {
           </p>
         </div>
       </div>
+
+      <AdminAccountsSubnav />
+
+      {(organizationFilter || vendorFilterRecord) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <span>Filtered to:</span>
+          {organizationFilter && (
+            <span className="rounded-full bg-white px-2 py-0.5 font-medium text-blue-700">
+              Organization: {organizationFilter.name}
+            </span>
+          )}
+          {vendorFilterRecord && (
+            <span className="rounded-full bg-white px-2 py-0.5 font-medium text-blue-700">
+              Vendor: {vendorFilterRecord.companyName}
+            </span>
+          )}
+          <Link href="/app/admin/users" className="font-medium text-blue-700 hover:text-blue-900">
+            Clear filter
+          </Link>
+        </div>
+      )}
 
       {/* Pending approval alert */}
       {pendingCount > 0 && (
@@ -133,7 +173,7 @@ export default async function AdminUsersPage() {
       </div>
 
       {/* Users table with tabs, search, sort */}
-      <UserTableClient users={serializedUsers} />
+      <UserTableClient users={serializedUsers} initialOrgId={orgFilter || null} initialVendorId={vendorFilter || null} />
     </div>
   );
 }

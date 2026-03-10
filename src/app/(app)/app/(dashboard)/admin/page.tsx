@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   Send,
   Users,
-  Building,
   BarChart3,
   Bell,
   ShieldCheck,
@@ -15,6 +14,7 @@ import {
   AlertTriangle,
   Briefcase,
   TrendingUp,
+  UserCog,
 } from "lucide-react";
 
 export const metadata = {
@@ -49,7 +49,7 @@ export default async function AdminDashboardPage() {
       where: { completedAt: { gte: firstOfMonth, not: null } },
     }),
     prisma.serviceRequest.count(),
-    prisma.vendor.count({ where: { isActive: true } }),
+    prisma.vendor.count({ where: { status: "ACTIVE" } }),
     prisma.organization.count(),
     prisma.serviceRequest.count({
       where: { urgency: "EMERGENCY", status: { notIn: ["COMPLETED", "VERIFIED", "CANCELLED"] } },
@@ -106,9 +106,12 @@ export default async function AdminDashboardPage() {
 
   const quickLinks = [
     { href: "/app/admin/dispatch", label: "Dispatch Board", icon: Send, desc: "Assign vendors to pending requests" },
-    { href: "/app/admin/vendors", label: "Vendors", icon: Users, desc: `${activeVendors} active vendors` },
-    { href: "/app/admin/organizations", label: "Organizations", icon: Building, desc: `${totalOrgs} organizations` },
-    { href: "/app/admin/users", label: "User Management", icon: Users, desc: "Manage users and roles" },
+    {
+      href: "/app/admin/accounts",
+      label: "Accounts",
+      icon: UserCog,
+      desc: `${totalOrgs} orgs · ${activeVendors} vendors · user management`,
+    },
     { href: "/app/admin/reports", label: "Reports", icon: BarChart3, desc: "Platform-wide KPIs" },
     { href: "/app/admin/notifications", label: "Notifications", icon: Bell, desc: "SMS configuration" },
     { href: "/app/admin/proof-packets", label: "Proof Packets", icon: ShieldCheck, desc: "Completed job documentation" },

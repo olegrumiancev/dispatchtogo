@@ -33,6 +33,27 @@ export default function RegisterPage() {
     agreedToTerms: false,
   });
 
+  const isOperator = form.role === "OPERATOR";
+  const isVendor = form.role === "VENDOR";
+
+  const pageSubtitle = isOperator
+    ? "Create your organization account"
+    : isVendor
+    ? "Create your vendor account"
+    : "Create your account";
+
+  const cardTitle = isOperator
+    ? "Create Organization Account"
+    : isVendor
+    ? "Create Vendor Account"
+    : "Register";
+
+  const submitLabel = isOperator
+    ? "Create Organization Account"
+    : isVendor
+    ? "Create Vendor Account"
+    : "Create Account";
+
   const set = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -83,6 +104,7 @@ export default function RegisterPage() {
           email: form.email.trim().toLowerCase(),
           password: form.password,
           role: form.role,
+          tosAccepted: form.agreedToTerms,
           organizationName: form.role === "OPERATOR" ? form.organizationName : undefined,
           organizationType: form.role === "OPERATOR" ? form.organizationType : undefined,
           phone: form.phone || undefined,
@@ -138,6 +160,22 @@ export default function RegisterPage() {
               <p className="text-sm text-gray-800">{registeredCategories.join(", ")}</p>
             </div>
           )}
+          {isOperator && (
+            <div className="text-left mb-6 rounded-md border border-blue-200 bg-blue-50 px-4 py-3">
+              <p className="text-xs font-semibold text-blue-700 mb-1">Organization account created</p>
+              <p className="text-sm text-blue-900">
+                Your organization profile and primary account holder login have been created.
+              </p>
+            </div>
+          )}
+          {isVendor && (
+            <div className="text-left mb-6 rounded-md border border-blue-200 bg-blue-50 px-4 py-3">
+              <p className="text-xs font-semibold text-blue-700 mb-1">Vendor account created</p>
+              <p className="text-sm text-blue-900">
+                Your vendor profile and primary account holder login have been created.
+              </p>
+            </div>
+          )}
           <p className="text-sm text-gray-500 mb-6">
             Click the link in the email to verify your account. After verification, an admin will review and approve your registration. You&apos;ll receive an email once approved.
           </p>
@@ -162,12 +200,19 @@ export default function RegisterPage() {
           </div>
         </a>
         <h1 className="text-3xl font-bold text-white">DispatchToGo</h1>
-        <p className="text-slate-400 text-sm mt-1">Create your account</p>
+        <p className="text-slate-400 text-sm mt-1">{pageSubtitle}</p>
       </div>
 
       {/* Card */}
       <div className="bg-white rounded-2xl shadow-2xl p-8">
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Register</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-2">{cardTitle}</h2>
+        <p className="text-sm text-gray-500 mb-6">
+          {isOperator
+            ? "Set up your organization and create the primary account holder login."
+            : isVendor
+            ? "Set up your vendor profile and create the primary account holder login."
+            : "Choose your role to continue."}
+        </p>
 
         {error && (
           <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -177,42 +222,9 @@ export default function RegisterPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Full Name"
-            type="text"
-            placeholder="Jane Smith"
-            value={form.name}
-            onChange={(e) => set("name", e.target.value)}
-            required
-          />
-          <Input
-            label="Email"
-            type="email"
-            placeholder="you@example.com"
-            value={form.email}
-            onChange={(e) => set("email", e.target.value)}
-            required
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <Input
-              label="Password"
-              type="password"
-              value={form.password}
-              onChange={(e) => set("password", e.target.value)}
-              required
-            />
-            <Input
-              label="Confirm Password"
-              type="password"
-              value={form.confirmPassword}
-              onChange={(e) => set("confirmPassword", e.target.value)}
-              required
-            />
-          </div>
-
           {/* Role selector */}
           <div className="space-y-1">
-            <p className="text-sm font-medium text-gray-700">I am a...</p>
+            <p className="text-sm font-medium text-gray-700">I am registering as...</p>
             <div className="grid grid-cols-2 gap-3">
               {(["OPERATOR", "VENDOR"] as Role[]).map((r) => (
                 <label
@@ -239,8 +251,21 @@ export default function RegisterPage() {
             </div>
           </div>
 
+          {(isOperator || isVendor) && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-sm font-medium text-gray-900">
+                {isOperator ? "Organization details" : "Vendor details"}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {isOperator
+                  ? "This creates your organization record in DispatchToGo."
+                  : "This creates your vendor company profile in DispatchToGo."}
+              </p>
+            </div>
+          )}
+
           {/* Operator fields */}
-          {form.role === "OPERATOR" && (
+          {isOperator && (
             <div className="space-y-4">
               <Input
                 label="Organization Name"
@@ -287,7 +312,7 @@ export default function RegisterPage() {
           )}
 
           {/* Vendor fields */}
-          {form.role === "VENDOR" && (
+          {isVendor && (
             <div className="space-y-4">
               <Input
                 label="Company Name"
@@ -334,6 +359,48 @@ export default function RegisterPage() {
               </div>
             </div>
           )}
+
+          {(isOperator || isVendor) && (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+              <p className="text-sm font-medium text-gray-900">Primary account holder</p>
+              <p className="text-xs text-gray-500 mt-1">
+                This person will sign in and manage the account. You can support additional users later.
+              </p>
+            </div>
+          )}
+
+          <Input
+            label="Full Name"
+            type="text"
+            placeholder="Jane Smith"
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            required
+          />
+          <Input
+            label="Email"
+            type="email"
+            placeholder="you@example.com"
+            value={form.email}
+            onChange={(e) => set("email", e.target.value)}
+            required
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Input
+              label="Password"
+              type="password"
+              value={form.password}
+              onChange={(e) => set("password", e.target.value)}
+              required
+            />
+            <Input
+              label="Confirm Password"
+              type="password"
+              value={form.confirmPassword}
+              onChange={(e) => set("confirmPassword", e.target.value)}
+              required
+            />
+          </div>
 
           {/* Terms & Privacy consent */}
           <label className="flex items-start gap-3 cursor-pointer">
@@ -383,7 +450,7 @@ export default function RegisterPage() {
             disabled={loading || !captchaToken || !form.agreedToTerms}
             className="w-full"
           >
-            Create Account
+            {submitLabel}
           </Button>
         </form>
 

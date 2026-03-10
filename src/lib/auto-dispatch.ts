@@ -23,7 +23,7 @@ function categoriesMatch(a: string, b: string): boolean {
  * 1. Operator explicitly chose a vendor in the form → use that vendor
  * 2. Preferred vendor for this property + category
  * 3. Preferred vendor for this org + category (property = null)
- * 4. Any active + AVAILABLE vendor with matching skill (load-balanced by fewest active jobs)
+ * 4. Any ACTIVE + AVAILABLE vendor with matching skill (load-balanced by fewest active jobs)
  * 5. No match → READY_TO_DISPATCH for manual admin assignment
  *
  * NOTE: Only vendors with availabilityStatus === "AVAILABLE" are considered
@@ -49,7 +49,7 @@ export async function autoDispatch(
       const vendor = await prisma.vendor.findFirst({
         where: {
           id: preferredVendorId,
-          isActive: true,
+          status: "ACTIVE",
           availabilityStatus: "AVAILABLE",
         },
       });
@@ -67,7 +67,7 @@ export async function autoDispatch(
       const match = prefs.find(
         (p) =>
           categoriesMatch(p.category, requestCategory) &&
-          p.vendor.isActive &&
+          p.vendor.status === "ACTIVE" &&
           p.vendor.availabilityStatus === "AVAILABLE"
       );
       if (match) {
@@ -84,7 +84,7 @@ export async function autoDispatch(
       const match = prefs.find(
         (p) =>
           categoriesMatch(p.category, requestCategory) &&
-          p.vendor.isActive &&
+          p.vendor.status === "ACTIVE" &&
           p.vendor.availabilityStatus === "AVAILABLE"
       );
       if (match) {
@@ -96,7 +96,7 @@ export async function autoDispatch(
     if (!chosenVendorId) {
       const allActiveVendors = await prisma.vendor.findMany({
         where: {
-          isActive: true,
+          status: "ACTIVE",
           availabilityStatus: "AVAILABLE",
         },
         include: {

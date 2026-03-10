@@ -31,9 +31,9 @@ export async function GET(request: NextRequest) {
   const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
   const catNorm = norm(category);
 
-  // Fetch all active vendors with skills
+  // Fetch all lifecycle-active vendors with skills
   const vendors = await prisma.vendor.findMany({
-    where: { isActive: true },
+    where: { status: "ACTIVE" },
     include: { skills: true },
   });
 
@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
       contactName: v.contactName,
       serviceArea: v.serviceArea,
     }));
+  const matchingVendorIds = new Set(matching.map((vendor) => vendor.id));
 
   // Find preferred vendor(s) for this org + property/category
   let preferredVendorId: string | null = null;
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
     const propPref = await prisma.preferredVendor.findFirst({
       where: { organizationId: user.organizationId, propertyId },
     });
-    if (propPref && norm(propPref.category) === catNorm) {
+    if (propPref && norm(propPref.category) === catNorm && matchingVendorIds.has(propPref.vendorId)) {
       preferredVendorId = propPref.vendorId;
     }
   }
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
     const orgPref = await prisma.preferredVendor.findFirst({
       where: { organizationId: user.organizationId, propertyId: null },
     });
-    if (orgPref && norm(orgPref.category) === catNorm) {
+    if (orgPref && norm(orgPref.category) === catNorm && matchingVendorIds.has(orgPref.vendorId)) {
       preferredVendorId = orgPref.vendorId;
     }
   }

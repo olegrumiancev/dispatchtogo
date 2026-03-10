@@ -1,25 +1,29 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import {
+  getStoredTriageArtifact,
+  type CompletionAssist,
+  type DispatchAssist,
+} from "@/lib/ai-assist";
+import { AI_ARTIFACT_ACTIONS, getLatestAiArtifact } from "@/lib/ai-artifacts";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import { URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import {
+  getAdminOperatorRequestStatusColor,
+  getAdminOperatorRequestStatusLabel,
+} from "@/lib/admin-operator-request-status";
 import { ArrowLeft, MapPin, Calendar, Phone, Mail, User, CheckCircle, Download, Image } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import AssignModal from "../assign-modal";
+import { TriageSection } from "@/components/forms/triage-section";
+import type { AiTriageData } from "@/components/ui/ai-triage-badge";
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusColor(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getStatusLabel(status: string) {
-  return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
 function getCategoryLabel(category: string) {
@@ -29,6 +33,7 @@ function getCategoryLabel(category: string) {
 const STATUS_PROGRESSION = [
   "SUBMITTED",
   "TRIAGING",
+  "NEEDS_CLARIFICATION",
   "READY_TO_DISPATCH",
   "DISPATCHED",
   "ACCEPTED",
@@ -56,7 +61,7 @@ function StatusTimeline({ currentStatus }: { currentStatus: string }) {
               }`}
             >
               {isDone && <CheckCircle className="w-3 h-3" />}
-              {getStatusLabel(status)}
+              {getAdminOperatorRequestStatusLabel(status)}
             </div>
             {idx < STATUS_PROGRESSION.length - 1 && (
               <span className="text-gray-300 text-xs">→</span>
@@ -81,7 +86,7 @@ export default async function AdminDispatchDetailPage({
 
   const { id } = await params;
 
-  const [req, availableVendors] = await Promise.all([
+  const [req, availableVendors, triageArtifact] = await Promise.all([
     prisma.serviceRequest.findUnique({
       where: { id },
       include: {
@@ -98,19 +103,39 @@ export default async function AdminDispatchDetailPage({
             proofPacket: { select: { id: true } },
           },
         },
+        aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
       },
     }),
     prisma.vendor.findMany({
-      where: { isActive: true },
+      where: { status: "ACTIVE" },
       include: { skills: { select: { category: true } } },
       orderBy: { companyName: "asc" },
     }),
+    getStoredTriageArtifact(id),
   ]);
 
   if (!req) notFound();
 
   const job = req.job as any;
   const isUnassigned = !job || job.status === "DECLINED";
+  const dispatchBlocked = req.status === "NEEDS_CLARIFICATION";
+
+  const [dispatchAssistArtifact, completionAssistArtifact] = await Promise.all([
+    job?.vendorId
+      ? getLatestAiArtifact<DispatchAssist>(
+          "SERVICE_REQUEST",
+          `${req.id}:${job.vendorId}`,
+          AI_ARTIFACT_ACTIONS.DISPATCH_HANDOFF
+        )
+      : Promise.resolve(null),
+    job
+      ? getLatestAiArtifact<CompletionAssist>(
+          "JOB",
+          job.id,
+          AI_ARTIFACT_ACTIONS.COMPLETION_ASSIST
+        )
+      : Promise.resolve(null),
+  ]);
 
   const vendorsForModal = availableVendors.map((v) => ({
     id: v.id,
@@ -138,14 +163,16 @@ export default async function AdminDispatchDetailPage({
           <h1 className="text-2xl font-bold text-gray-900">{req.referenceNumber}</h1>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <Badge variant={getUrgencyColor(req.urgency)}>{req.urgency}</Badge>
-            <Badge variant={getStatusColor(req.status)}>{getStatusLabel(req.status)}</Badge>
+            <Badge variant={getAdminOperatorRequestStatusColor(req.status)}>
+              {getAdminOperatorRequestStatusLabel(req.status)}
+            </Badge>
             {job?.isPaused && (
               <Badge variant="bg-amber-100 text-amber-800">⏸ Paused</Badge>
             )}
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {isUnassigned && (
+          {isUnassigned && !dispatchBlocked && (
             <AssignModal
               requestRef={req.referenceNumber}
               requestId={req.id}
@@ -208,6 +235,14 @@ export default async function AdminDispatchDetailPage({
         </CardContent>
       </Card>
 
+      {dispatchBlocked && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-medium text-amber-900">
+            Dispatch is blocked until the clarification questions are resolved.
+          </p>
+        </div>
+      )}
+
       {/* Request details */}
       <Card>
         <CardHeader>
@@ -269,6 +304,32 @@ export default async function AdminDispatchDetailPage({
         </CardContent>
       </Card>
 
+      {/* AI Triage */}
+      {(() => {
+        const reqAny = req as any;
+        const aiClass = reqAny.aiClassifications?.[0];
+        const hasTriage = reqAny.aiTriageSummary || aiClass || triageArtifact?.data;
+        const initialTriage: AiTriageData | null = hasTriage
+          ? {
+              category: (triageArtifact?.data.category ?? aiClass?.suggestedCategory ?? req.category) as AiTriageData["category"],
+              urgency: (triageArtifact?.data.urgency ?? req.urgency) as AiTriageData["urgency"],
+              requiresLicensedTrade:
+                triageArtifact?.data.requiresLicensedTrade ??
+                reqAny.requiresLicensedTrade ??
+                false,
+              summary: triageArtifact?.data.summary ?? reqAny.aiTriageSummary ?? "",
+              reasoning: triageArtifact?.data.reasoning ?? aiClass?.reasoning ?? undefined,
+              clarifyingQuestions: triageArtifact?.data.clarifyingQuestions ?? [],
+              suggestedVendorCategories:
+                (triageArtifact?.data.suggestedVendorCategories as AiTriageData["category"][]) ??
+                [req.category as AiTriageData["category"]],
+              statusSuggestion: triageArtifact?.data.statusSuggestion,
+              confidence: triageArtifact?.data.confidence ?? aiClass?.confidence ?? 0.8,
+            }
+          : null;
+        return <TriageSection requestId={req.id} initialTriage={initialTriage} />;
+      })()}
+
       {/* Vendor / Job */}
       {job ? (
         <Card>
@@ -323,6 +384,35 @@ export default async function AdminDispatchDetailPage({
               </div>
             )}
 
+            {dispatchAssistArtifact?.data && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 space-y-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-blue-700 mb-1">Dispatch Brief</p>
+                  <p className="text-sm text-blue-950">{dispatchAssistArtifact.data.brief}</p>
+                </div>
+                {dispatchAssistArtifact.data.calloutPoints.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-blue-700 mb-1">Callout Points</p>
+                    <ul className="space-y-1 text-sm text-blue-900">
+                      {dispatchAssistArtifact.data.calloutPoints.map((point, index) => (
+                        <li key={index}>- {point}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {dispatchAssistArtifact.data.questionsToConfirm.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-blue-700 mb-1">Questions To Confirm</p>
+                    <ul className="space-y-1 text-sm text-blue-900">
+                      {dispatchAssistArtifact.data.questionsToConfirm.map((question, index) => (
+                        <li key={index}>- {question}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Job status */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
@@ -349,6 +439,27 @@ export default async function AdminDispatchDetailPage({
               <div>
                 <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Vendor Notes</p>
                 <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">{job.vendorNotes}</p>
+              </div>
+            )}
+
+            {completionAssistArtifact?.data && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 space-y-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">AI Proof Summary</p>
+                  <p className="text-sm text-emerald-950 whitespace-pre-wrap">
+                    {completionAssistArtifact.data.proofSummary}
+                  </p>
+                </div>
+                {completionAssistArtifact.data.missingEvidenceFlags.length > 0 && (
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">Evidence Flags</p>
+                    <ul className="space-y-1 text-sm text-emerald-900">
+                      {completionAssistArtifact.data.missingEvidenceFlags.map((flag, index) => (
+                        <li key={index}>- {flag}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
 
@@ -407,12 +518,18 @@ export default async function AdminDispatchDetailPage({
       ) : (
         <Card>
           <CardContent className="py-8 text-center text-sm text-gray-400 space-y-3">
-            <p>No vendor assigned yet.</p>
-            <AssignModal
-              requestRef={req.referenceNumber}
-              requestId={req.id}
-              vendors={vendorsForModal}
-            />
+            <p>
+              {dispatchBlocked
+                ? "No vendor assigned yet because the request still needs clarification."
+                : "No vendor assigned yet."}
+            </p>
+            {!dispatchBlocked && (
+              <AssignModal
+                requestRef={req.referenceNumber}
+                requestId={req.id}
+                vendors={vendorsForModal}
+              />
+            )}
           </CardContent>
         </Card>
       )}

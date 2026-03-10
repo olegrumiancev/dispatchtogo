@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { AI_ARTIFACT_ACTIONS, getLatestAiArtifact } from "@/lib/ai-artifacts";
+import type { CompletionAssist } from "@/lib/ai-assist";
 import { prisma } from "@/lib/prisma";
 import { generateProofPacketPdf, ProofPacketData } from "@/lib/proof-packet";
 
@@ -140,7 +142,14 @@ export async function GET(
   }
 
   // Upsert ProofPacket record
+  const completionAssistArtifact = await getLatestAiArtifact<CompletionAssist>(
+    "JOB",
+    job.id,
+    AI_ARTIFACT_ACTIONS.COMPLETION_ASSIST
+  );
+
   const summary = [
+    completionAssistArtifact?.data.proofSummary?.slice(0, 140) ?? null,
     req.description.slice(0, 120),
     job.completionSummary ? `Completed: ${job.completionSummary.slice(0, 100)}` : null,
   ]

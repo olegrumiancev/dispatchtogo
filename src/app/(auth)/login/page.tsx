@@ -79,6 +79,14 @@ function LoginForm() {
           setError("Your account registration was not approved. Please contact support if you believe this is an error.");
         } else if (result.error === "ACCOUNT_DISABLED") {
           setError("Your account has been disabled. Please contact an administrator for assistance.");
+        } else if (result.error === "ORG_SUSPENDED") {
+          setError("Your organization is currently suspended. Please contact DispatchToGo support or your administrator.");
+        } else if (result.error === "ORG_OFFBOARDED") {
+          setError("Your organization has been offboarded and no longer has operational access.");
+        } else if (result.error === "VENDOR_SUSPENDED") {
+          setError("Your vendor account is suspended. Please contact DispatchToGo support or an administrator.");
+        } else if (result.error === "VENDOR_OFFBOARDED") {
+          setError("Your vendor account has been offboarded and no longer has operational access.");
         } else {
           setError("Invalid email or password. Please try again.");
         }

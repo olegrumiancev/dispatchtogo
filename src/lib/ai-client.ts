@@ -11,9 +11,24 @@
  * also set CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET.
  */
 
+export type ChatMessageContent =
+  | string
+  | Array<
+      | {
+          type: "text";
+          text: string;
+        }
+      | {
+          type: "image_url";
+          image_url: {
+            url: string;
+          };
+        }
+    >;
+
 interface ChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: ChatMessageContent;
 }
 
 interface ChatCompletionResponse {
