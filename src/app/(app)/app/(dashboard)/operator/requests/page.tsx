@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES, BILLING_PLANS, BILLING_JOB_TAG_STYLES } from "@/lib/constants";
-import { Plus, Eye, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Archive, CheckCircle2 } from "lucide-react";
+import { Plus, Eye, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Archive, CheckCircle2, BadgeCheck, Camera } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
 import { currentPeriodStart, currentPeriodEnd, getOrgBillingRankMap } from "@/lib/billing";
@@ -63,7 +63,7 @@ export default async function RequestsPage({
   const orgId: string = user.organizationId!;
 
   const sp = await searchParams;
-  const view = sp.view === "cancelled" ? "cancelled" : "active";
+  const view = sp.view === "cancelled" ? "cancelled" : sp.view === "completed" ? "completed" : "active";
   const statusFilter = sp.status ?? "";
   const urgencyFilter = sp.urgency ?? "";
   const categoryFilter = sp.category ?? "";
@@ -77,13 +77,15 @@ export default async function RequestsPage({
   // Build Prisma where clause
   const where: any = { organizationId: orgId };
 
-  // Cancelled view always shows only CANCELLED; active view excludes CANCELLED unless a specific status is chosen
+  // Cancelled view: CANCELLED only; completed view: COMPLETED + VERIFIED; active view: everything else
   if (view === "cancelled") {
     where.status = "CANCELLED";
+  } else if (view === "completed") {
+    where.status = { in: ["COMPLETED", "VERIFIED"] };
   } else if (statusFilter) {
     where.status = statusFilter;
   } else {
-    where.status = { not: "CANCELLED" };
+    where.status = { notIn: ["CANCELLED", "COMPLETED", "VERIFIED"] };
   }
   if (urgencyFilter) where.urgency = urgencyFilter;
   if (categoryFilter) where.category = categoryFilter;
@@ -123,6 +125,7 @@ export default async function RequestsPage({
           include: {
             vendor: { select: { companyName: true } },
             notes: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+            _count: { select: { photos: true } },
           },
         },
         requestViews: { where: { userId: user.id }, select: { viewedAt: true } },
@@ -165,7 +168,8 @@ export default async function RequestsPage({
   function buildUrl(params: Record<string, string>) {
     const base: Record<string, string> = {};
     if (view === "cancelled") base.view = "cancelled";
-    if (statusFilter && view !== "cancelled") base.status = statusFilter;
+    else if (view === "completed") base.view = "completed";
+    if (statusFilter && view === "active") base.status = statusFilter;
     if (urgencyFilter) base.urgency = urgencyFilter;
     if (categoryFilter) base.category = categoryFilter;
     if (searchFilter) base.search = searchFilter;
@@ -212,7 +216,7 @@ export default async function RequestsPage({
         </Link>
       </div>
 
-      {/* Active / Cancelled toggle */}
+      {/* Active / Completed / Cancelled toggle */}
       <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
         <Link
           href={buildUrl({ view: "active", status: "", page: "1" })}
@@ -224,6 +228,17 @@ export default async function RequestsPage({
         >
           <CheckCircle2 className="w-3.5 h-3.5" />
           Active
+        </Link>
+        <Link
+          href={buildUrl({ view: "completed", status: "", page: "1" })}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            view === "completed"
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <BadgeCheck className="w-3.5 h-3.5" />
+          Completed
         </Link>
         <Link
           href={buildUrl({ view: "cancelled", status: "", page: "1" })}
@@ -242,6 +257,7 @@ export default async function RequestsPage({
       <Card>
         <form method="GET" action="/app/operator/requests" className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center">
           {view === "cancelled" && <input type="hidden" name="view" value="cancelled" />}
+          {view === "completed" && <input type="hidden" name="view" value="completed" />}
           {view === "active" && (
             <select
               name="status"
@@ -249,7 +265,7 @@ export default async function RequestsPage({
               className="rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Statuses</option>
-              {REQUEST_STATUSES.filter((s) => s.value !== "CANCELLED").map((s) => (
+              {REQUEST_STATUSES.filter((s) => !["CANCELLED", "COMPLETED", "VERIFIED"].includes(s.value)).map((s) => (
                 <option key={s.value} value={s.value}>{s.label}</option>
               ))}
             </select>
@@ -414,8 +430,13 @@ export default async function RequestsPage({
                           {req.referenceNumber}
                         </Link>
                         {req._count.photos > 0 && (
-                          <span title={`${req._count.photos} photo${req._count.photos !== 1 ? "s" : ""}`}>
+                          <span title={`${req._count.photos} intake photo${req._count.photos !== 1 ? "s" : ""}`}>
                             <Paperclip className="w-3 h-3 text-gray-400" />
+                          </span>
+                        )}
+                        {(req.job?._count?.photos ?? 0) > 0 && (
+                          <span title={`${req.job!._count!.photos} vendor photo${req.job!._count!.photos !== 1 ? "s" : ""}`}>
+                            <Camera className="w-3 h-3 text-teal-500" />
                           </span>
                         )}
                       </div>
