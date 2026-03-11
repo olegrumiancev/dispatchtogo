@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Download, Package, Eye } from "lucide-react";
+import { FileText, Download, Package, Eye, Paperclip, Camera } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 
@@ -42,10 +42,12 @@ export default async function AdminProofPacketsPage({
       include: {
         organization: { select: { name: true } },
         property: true,
+        _count: { select: { photos: true } },
         job: {
           include: {
             vendor: { select: { companyName: true } },
             proofPacket: true,
+            _count: { select: { photos: true } },
           },
         },
       },
@@ -122,12 +124,30 @@ export default async function AdminProofPacketsPage({
                   {requests.map((req) => (
                     <tr key={req.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
-                        <Link
-                          href={`/app/admin/dispatch/${req.id}`}
-                          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          {req.referenceNumber}
-                        </Link>
+                        <div className="space-y-1">
+                          <Link
+                            href={`/app/admin/dispatch/${req.id}`}
+                            className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {req.referenceNumber}
+                          </Link>
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            <span
+                              title={`${req._count.photos} intake photo${req._count.photos !== 1 ? "s" : ""}`}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <Paperclip className="h-3.5 w-3.5 text-gray-400" />
+                              {req._count.photos}
+                            </span>
+                            <span
+                              title={`${req.job?._count.photos ?? 0} vendor photo${(req.job?._count.photos ?? 0) !== 1 ? "s" : ""}`}
+                              className="inline-flex items-center gap-1"
+                            >
+                              <Camera className="h-3.5 w-3.5 text-teal-500" />
+                              {req.job?._count.photos ?? 0}
+                            </span>
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">
                         {req.organization.name}

@@ -37,6 +37,8 @@ const JOB_INCLUDE = {
   proofPacket: true,
 };
 
+const SUBMISSION_LOCKED_STATUSES = new Set(["COMPLETED", "VERIFIED", "CANCELLED"]);
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -115,6 +117,22 @@ export async function PATCH(
     return NextResponse.json({ error: "Forbidden: OPERATORs cannot update jobs" }, { status: 403 });
   }
 
+  const isCompletionFieldUpdate =
+    vendorNotes !== undefined ||
+    completionSummary !== undefined ||
+    totalLabourHours !== undefined ||
+    totalMaterialsCost !== undefined ||
+    totalCost !== undefined;
+
+  if (user.role !== "ADMIN" && SUBMISSION_LOCKED_STATUSES.has(job.serviceRequest.status)) {
+    if (action || isCompletionFieldUpdate) {
+      return NextResponse.json(
+        { error: "Completion proof is locked after submission." },
+        { status: 409 }
+      );
+    }
+  }
+
   const jobData: any = {};
   const requestData: any = {};
 
@@ -142,6 +160,9 @@ export async function PATCH(
         newStatus = "IN_PROGRESS";
         break;
       case "complete":
+        if (job.serviceRequest.status !== "IN_PROGRESS") {
+          return NextResponse.json({ error: "Only in-progress jobs can be marked complete." }, { status: 409 });
+        }
         jobData.completedAt = new Date();
         jobData.isPaused = false;
         jobData.pauseReason = null;
@@ -410,6 +431,19 @@ export async function POST(
   }
 
   if (type === "note") {
+    if (user.role !== "ADMIN") {
+      const sr = await prisma.serviceRequest.findUnique({
+        where: { id: job.serviceRequestId },
+        select: { status: true },
+      });
+      if (sr && SUBMISSION_LOCKED_STATUSES.has(sr.status)) {
+        return NextResponse.json(
+          { error: "Notes cannot be changed after completion is submitted." },
+          { status: 409 }
+        );
+      }
+    }
+
     const { text } = body;
     if (!text) {
       return NextResponse.json({ error: "text is required for note type" }, { status: 400 });
@@ -430,6 +464,19 @@ export async function POST(
   }
 
   if (type === "material") {
+    if (user.role !== "ADMIN") {
+      const sr = await prisma.serviceRequest.findUnique({
+        where: { id: job.serviceRequestId },
+        select: { status: true },
+      });
+      if (sr && SUBMISSION_LOCKED_STATUSES.has(sr.status)) {
+        return NextResponse.json(
+          { error: "Materials cannot be changed after completion is submitted." },
+          { status: 409 }
+        );
+      }
+    }
+
     const { description, quantity, unitCost } = body;
     if (!description) {
       return NextResponse.json({ error: "description is required for material type" }, { status: 400 });
@@ -453,12 +500,11 @@ export async function POST(
       return NextResponse.json({ error: "url is required for photo type" }, { status: 400 });
     }
 
-    const LOCKED_STATUSES = ["COMPLETED", "VERIFIED", "CANCELLED"];
     const sr = await prisma.serviceRequest.findUnique({
       where: { id: job.serviceRequestId },
       select: { status: true },
     });
-    if (sr && LOCKED_STATUSES.includes(sr.status)) {
+    if (sr && SUBMISSION_LOCKED_STATUSES.has(sr.status)) {
       return NextResponse.json(
         { error: "Photos cannot be added after the job is complete" },
         { status: 409 }

@@ -5,7 +5,16 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
-import { MapPin, Clock, RotateCcw, PauseCircle } from "lucide-react";
+import {
+  MapPin,
+  Clock,
+  RotateCcw,
+  PauseCircle,
+  ShieldCheck,
+  ExternalLink,
+  ImageIcon,
+  Brain,
+} from "lucide-react";
 import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import { VendorJobActions } from "@/components/forms/vendor-job-actions";
@@ -47,8 +56,6 @@ export default async function VendorJobsPage({
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
   const skip = (page - 1) * PAGE_SIZE;
 
-  // Available jobs: ServiceRequests with status DISPATCHED that have a Job for this vendor
-  // where the job has NOT been accepted yet
   const [availableJobs, activeJobs, completedTotal, completedJobs, unreadNotifications] = await Promise.all([
     prisma.job.findMany({
       where: {
@@ -62,13 +69,12 @@ export default async function VendorJobsPage({
         serviceRequest: {
           include: {
             property: { select: { name: true, address: true } },
+            _count: { select: { photos: true } },
           },
         },
       },
       orderBy: { createdAt: "desc" },
     }),
-
-    // Active jobs: accepted but not yet completed
     prisma.job.findMany({
       where: {
         vendorId,
@@ -84,8 +90,6 @@ export default async function VendorJobsPage({
       },
       orderBy: { acceptedAt: "desc" },
     }),
-
-    // Completed jobs: paginated
     prisma.job.count({
       where: { vendorId, completedAt: { not: null } },
     }),
@@ -105,8 +109,6 @@ export default async function VendorJobsPage({
       skip,
       take: PAGE_SIZE,
     }),
-
-    // Unread notifications for this vendor user (recent 10)
     prisma.notification.findMany({
       where: { userId: user.id, read: false },
       orderBy: { createdAt: "desc" },
@@ -131,16 +133,22 @@ export default async function VendorJobsPage({
 
   return (
     <div className="space-y-6">
-      {/* Rejection / important notifications */}
-      {notifProps.length > 0 && (
-        <VendorNotificationBanner notifications={notifProps} />
-      )}
+      {notifProps.length > 0 && <VendorNotificationBanner notifications={notifProps} />}
 
-      <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
+        {completedTotal > 0 && (
+          <Link href="/app/vendor/proof-packets" className="inline-flex">
+            <button className="inline-flex min-h-[44px] items-center gap-2 rounded-md border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700">
+              <ShieldCheck className="h-4 w-4" />
+              Proof Packets
+            </button>
+          </Link>
+        )}
+      </div>
 
-      {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-3 sm:gap-6 overflow-x-auto">
+        <nav className="flex gap-3 overflow-x-auto sm:gap-6">
           <Link
             href="/app/vendor/jobs?tab=available"
             className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
@@ -150,7 +158,7 @@ export default async function VendorJobsPage({
             }`}
           >
             Available Jobs
-            <span className="ml-2 bg-blue-100 text-blue-700 text-xs font-semibold px-2 py-0.5 rounded-full">
+            <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
               {availableJobs.length}
             </span>
           </Link>
@@ -163,7 +171,7 @@ export default async function VendorJobsPage({
             }`}
           >
             My Jobs
-            <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-0.5 rounded-full">
+            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
               {activeJobs.length}
             </span>
           </Link>
@@ -176,79 +184,162 @@ export default async function VendorJobsPage({
             }`}
           >
             Completed
-            <span className="ml-2 bg-gray-100 text-gray-600 text-xs font-semibold px-2 py-0.5 rounded-full">
+            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
               {completedTotal}
             </span>
           </Link>
         </nav>
       </div>
 
-      {/* Available jobs */}
       {tab === "available" && (
         <div className="space-y-4">
           {availableJobs.length === 0 ? (
             <Card>
-              <CardContent className="text-center py-12 text-gray-400">
+              <CardContent className="py-12 text-center text-gray-400">
                 <p className="text-sm">No available jobs right now. Check back soon.</p>
               </CardContent>
             </Card>
           ) : (
-            availableJobs.map((job) => {
-              const sr = job.serviceRequest;
-              return (
-                <Card key={job.id}>
-                  <CardContent className="py-5">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-900">
-                            {sr.referenceNumber}
-                          </span>
-                          <Badge variant={getUrgencyColor(sr.urgency)}>
-                            {sr.urgency}
-                          </Badge>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                            {getCategoryLabel(sr.category)}
-                          </span>
-                        </div>
+            <>
+              <div className="hidden space-y-2 md:block">
+                {availableJobs.map((job) => {
+                  const sr = job.serviceRequest as any;
+                  return (
+                    <Card key={job.id}>
+                      <CardContent className="px-4 py-4">
+                        <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.25fr)_140px_auto] items-start gap-4">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-semibold text-gray-900">
+                                {sr.referenceNumber}
+                              </span>
+                              <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                                {getCategoryLabel(sr.category)}
+                              </span>
+                            </div>
+                            <p className="mt-2 line-clamp-1 text-sm text-gray-700">{sr.description}</p>
+                            {sr.aiTriageSummary && (
+                              <div className="mt-2 inline-flex max-w-full items-start gap-1.5 rounded-md bg-blue-50 px-2.5 py-1.5 text-xs text-blue-800 ring-1 ring-blue-100">
+                                <Brain className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-blue-500" />
+                                <span className="line-clamp-2">
+                                  {sr.aiTriageSummary}
+                                </span>
+                              </div>
+                            )}
+                          </div>
 
-                        <div className="flex items-center gap-1 text-sm text-gray-700">
-                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="font-medium">{sr.property.name}</span>
+                          <div className="min-w-0">
+                            <div className="flex items-start gap-2 text-sm text-gray-700">
+                              <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+                              <div className="min-w-0">
+                                <p className="truncate font-medium text-gray-900">{sr.property.name}</p>
+                                <p className="truncate text-xs text-gray-500">
+                                  {sr.property.address || "Address not provided"}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5 text-xs text-gray-500">
+                            <div className="inline-flex items-center gap-1">
+                              <ImageIcon className="h-3.5 w-3.5 text-gray-400" />
+                              {sr._count.photos} photo{sr._count.photos !== 1 ? "s" : ""}
+                            </div>
+                            <div className="inline-flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5 text-gray-400" />
+                              {formatDate(sr.createdAt)}
+                            </div>
+                          </div>
+
+                          <div className="flex items-start justify-end gap-2">
+                            <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
+                              <button className="inline-flex min-h-[38px] items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900">
+                                <ExternalLink className="h-4 w-4" />
+                                Preview
+                              </button>
+                            </Link>
+                            <VendorJobActions jobId={job.id} mode="available" layout="inline" />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-3 md:hidden">
+                {availableJobs.map((job) => {
+                  const sr = job.serviceRequest as any;
+                  return (
+                    <Card key={job.id}>
+                      <CardContent className="py-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-semibold text-gray-900">
+                              {sr.referenceNumber}
+                            </span>
+                            <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                              {getCategoryLabel(sr.category)}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1 text-sm text-gray-700">
+                            <MapPin className="h-4 w-4 flex-shrink-0 text-gray-400" />
+                            <span className="font-medium">{sr.property.name}</span>
+                          </div>
+
                           {sr.property.address && (
-                            <>
-                              <span className="text-gray-400 mx-1">·</span>
-                              <span className="text-gray-500 text-xs">{sr.property.address}</span>
-                            </>
+                            <p className="text-xs text-gray-500">{sr.property.address}</p>
                           )}
+
+                          <p className="line-clamp-2 text-sm text-gray-600">{sr.description}</p>
+                          {sr.aiTriageSummary && (
+                            <div className="inline-flex max-w-full items-start gap-1.5 rounded-md bg-blue-50 px-2.5 py-1.5 text-xs text-blue-800 ring-1 ring-blue-100">
+                              <Brain className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-blue-500" />
+                              <span className="line-clamp-2">
+                                {sr.aiTriageSummary}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+                            <span className="inline-flex items-center gap-1">
+                              <ImageIcon className="h-3.5 w-3.5" />
+                              {sr._count.photos} photo{sr._count.photos !== 1 ? "s" : ""}
+                            </span>
+                            <span className="inline-flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5" />
+                              Posted {formatDate(sr.createdAt)}
+                            </span>
+                          </div>
+
+                          <div className="flex w-full flex-col gap-2">
+                            <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
+                              <button className="inline-flex w-full min-h-[44px] items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900">
+                                <ExternalLink className="h-4 w-4" />
+                                View Details
+                              </button>
+                            </Link>
+                            <VendorJobActions jobId={job.id} mode="available" />
+                          </div>
                         </div>
-
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {sr.description}
-                        </p>
-
-                        <div className="flex items-center gap-1 text-xs text-gray-400">
-                          <Clock className="w-3 h-3" />
-                          Posted {formatDate(sr.createdAt)}
-                        </div>
-                      </div>
-
-                      <VendorJobActions jobId={job.id} mode="available" />
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       )}
 
-      {/* My (active) jobs */}
       {tab === "mine" && (
         <div className="space-y-4">
           {activeJobs.length === 0 ? (
             <Card>
-              <CardContent className="text-center py-12 text-gray-400">
+              <CardContent className="py-12 text-center text-gray-400">
                 <p className="text-sm">No active jobs. Accept one from Available Jobs.</p>
               </CardContent>
             </Card>
@@ -261,69 +352,61 @@ export default async function VendorJobsPage({
               return (
                 <Card key={job.id} className={borderClass}>
                   <CardContent className="py-5">
-                    {/* Paused banner */}
                     {isPaused && (
-                      <div className="flex items-start gap-2 bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mb-3">
-                        <PauseCircle className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                      <div className="mb-3 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
+                        <PauseCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-600" />
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold text-orange-800">Paused — Will Return</p>
+                          <p className="text-xs font-semibold text-orange-800">Paused â€” Will Return</p>
                           {(job as any).pauseReason && (
-                            <p className="text-xs text-orange-700 mt-0.5 line-clamp-2">{(job as any).pauseReason}</p>
+                            <p className="mt-0.5 line-clamp-2 text-xs text-orange-700">{(job as any).pauseReason}</p>
                           )}
                           {(job as any).estimatedReturnDate && (
-                            <p className="text-xs text-orange-600 mt-0.5">Expected return: {formatDate((job as any).estimatedReturnDate)}</p>
+                            <p className="mt-0.5 text-xs text-orange-600">
+                              Expected return: {formatDate((job as any).estimatedReturnDate)}
+                            </p>
                           )}
                         </div>
                       </div>
                     )}
-                    {/* Rejection reason banner */}
                     {hasRejection && (
-                      <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
-                        <RotateCcw className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                        <RotateCcw className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-amber-800">Work sent back for rework</p>
-                          <p className="text-xs text-amber-700 mt-0.5 line-clamp-2">{sr.rejectionReason}</p>
+                          <p className="mt-0.5 line-clamp-2 text-xs text-amber-700">{sr.rejectionReason}</p>
                         </div>
                       </div>
                     )}
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-900">
-                            {sr.referenceNumber}
-                          </span>
-                          <Badge variant={getStatusColor(sr.status)}>
-                            {getStatusLabel(sr.status)}
-                          </Badge>
-                          <Badge variant={getUrgencyColor(sr.urgency)}>
-                            {sr.urgency}
-                          </Badge>
+                          <span className="text-sm font-semibold text-gray-900">{sr.referenceNumber}</span>
+                          <Badge variant={getStatusColor(sr.status)}>{getStatusLabel(sr.status)}</Badge>
+                          <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
                           {isPaused && (
-                            <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-semibold">
+                            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700">
                               Paused
                             </span>
                           )}
                         </div>
 
                         <div className="flex items-center gap-1 text-sm text-gray-700">
-                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <MapPin className="h-4 w-4 flex-shrink-0 text-gray-400" />
                           <span className="font-medium">{sr.property.name}</span>
                         </div>
 
-                        <p className="text-sm text-gray-600 line-clamp-2">
-                          {sr.description}
-                        </p>
+                        <p className="line-clamp-2 text-sm text-gray-600">{sr.description}</p>
 
                         {job.acceptedAt && (
                           <div className="flex items-center gap-1 text-xs text-gray-400">
-                            <Clock className="w-3 h-3" />
+                            <Clock className="h-3 w-3" />
                             Accepted {formatDate(job.acceptedAt)}
                           </div>
                         )}
                       </div>
 
                       <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
-                        <button className="text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-200 rounded-md px-3 py-2.5 min-h-[44px] hover:bg-blue-50 transition-colors">
+                        <button className="rounded-md border border-blue-200 px-3 py-2.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700">
                           View Details
                         </button>
                       </Link>
@@ -336,12 +419,11 @@ export default async function VendorJobsPage({
         </div>
       )}
 
-      {/* Completed jobs */}
       {tab === "completed" && (
         <div className="space-y-4">
           {completedTotal === 0 ? (
             <Card>
-              <CardContent className="text-center py-12 text-gray-400">
+              <CardContent className="py-12 text-center text-gray-400">
                 <p className="text-sm">No completed jobs yet.</p>
               </CardContent>
             </Card>
@@ -351,35 +433,31 @@ export default async function VendorJobsPage({
               return (
                 <Card key={job.id}>
                   <CardContent className="py-5">
-                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-900">
-                            {sr.referenceNumber}
-                          </span>
-                          <Badge variant={getStatusColor(sr.status)}>
-                            {getStatusLabel(sr.status)}
-                          </Badge>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                          <span className="text-sm font-semibold text-gray-900">{sr.referenceNumber}</span>
+                          <Badge variant={getStatusColor(sr.status)}>{getStatusLabel(sr.status)}</Badge>
+                          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
                             {getCategoryLabel(sr.category)}
                           </span>
                         </div>
 
                         <div className="flex items-center gap-1 text-sm text-gray-700">
-                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <MapPin className="h-4 w-4 flex-shrink-0 text-gray-400" />
                           <span className="font-medium">{sr.property.name}</span>
                         </div>
 
                         {job.completedAt && (
                           <div className="flex items-center gap-1 text-xs text-gray-400">
-                            <Clock className="w-3 h-3" />
+                            <Clock className="h-3 w-3" />
                             Completed {formatDate(job.completedAt)}
                           </div>
                         )}
                       </div>
 
                       <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
-                        <button className="text-sm font-medium text-gray-600 hover:text-gray-800 border border-gray-200 rounded-md px-3 py-2.5 min-h-[44px] hover:bg-gray-50 transition-colors">
+                        <button className="rounded-md border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-gray-800">
                           View Details
                         </button>
                       </Link>

@@ -47,6 +47,7 @@ const OPERATOR_NAV: NavItem[] = [
 
 const VENDOR_NAV: NavItem[] = [
   { href: "/app/vendor/jobs", label: "Available Jobs", icon: Briefcase },
+  { href: "/app/vendor/proof-packets", label: "Proof Packets", icon: ShieldCheck },
   { href: "/app/vendor/profile", label: "My Profile", icon: UserCircle },
 ];
 

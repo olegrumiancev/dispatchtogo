@@ -8,6 +8,7 @@ import { Check, X, ChevronDown } from "lucide-react";
 interface VendorJobActionsProps {
   jobId: string;
   mode: "available";
+  layout?: "stacked" | "inline";
 }
 
 type DeclineKey = "capacity" | "wont_service" | "other";
@@ -18,7 +19,7 @@ const DECLINE_OPTIONS: { key: DeclineKey; label: string; value: string | null }[
   { key: "other",        label: "Other (provide reason)",  value: null },
 ];
 
-export function VendorJobActions({ jobId, mode }: VendorJobActionsProps) {
+export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobActionsProps) {
   const router = useRouter();
   const [accepting, setAccepting] = useState(false);
   const [declining, setDeclining] = useState(false);
@@ -93,42 +94,46 @@ export function VendorJobActions({ jobId, mode }: VendorJobActionsProps) {
     selectedKey !== null &&
     (selectedKey !== "other" || otherReason.trim().length > 0);
 
+  const isInline = layout === "inline";
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`flex flex-col gap-2 ${isInline ? "items-end" : ""}`}>
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      <Button
-        variant="primary"
-        size="sm"
-        loading={accepting}
-        disabled={showDeclineOptions}
-        onClick={handleAccept}
-        className="w-full justify-center min-h-[44px]"
-      >
-        <Check className="w-4 h-4" />
-        Accept
-      </Button>
-
-      {/* Decline trigger */}
-      {!showDeclineOptions && (
+      <div className={`flex gap-2 ${isInline ? "items-center" : "flex-col"}`}>
         <Button
-          variant="secondary"
+          variant="primary"
           size="sm"
-          disabled={accepting}
-          onClick={() => setShowDeclineOptions(true)}
-          className="w-full justify-between min-h-[44px]"
+          loading={accepting}
+          disabled={showDeclineOptions}
+          onClick={handleAccept}
+          className={`${isInline ? "min-h-[38px]" : "w-full min-h-[44px]"} justify-center`}
         >
-          <span className="flex items-center gap-1.5">
-            <X className="w-4 h-4" />
-            Decline
-          </span>
-          <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+          <Check className="w-4 h-4" />
+          Accept
         </Button>
-      )}
+
+        {/* Decline trigger */}
+        {!showDeclineOptions && (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={accepting}
+            onClick={() => setShowDeclineOptions(true)}
+            className={`${isInline ? "min-h-[38px]" : "w-full min-h-[44px]"} justify-between`}
+          >
+            <span className="flex items-center gap-1.5">
+              <X className="w-4 h-4" />
+              Decline
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+          </Button>
+        )}
+      </div>
 
       {/* Expanded decline options */}
       {showDeclineOptions && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5">
+        <div className={`rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5 ${isInline ? "w-[240px]" : ""}`}>
           <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">
             Reason for declining
           </p>

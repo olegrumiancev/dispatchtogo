@@ -463,15 +463,42 @@ function heuristicCompletionAssist(input: {
   };
 }
 
+interface CompletionAssistDraftInput {
+  completionSummary?: string | null;
+  vendorNotes?: string | null;
+  totalLabourHours?: number | null;
+  totalMaterialsCost?: number | null;
+  totalCost?: number | null;
+  noteCount?: number;
+  beforeCount?: number;
+  afterCount?: number;
+  materialEntries?: Array<{
+    description: string;
+    quantity: number;
+    unitCost?: number | null;
+  }>;
+}
+
 export async function generateCompletionAssist(
-  jobId: string
+  jobId: string,
+  options?: {
+    forceRefresh?: boolean;
+    persist?: boolean;
+    draft?: CompletionAssistDraftInput;
+  }
 ): Promise<StoredAiArtifact<CompletionAssist>> {
-  const cached = await getLatestAiArtifact<CompletionAssist>(
-    "JOB",
-    jobId,
-    AI_ARTIFACT_ACTIONS.COMPLETION_ASSIST
-  );
-  if (cached) return cached;
+  const forceRefresh = options?.forceRefresh ?? false;
+  const persist = options?.persist ?? true;
+  const draft = options?.draft;
+
+  if (!forceRefresh && !draft) {
+    const cached = await getLatestAiArtifact<CompletionAssist>(
+      "JOB",
+      jobId,
+      AI_ARTIFACT_ACTIONS.COMPLETION_ASSIST
+    );
+    if (cached) return cached;
+  }
 
   const job = await prisma.job.findUnique({
     where: { id: jobId },
@@ -493,15 +520,35 @@ export async function generateCompletionAssist(
     throw new Error("Job not found for completion assist");
   }
 
+  const materialEntries =
+    draft?.materialEntries && draft.materialEntries.length > 0
+      ? draft.materialEntries
+      : job.materials.map((material) => ({
+          description: material.description,
+          quantity: material.quantity,
+          unitCost: material.unitCost,
+        }));
+
+  const vendorNotes = draft?.vendorNotes ?? job.vendorNotes;
+  const noteCount = draft?.noteCount ?? job.notes.length;
+  const beforeCount =
+    draft?.beforeCount ?? job.photos.filter((photo) => photo.type === "BEFORE").length;
+  const afterCount =
+    draft?.afterCount ?? job.photos.filter((photo) => photo.type === "AFTER").length;
+  const totalLabourHours = draft?.totalLabourHours ?? job.totalLabourHours;
+  const totalMaterialsCost = draft?.totalMaterialsCost ?? job.totalMaterialsCost;
+  const totalCost = draft?.totalCost ?? job.totalCost;
+  const completionSummary = draft?.completionSummary ?? job.completionSummary;
+
   let assist = heuristicCompletionAssist({
     description: job.serviceRequest.description,
     propertyName: job.serviceRequest.property?.name ?? "property",
     category: job.serviceRequest.category,
-    vendorNotes: job.vendorNotes,
-    noteCount: job.notes.length,
-    materialCount: job.materials.length,
-    beforeCount: job.photos.filter((photo) => photo.type === "BEFORE").length,
-    afterCount: job.photos.filter((photo) => photo.type === "AFTER").length,
+    vendorNotes,
+    noteCount,
+    materialCount: materialEntries.length,
+    beforeCount,
+    afterCount,
   });
   let source: "ai" | "heuristic" = "heuristic";
 
@@ -527,23 +574,26 @@ Original issue:
 ${job.serviceRequest.description}
 
 Vendor notes:
-${job.vendorNotes ?? "(none)"}
+${vendorNotes ?? "(none)"}
+
+Draft completion summary:
+${completionSummary ?? "(none)"}
 
 Job notes:
 ${job.notes.map((note) => `- ${note.text}`).join("\n") || "(none)"}
 
 Materials:
-${job.materials.map((material) => `- ${material.description} x${material.quantity}`).join("\n") || "(none)"}
+${materialEntries.map((material) => `- ${material.description} x${material.quantity}`).join("\n") || "(none)"}
 
 Photos:
-Before: ${job.photos.filter((photo) => photo.type === "BEFORE").length}
-After: ${job.photos.filter((photo) => photo.type === "AFTER").length}
+Before: ${beforeCount}
+After: ${afterCount}
 Other: ${job.photos.filter((photo) => !["BEFORE", "AFTER"].includes(photo.type)).length}
 
 Structured totals:
-Labour hours: ${job.totalLabourHours ?? "N/A"}
-Materials cost: ${job.totalMaterialsCost ?? "N/A"}
-Total cost: ${job.totalCost ?? "N/A"}`,
+Labour hours: ${totalLabourHours ?? "N/A"}
+Materials cost: ${totalMaterialsCost ?? "N/A"}
+Total cost: ${totalCost ?? "N/A"}`,
         },
       ],
       { temperature: 0.1, maxTokens: 700 }
@@ -561,13 +611,15 @@ Total cost: ${job.totalCost ?? "N/A"}`,
     }
   }
 
-  await saveAiArtifact({
-    entityType: "JOB",
-    entityId: jobId,
-    action: AI_ARTIFACT_ACTIONS.COMPLETION_ASSIST,
-    data: assist,
-    source,
-  });
+  if (persist) {
+    await saveAiArtifact({
+      entityType: "JOB",
+      entityId: jobId,
+      action: AI_ARTIFACT_ACTIONS.COMPLETION_ASSIST,
+      data: assist,
+      source,
+    });
+  }
 
   return {
     data: assist,
