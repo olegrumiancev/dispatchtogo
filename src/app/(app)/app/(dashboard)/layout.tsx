@@ -42,7 +42,7 @@ export default async function DashboardLayout({
 
   return (
     <AuthSessionProvider>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gradient-to-br from-[#f8fafc] via-white to-[#e8f0fe]">
         <Sidebar role={user.role} userName={user.name ?? user.email} smsRedirectEnabled={smsRedirectEnabled} />
         <div className="md:pl-64 flex flex-col min-h-screen">
           <Header

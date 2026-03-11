@@ -5,7 +5,8 @@ import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
-import { Truck, AlertCircle, Mail } from "lucide-react";
+import { AlertCircle, Mail } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -70,11 +71,7 @@ export default function ForgotPasswordPage() {
     <div className="w-full max-w-md">
       {/* Branding */}
       <div className="flex flex-col items-center mb-8">
-        <div className="w-14 h-14 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg mb-4">
-          <Truck className="w-8 h-8 text-white" />
-        </div>
-        <h1 className="text-3xl font-bold text-white">DispatchToGo</h1>
-        <p className="text-slate-400 text-sm mt-1">Reset your password</p>
+        <BrandLogo size="lg" theme="dark" subtitle="Reset your password" />
       </div>
 
       {/* Card */}

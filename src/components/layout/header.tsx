@@ -11,9 +11,9 @@ interface HeaderProps {
 }
 
 const roleBadgeColors: Record<string, string> = {
-  OPERATOR: "bg-blue-100 text-blue-800",
+  OPERATOR: "bg-brand-mist text-brand-primary",
   VENDOR: "bg-emerald-100 text-emerald-800",
-  ADMIN: "bg-purple-100 text-purple-800",
+  ADMIN: "bg-rose-100 text-rose-700",
 };
 
 const roleLabels: Record<string, string> = {
@@ -26,14 +26,14 @@ export function Header({ pageTitle, userName, userRole, className }: HeaderProps
   return (
     <header
       className={cn(
-        "h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6",
+        "flex h-16 items-center justify-between border-b border-brand-mist bg-white/90 px-4 backdrop-blur-sm md:px-6",
         className
       )}
     >
       {/* Left: Title (leave space for mobile hamburger) */}
       <div className="ml-12 md:ml-0">
         {pageTitle && (
-          <h1 className="text-lg font-semibold text-gray-900 truncate">
+          <h1 className="truncate text-lg font-semibold text-brand-ink">
             {pageTitle}
           </h1>
         )}
@@ -50,11 +50,11 @@ export function Header({ pageTitle, userName, userRole, className }: HeaderProps
           </Badge>
         )}
         {userName && (
-          <span className="text-sm text-gray-700 font-medium truncate max-w-[140px]">
+          <span className="max-w-[140px] truncate text-sm font-medium text-slate-700">
             {userName}
           </span>
         )}
-        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-primary text-sm font-semibold text-white shadow-sm">
           {userName?.charAt(0).toUpperCase() || "U"}
         </div>
       </div>

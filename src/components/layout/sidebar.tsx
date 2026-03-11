@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { BrandLogo } from "@/components/brand/brand-logo";
 import {
   LayoutDashboard,
   ClipboardList,
@@ -19,7 +20,6 @@ import {
   Menu,
   X,
   LogOut,
-  Truck,
   ShieldCheck,
   UserCog,
   Heart,
@@ -71,6 +71,12 @@ interface SidebarProps {
 export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const homeHref =
+    role === "OPERATOR"
+      ? "/app/operator"
+      : role === "VENDOR"
+      ? "/app/vendor/jobs"
+      : "/app/admin";
 
   const navItems =
     role === "OPERATOR"
@@ -94,11 +100,8 @@ export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarP
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-700">
-        <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
-          <Truck className="w-5 h-5 text-white" />
-        </div>
-        <span className="text-white font-semibold text-lg">DispatchToGo</span>
+      <div className="px-4 py-5 border-b border-slate-700">
+        <BrandLogo href={homeHref} size="sm" theme="dark" />
       </div>
 
       {/* Navigation */}
@@ -114,8 +117,8 @@ export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarP
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
                 active
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-300 hover:bg-slate-700 hover:text-white"
+                  ? "bg-brand-primary text-white shadow-sm"
+                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
               )}
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
@@ -138,7 +141,7 @@ export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarP
         )}
         <button
           onClick={() => signOut({ callbackUrl: "/app/login" })}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-md text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+          className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
         >
           <LogOut className="w-5 h-5 flex-shrink-0" />
           Sign Out
@@ -150,14 +153,14 @@ export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarP
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex md:flex-col md:w-64 md:fixed md:inset-y-0 bg-slate-800 z-30">
+      <aside className="z-30 hidden bg-slate-950 md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col">
         <SidebarContent />
       </aside>
 
       {/* Mobile: hamburger button */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-40 p-2 bg-slate-800 text-white rounded-md shadow-lg"
+        className="fixed left-4 top-4 z-40 rounded-md bg-slate-950 p-2 text-white shadow-lg md:hidden"
         aria-label="Open menu"
       >
         <Menu className="w-5 h-5" />
@@ -170,7 +173,7 @@ export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarP
             className="absolute inset-0 bg-black/50"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="relative w-64 bg-slate-800 h-full shadow-xl">
+          <aside className="relative h-full w-64 bg-slate-950 shadow-xl">
             <button
               onClick={() => setMobileOpen(false)}
               className="absolute top-4 right-4 p-1 text-slate-400 hover:text-white"

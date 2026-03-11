@@ -1,12 +1,12 @@
 import Link from "next/link";
 import {
-  Truck,
   CheckCircle2,
   ArrowRight,
   Zap,
   HelpCircle,
   Clock,
 } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 const FREE_FEATURES = [
   "15 completed service requests included / month",
@@ -61,12 +61,24 @@ function NavBar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
-            <Truck className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900">DispatchToGo</span>
-        </Link>
+        <BrandLogo href="/" size="sm" hideWordmarkOnMobile />
+        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
+          <Link href="/" className="hover:text-gray-900 transition-colors">
+            Home
+          </Link>
+          <Link href="/#features" className="hover:text-gray-900 transition-colors">
+            Features
+          </Link>
+          <Link href="/#how-it-works" className="hover:text-gray-900 transition-colors">
+            How It Works
+          </Link>
+          <Link href="/about" className="hover:text-gray-900 transition-colors">
+            About
+          </Link>
+          <Link href="/pricing" className="text-gray-900 transition-colors">
+            Pricing
+          </Link>
+        </div>
         <div className="flex items-center gap-3">
           <Link
             href="/app/login"
@@ -262,16 +274,14 @@ export default function PricingPage() {
       {/* Footer */}
       <footer className="bg-gray-900 text-gray-400 py-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <Truck className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-white font-semibold">DispatchToGo</span>
-            </div>
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <BrandLogo href="/" size="sm" theme="dark" />
             <div className="flex items-center gap-6 text-sm">
               <Link href="/" className="hover:text-white transition-colors">
                 Home
+              </Link>
+              <Link href="/about" className="hover:text-white transition-colors">
+                About
               </Link>
               <Link href="/app/login" className="hover:text-white transition-colors">
                 Sign In

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import {
-  Truck,
   Zap,
   Shield,
   BarChart3,
@@ -13,32 +12,41 @@ import {
   Clock,
   FileText,
 } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
+import { HeroCopy } from "./hero-copy";
 
 function NavBar() {
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-100">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
-            <Truck className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900">DispatchToGo</span>
-        </Link>
-        <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-          <a href="#features" className="hover:text-gray-900 transition-colors">Features</a>
-          <a href="#how-it-works" className="hover:text-gray-900 transition-colors">How It Works</a>
-          <Link href="/pricing" className="hover:text-gray-900 transition-colors">Pricing</Link>
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-gray-100 bg-white/80 backdrop-blur-md">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <BrandLogo href="/" size="sm" hideWordmarkOnMobile />
+        <div className="hidden items-center gap-8 text-sm font-medium text-gray-600 md:flex">
+          <Link href="/" className="text-gray-900">
+            Home
+          </Link>
+          <a href="#features" className="transition-colors hover:text-gray-900">
+            Features
+          </a>
+          <a href="#how-it-works" className="transition-colors hover:text-gray-900">
+            How It Works
+          </a>
+          <Link href="/about" className="transition-colors hover:text-gray-900">
+            About
+          </Link>
+          <Link href="/pricing" className="transition-colors hover:text-gray-900">
+            Pricing
+          </Link>
         </div>
         <div className="flex items-center gap-3">
           <Link
             href="/app/login"
-            className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+            className="text-sm font-medium text-gray-700 transition-colors hover:text-gray-900"
           >
             Sign In
           </Link>
           <Link
             href="/app/register"
-            className="text-sm font-medium bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             Get Started Free
           </Link>
@@ -50,38 +58,32 @@ function NavBar() {
 
 function Hero() {
   return (
-    <section className="pt-32 pb-20 bg-gradient-to-b from-slate-50 to-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="max-w-3xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
-            <Zap className="w-4 h-4" />
+    <section className="bg-gradient-to-b from-slate-50 to-white pb-20 pt-32">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-3xl text-center">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-1.5 text-sm font-medium text-blue-700">
+            <Zap className="h-4 w-4" />
             Built for Cornwall &amp; SDG Tourism Operators
           </div>
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 tracking-tight leading-tight">
-            Dispatch vendors.{" "}
-            <span className="text-blue-600">Track everything.</span>
-          </h1>
-          <p className="mt-6 text-lg sm:text-xl text-gray-600 leading-relaxed max-w-2xl mx-auto">
-            DispatchToGo is a managed vendor network for hotels, marinas, and property operators.
-            Submit a maintenance request, and we handle triage, dispatch, and proof of service — automatically.
-          </p>
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+          <HeroCopy />
+          <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
               href="/app/register"
-              className="inline-flex items-center gap-2 bg-blue-600 text-white text-lg font-semibold px-8 py-4 rounded-xl hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-4 text-lg font-semibold text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700"
             >
               Get Started Free
-              <ArrowRight className="w-5 h-5" />
+              <ArrowRight className="h-5 w-5" />
             </Link>
             <Link
               href="/pricing"
-              className="inline-flex items-center gap-2 bg-white text-gray-700 text-lg font-semibold px-8 py-4 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-colors"
+              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-8 py-4 text-lg font-semibold text-gray-700 transition-colors hover:border-gray-300 hover:bg-gray-50"
             >
               View Pricing
             </Link>
           </div>
           <p className="mt-4 text-sm text-gray-500">
-            Free tier included &middot; 15 requests/month &middot; No credit card to start
+            Free tier included &middot; 15 requests/month &middot; No credit
+            card to start
           </p>
         </div>
       </div>
@@ -130,29 +132,32 @@ function Features() {
   ];
 
   return (
-    <section id="features" className="py-20 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+    <section id="features" className="bg-white py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-16 text-center">
+          <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
             Everything you need to manage vendors
           </h2>
-          <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-            From the moment a maintenance issue is reported to the final proof of service — DispatchToGo handles the entire workflow.
+          <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
+            From the moment a maintenance issue is reported to the final proof
+            of service — DispatchToGo handles the entire workflow.
           </p>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {features.map((f) => (
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+          {features.map((feature) => (
             <div
-              key={f.title}
-              className="bg-gray-50 rounded-2xl p-8 hover:bg-gray-100 transition-colors"
+              key={feature.title}
+              className="rounded-2xl bg-gray-50 p-8 transition-colors hover:bg-gray-100"
             >
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-5">
-                <f.icon className="w-6 h-6 text-blue-600" />
+              <div className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100">
+                <feature.icon className="h-6 w-6 text-blue-600" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {f.title}
+              <h3 className="mb-2 text-lg font-semibold text-gray-900">
+                {feature.title}
               </h3>
-              <p className="text-gray-600 leading-relaxed">{f.description}</p>
+              <p className="leading-relaxed text-gray-600">
+                {feature.description}
+              </p>
             </div>
           ))}
         </div>
@@ -194,30 +199,28 @@ function HowItWorks() {
   ];
 
   return (
-    <section id="how-it-works" className="py-20 bg-slate-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900">
+    <section id="how-it-works" className="bg-slate-50 py-20">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="mb-16 text-center">
+          <h2 className="text-3xl font-bold text-gray-900 sm:text-4xl">
             How it works
           </h2>
-          <p className="mt-4 text-lg text-gray-600">
-            Four steps. Zero phone calls.
-          </p>
+          <p className="mt-4 text-lg text-gray-600">Four steps. Zero phone calls.</p>
         </div>
-        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {steps.map((s) => (
-            <div key={s.step} className="text-center">
-              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-blue-600/20">
-                <s.icon className="w-8 h-8 text-white" />
+        <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+          {steps.map((step) => (
+            <div key={step.step} className="text-center">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-600 shadow-lg shadow-blue-600/20">
+                <step.icon className="h-8 w-8 text-white" />
               </div>
-              <div className="text-sm font-bold text-blue-600 mb-2">
-                Step {s.step}
+              <div className="mb-2 text-sm font-bold text-blue-600">
+                Step {step.step}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {s.title}
+              <h3 className="mb-2 text-lg font-semibold text-gray-900">
+                {step.title}
               </h3>
-              <p className="text-gray-600 text-sm leading-relaxed">
-                {s.description}
+              <p className="text-sm leading-relaxed text-gray-600">
+                {step.description}
               </p>
             </div>
           ))}
@@ -229,29 +232,30 @@ function HowItWorks() {
 
 function CTA() {
   return (
-    <section className="py-20 bg-blue-600">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-3xl sm:text-4xl font-bold text-white">
+    <section className="bg-blue-600 py-20">
+      <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
+        <h2 className="text-3xl font-bold text-white sm:text-4xl">
           Ready to streamline your maintenance?
         </h2>
-        <p className="mt-4 text-lg text-blue-100 max-w-2xl mx-auto">
-          Join Cornwall &amp; SDG operators who are replacing phone calls and spreadsheets with automated dispatch and verified proof of service.
+        <p className="mx-auto mt-4 max-w-2xl text-lg text-blue-100">
+          Join Cornwall &amp; SDG operators who are replacing phone calls and
+          spreadsheets with automated dispatch and verified proof of service.
         </p>
-        <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
           <Link
             href="/app/register"
-            className="inline-flex items-center gap-2 bg-white text-blue-600 text-lg font-semibold px-8 py-4 rounded-xl hover:bg-blue-50 transition-colors"
+            className="inline-flex items-center gap-2 rounded-xl bg-white px-8 py-4 text-lg font-semibold text-blue-600 transition-colors hover:bg-blue-50"
           >
             Get Started Free
-            <ArrowRight className="w-5 h-5" />
+            <ArrowRight className="h-5 w-5" />
           </Link>
         </div>
-        <div className="mt-6 flex items-center justify-center gap-6 text-blue-100 text-sm">
+        <div className="mt-6 flex items-center justify-center gap-6 text-sm text-blue-100">
           <span className="flex items-center gap-1.5">
-            <Shield className="w-4 h-4" /> 15 requests/month free
+            <Shield className="h-4 w-4" /> 15 requests/month free
           </span>
           <span className="flex items-center gap-1.5">
-            <Clock className="w-4 h-4" /> $0.25 CAD per additional completion
+            <Clock className="h-4 w-4" /> $0.25 CAD per additional completion
           </span>
         </div>
       </div>
@@ -261,34 +265,33 @@ function CTA() {
 
 function Footer() {
   return (
-    <footer className="bg-gray-900 text-gray-400 py-12">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Truck className="w-4 h-4 text-white" />
-            </div>
-            <span className="text-white font-semibold">DispatchToGo</span>
-          </div>
+    <footer className="bg-gray-900 py-12 text-gray-400">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center justify-between gap-6 md:flex-row">
+          <BrandLogo href="/" size="sm" theme="dark" />
           <div className="flex items-center gap-6 text-sm">
-            <Link href="/pricing" className="hover:text-white transition-colors">
+            <Link href="/pricing" className="transition-colors hover:text-white">
               Pricing
             </Link>
-            <Link href="/app/login" className="hover:text-white transition-colors">
+            <Link href="/about" className="transition-colors hover:text-white">
+              About
+            </Link>
+            <Link href="/app/login" className="transition-colors hover:text-white">
               Sign In
             </Link>
-            <Link href="/app/register" className="hover:text-white transition-colors">
+            <Link href="/app/register" className="transition-colors hover:text-white">
               Register
             </Link>
-            <Link href="/terms" className="hover:text-white transition-colors">
+            <Link href="/terms" className="transition-colors hover:text-white">
               Terms
             </Link>
-            <Link href="/privacy" className="hover:text-white transition-colors">
+            <Link href="/privacy" className="transition-colors hover:text-white">
               Privacy
             </Link>
           </div>
           <p className="text-sm">
-            &copy; {new Date().getFullYear()} DispatchToGo. Cornwall &amp; SDG, Ontario.
+            &copy; {new Date().getFullYear()} DispatchToGo. Cornwall &amp; SDG,
+            Ontario.
           </p>
         </div>
       </div>

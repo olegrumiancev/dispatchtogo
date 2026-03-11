@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">DispatchToGo concept C</title>
+  <desc id="desc">Minimal truck with motion lines that taper into a maple-inspired accent.</desc>
+  <rect width="64" height="64" rx="16" fill="#1557C8"/>
+  <path d="M10 28h9.5" stroke="#A8C8FF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M10 33h13" stroke="#A8C8FF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M10 38h8" stroke="#A8C8FF" stroke-width="3" stroke-linecap="round"/>
+  <path d="M24 25h18.4c1.8 0 3.43.83 4.48 2.27l4.12 5.68c.64.88.98 1.94.98 3.03V39a2 2 0 0 1-2 2h-2.1a6.1 6.1 0 0 0-11.72 0H26.8a6.1 6.1 0 0 0-11.72 0H14a2 2 0 0 1-2-2v-2.4a2.6 2.6 0 0 1 2.6-2.6H24V25Z" fill="#ffffff"/>
+  <path d="M38 28.4h5.2c1.13 0 2.2.54 2.87 1.45L49 33.7h-11v-5.3Z" fill="#1557C8"/>
+  <path d="m23 22 1.4 2.2 2.4.25-1.75 1.65.5 2.3-2.15-1.1-2.1 1.1.45-2.3-1.65-1.65 2.35-.25L23 22Z" fill="#D84B3E"/>
+  <circle cx="20.9" cy="41" r="4.6" fill="#0F172A"/>
+  <circle cx="40.9" cy="41" r="4.6" fill="#0F172A"/>
+  <circle cx="20.9" cy="41" r="2.15" fill="#ffffff"/>
+  <circle cx="40.9" cy="41" r="2.15" fill="#ffffff"/>
+</svg>

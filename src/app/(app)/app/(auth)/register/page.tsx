@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { SERVICE_CATEGORIES, ORGANIZATION_TYPES } from "@/lib/constants";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
-import { Truck, AlertCircle, Mail, Globe } from "lucide-react";
+import { AlertCircle, Mail, Globe } from "lucide-react";
+import { BrandLogo } from "@/components/brand/brand-logo";
 
 type Role = "OPERATOR" | "VENDOR" | "";
 
@@ -157,13 +158,12 @@ export default function RegisterPage() {
     <div className="w-full max-w-md">
       {/* Branding */}
       <div className="flex flex-col items-center mb-8">
-        <a href={process.env.NEXT_PUBLIC_WWW_BASE_URL ?? "https://www.dispatchtogo.com"}>
-          <div className="w-14 h-14 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg mb-4">
-            <Truck className="w-8 h-8 text-white" />
-          </div>
-        </a>
-        <h1 className="text-3xl font-bold text-white">DispatchToGo</h1>
-        <p className="text-slate-400 text-sm mt-1">Create your account</p>
+        <BrandLogo
+          href={process.env.NEXT_PUBLIC_WWW_BASE_URL ?? "https://www.dispatchtogo.com"}
+          size="lg"
+          theme="dark"
+          subtitle="Create your account"
+        />
       </div>
 
       {/* Card */}

@@ -8,7 +8,7 @@ interface PaginationControlsProps {
   basePath: string;
   /** Extra query params to preserve across page changes */
   extraParams?: Record<string, string>;
-  /** Total number of items (optional — displays "Showing X–Y of N") */
+  /** Total number of items (optional - displays "Showing X-Y of N") */
   total?: number;
   pageSize?: number;
 }
@@ -32,7 +32,6 @@ export function PaginationControls({
 }: PaginationControlsProps) {
   if (totalPages <= 1) return null;
 
-  // Build a window of page numbers around the current page
   const windowSize = 5;
   const half = Math.floor(windowSize / 2);
   let start = Math.max(1, page - half);
@@ -46,53 +45,50 @@ export function PaginationControls({
   const rangeEnd = total && pageSize ? Math.min(page * pageSize, total) : null;
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-1 py-3">
+    <div className="flex flex-col items-center justify-between gap-3 px-1 py-3 sm:flex-row">
       {total != null && rangeStart != null && rangeEnd != null ? (
-        <p className="text-sm text-gray-500">
-          Showing <span className="font-medium text-gray-700">{rangeStart}–{rangeEnd}</span> of{" "}
-          <span className="font-medium text-gray-700">{total}</span>
+        <p className="text-sm text-slate-500">
+          Showing <span className="font-medium text-slate-700">{rangeStart}-{rangeEnd}</span> of{" "}
+          <span className="font-medium text-slate-700">{total}</span>
         </p>
       ) : (
-        <p className="text-sm text-gray-500">
-          Page <span className="font-medium text-gray-700">{page}</span> of{" "}
-          <span className="font-medium text-gray-700">{totalPages}</span>
+        <p className="text-sm text-slate-500">
+          Page <span className="font-medium text-slate-700">{page}</span> of{" "}
+          <span className="font-medium text-slate-700">{totalPages}</span>
         </p>
       )}
 
       <nav className="flex items-center gap-1">
-        {/* Prev */}
         {page > 1 ? (
           <Link
             href={buildHref(basePath, page - 1, extraParams)}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-brand-mist"
           >
             <ChevronLeft className="w-4 h-4" />
           </Link>
         ) : (
-          <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-gray-300 cursor-not-allowed">
+          <span className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md text-slate-300">
             <ChevronLeft className="w-4 h-4" />
           </span>
         )}
 
-        {/* Ellipsis before */}
         {start > 1 && (
           <>
             <Link
               href={buildHref(basePath, 1, extraParams)}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-slate-700 transition-colors hover:bg-brand-mist"
             >
               1
             </Link>
-            {start > 2 && <span className="px-1 text-gray-400 text-sm">…</span>}
+            {start > 2 && <span className="px-1 text-sm text-slate-400">...</span>}
           </>
         )}
 
-        {/* Page numbers */}
-        {pages.map((p) => (
+        {pages.map((p) =>
           p === page ? (
             <span
               key={p}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm font-semibold bg-blue-600 text-white"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-brand-primary text-sm font-semibold text-white"
             >
               {p}
             </span>
@@ -100,36 +96,34 @@ export function PaginationControls({
             <Link
               key={p}
               href={buildHref(basePath, p, extraParams)}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-slate-700 transition-colors hover:bg-brand-mist"
             >
               {p}
             </Link>
           )
-        ))}
+        )}
 
-        {/* Ellipsis after */}
         {end < totalPages && (
           <>
-            {end < totalPages - 1 && <span className="px-1 text-gray-400 text-sm">…</span>}
+            {end < totalPages - 1 && <span className="px-1 text-sm text-slate-400">...</span>}
             <Link
               href={buildHref(basePath, totalPages, extraParams)}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-sm text-slate-700 transition-colors hover:bg-brand-mist"
             >
               {totalPages}
             </Link>
           </>
         )}
 
-        {/* Next */}
         {page < totalPages ? (
           <Link
             href={buildHref(basePath, page + 1, extraParams)}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-600 transition-colors hover:bg-brand-mist"
           >
             <ChevronRight className="w-4 h-4" />
           </Link>
         ) : (
-          <span className="inline-flex items-center justify-center w-8 h-8 rounded-md text-gray-300 cursor-not-allowed">
+          <span className="inline-flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md text-slate-300">
             <ChevronRight className="w-4 h-4" />
           </span>
         )}

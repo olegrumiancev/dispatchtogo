@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">DispatchToGo concept A</title>
+  <desc id="desc">Truck mark with a half maple leaf integrated into the cargo box.</desc>
+  <rect width="64" height="64" rx="16" fill="#1557C8"/>
+  <path d="M12 22h22.6c1.33 0 2.4 1.07 2.4 2.4V37H12V24.4c0-1.33 1.07-2.4 2.4-2.4Z" fill="#ffffff"/>
+  <path d="M29.8 22h4.8l4.9 4.1L37 29l3.2 2.5L37 34l2.5 3H37l-2.4-2.4V37H12V22h17.8Z" fill="#ffffff"/>
+  <path d="M37 27.5h7.5c1.7 0 3.2.77 4.2 2.1l3.34 4.45c.63.84.96 1.86.96 2.91V40a2 2 0 0 1-2 2H48.9a6.4 6.4 0 0 0-12.3 0H27.4a6.4 6.4 0 0 0-12.3 0H14a2 2 0 0 1-2-2V37.5a2.5 2.5 0 0 1 2.5-2.5H37v-7.5Z" fill="#ffffff"/>
+  <path d="M41 30.5h4.16c1.05 0 2.04.5 2.66 1.34L50.8 35.9H41v-5.4Z" fill="#1557C8"/>
+  <circle cx="21.3" cy="42" r="4.8" fill="#0F172A"/>
+  <circle cx="42.7" cy="42" r="4.8" fill="#0F172A"/>
+  <circle cx="21.3" cy="42" r="2.2" fill="#ffffff"/>
+  <circle cx="42.7" cy="42" r="2.2" fill="#ffffff"/>
+</svg>

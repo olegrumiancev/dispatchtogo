@@ -1,49 +1,201 @@
 [@sentry/nextjs] DEPRECATION WARNING: It is recommended renaming your `sentry.client.config.ts` file, or moving its content to `instrumentation-client.ts`. When using Turbopack `sentry.client.config.ts` will no longer work. Read more about the `instrumentation-client.ts` file: https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation-client
- ⨯ Failed to generate static paths for /api/auth/[...nextauth]:
-[Error: ENOENT: no such file or directory, open 'E:\DispatchToGo\dispatchtogo\.next\build-manifest.json'] {
-  type: 'Error',
-  errno: -4058,
-  code: 'ENOENT',
-  syscall: 'open',
-  path: 'E:\\DispatchToGo\\dispatchtogo\\.next\\build-manifest.json'
-}
- ⨯ Error: Cannot find module './4315.js'
-Require stack:
-- E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js
-- E:\DispatchToGo\dispatchtogo\.next\server\app\api\auth\[...nextauth]\route.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\require.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\load-components.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\utils.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\swc\options.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\swc\index.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\next-config-ts\transpile-config.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\config.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\next.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\lib\start-server.js
-    at __webpack_require__.f.require (E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js:201:28)
-    at <unknown> (E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js:114:40)
-    at Array.reduce (<anonymous>)
-    at __webpack_require__.e (E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js:113:67)
-    at Array.map (<anonymous>)
-    at __webpack_require__.X (E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js:165:22)
-    at <unknown> (E:\DispatchToGo\dispatchtogo\.next\server\app\(app)\app\(dashboard)\admin\proof-packets\page.js:1:17597)
-    at Object.<anonymous> (E:\DispatchToGo\dispatchtogo\.next\server\app\(app)\app\(dashboard)\admin\proof-packets\page.js:1:17668) {
-  code: 'MODULE_NOT_FOUND',
-  requireStack: [Array],
-  page: '/app/admin/proof-packets'
-}
- ⨯ Failed to generate static paths for /api/proof-packets/[jobId]:
-[Error: Cannot find module './vendor-chunks/@opentelemetry.js'
-Require stack:
-- E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js
-- E:\DispatchToGo\dispatchtogo\.next\server\app\api\proof-packets\[jobId]\route.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\require.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\load-components.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\utils.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\dev\static-paths-worker.js
-- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\compiled\jest-worker\processChild.js] {
-  type: 'Error',
-  code: 'MODULE_NOT_FOUND',
-  requireStack: [Array]
-}
-^C
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m | 
+ [2m56[0m |   const content = (
+ [2m57[0m |     <div
+    : [35;1m     ^^^[0m
+ [2m58[0m |       className={[
+ [2m59[0m |         "inline-flex",
+ [2m60[0m |         "items-center",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m 'const' declarations must be initialized
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:55:1]
+ [2m52[0m |   const subtitleColor = theme === "dark" ? "text-slate-400" : "text-slate-500";
+ [2m53[0m |   const isStacked = layout === "stacked";
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m |   const image
+    : [35;1m        ^^^^^[0m
+ [2m56[0m | 
+ [2m57[0m |   const content = (
+ [2m58[0m |     <div
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⨯ ./src/components/brand/brand-logo.tsx
+Error:   [31mx[0m Expression expected
+    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
+ [2m54[0m |   const iconSize = scale.horizontalIcon;
+ [2m55[0m |   const imageClass = 
+ [2m56[0m | 
+ [2m57[0m |   const content = (
+    : [35;1m  ^^^^^[0m
+ [2m58[0m |     <div
+ [2m59[0m |       className={[
+ [2m60[0m |         "inline-flex",
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./src/components/brand/brand-logo.tsx
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
