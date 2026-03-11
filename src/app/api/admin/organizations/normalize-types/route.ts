@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ORGANIZATION_TYPES } from "@/lib/constants";
-
-const ALLOWED_TYPES = new Set<string>(ORGANIZATION_TYPES.map((t) => t.value));
+import { getOrganizationTypes } from "@/lib/catalog";
 
 /**
  * POST /api/admin/organizations/normalize-types
@@ -20,6 +18,8 @@ export async function POST() {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const allowedTypes = new Set<string>((await getOrganizationTypes()).map((t) => t.value));
+
   const orgs = await prisma.organization.findMany({
     select: { id: true, type: true },
   });
@@ -27,8 +27,8 @@ export async function POST() {
   let fixed = 0;
   for (const org of orgs) {
     const upper = org.type.toUpperCase();
-    if (org.type !== upper || !ALLOWED_TYPES.has(upper)) {
-      const newType = ALLOWED_TYPES.has(upper) ? upper : "OTHER";
+    if (org.type !== upper || !allowedTypes.has(upper)) {
+      const newType = allowedTypes.has(upper) ? upper : "OTHER";
       if (newType !== org.type) {
         await prisma.organization.update({
           where: { id: org.id },

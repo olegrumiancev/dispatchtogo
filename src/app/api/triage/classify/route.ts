@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { isAiConfigured } from "@/lib/ai-client";
 import { runClarificationCopilot } from "@/lib/ai-assist";
+import { getServiceCategories } from "@/lib/catalog";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(request: NextRequest) {
@@ -39,24 +40,8 @@ export async function POST(request: NextRequest) {
       .then((rows) => rows.map((row) => row.category)),
   ]);
 
-  const categories =
-    vendorCategories.length > 0
-      ? vendorCategories
-      : [
-          "PLUMBING",
-          "ELECTRICAL",
-          "HVAC",
-          "APPLIANCE",
-          "LOCKSMITH",
-          "SNOW_REMOVAL",
-          "LANDSCAPING",
-          "CLEANING",
-          "DOCK_MARINA",
-          "STRUCTURAL",
-          "PEST",
-          "GENERAL",
-          "OTHER",
-        ];
+  const configuredCategories = (await getServiceCategories()).map((category) => category.value);
+  const categories = vendorCategories.length > 0 ? vendorCategories : configuredCategories;
 
   try {
     const result = await runClarificationCopilot({

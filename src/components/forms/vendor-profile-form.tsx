@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { SERVICE_CATEGORIES } from "@/lib/constants";
 import { Save, Loader2 } from "lucide-react";
+import { useCatalogOptions } from "@/hooks/use-catalog-options";
 
 interface VendorProfileFormProps {
   vendor: {
@@ -23,6 +23,7 @@ interface VendorProfileFormProps {
 
 export default function VendorProfileForm({ vendor, onSaved }: VendorProfileFormProps) {
   const router = useRouter();
+  const { serviceCategories } = useCatalogOptions();
   const [form, setForm] = useState({
     companyName: vendor.companyName,
     contactName: vendor.contactName,
@@ -203,7 +204,7 @@ export default function VendorProfileForm({ vendor, onSaved }: VendorProfileForm
         <div className="sm:col-span-2">
           <p className={labelClass}>Service Categories</p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {SERVICE_CATEGORIES.map((category) => {
+            {serviceCategories.map((category) => {
               const checked = form.categories.includes(category.value);
               return (
                 <label

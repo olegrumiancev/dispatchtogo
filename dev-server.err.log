@@ -1,201 +1,133 @@
 [@sentry/nextjs] DEPRECATION WARNING: It is recommended renaming your `sentry.client.config.ts` file, or moving its content to `instrumentation-client.ts`. When using Turbopack `sentry.client.config.ts` will no longer work. Read more about the `instrumentation-client.ts` file: https://nextjs.org/docs/app/api-reference/file-conventions/instrumentation-client
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Unexpected token `div`. Expected jsx identifier
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m | 
- [2m56[0m |   const content = (
- [2m57[0m |     <div
-    : [35;1m     ^^^[0m
- [2m58[0m |       className={[
- [2m59[0m |         "inline-flex",
- [2m60[0m |         "items-center",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m 'const' declarations must be initialized
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:55:1]
- [2m52[0m |   const subtitleColor = theme === "dark" ? "text-slate-400" : "text-slate-500";
- [2m53[0m |   const isStacked = layout === "stacked";
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m |   const image
-    : [35;1m        ^^^^^[0m
- [2m56[0m | 
- [2m57[0m |   const content = (
- [2m58[0m |     <div
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
- ⨯ ./src/components/brand/brand-logo.tsx
-Error:   [31mx[0m Expression expected
-    ,-[[36;1;4mE:\DispatchToGo\dispatchtogo\src\components\brand\brand-logo.tsx[0m:57:1]
- [2m54[0m |   const iconSize = scale.horizontalIcon;
- [2m55[0m |   const imageClass = 
- [2m56[0m | 
- [2m57[0m |   const content = (
-    : [35;1m  ^^^^^[0m
- [2m58[0m |     <div
- [2m59[0m |       className={[
- [2m60[0m |         "inline-flex",
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./src/components/brand/brand-logo.tsx
  ⚠ Fast Refresh had to perform a full reload due to a runtime error.
  ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ ReferenceError: sectionNavItems is not defined
+    at sectionNavItems (src\components\forms\vendor-job-detail.tsx:1388:7)
+  1386 |       )}
+  1387 |
+> 1388 |       {sectionNavItems.length > 1 && (
+       |       ^
+  1389 |         <div className="sticky top-3 z-20 -mx-1">
+  1390 |           <div className="overflow-x-auto rounded-2xl border border-gray-200/80 bg-white/90 p-2 shadow-sm backdrop-blur">
+  1391 |             <div className="flex min-w-max gap-2"> {
+  digest: '1627391481'
+}
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ ReferenceError: sectionNavItems is not defined
+    at sectionNavItems (src\components\forms\vendor-job-detail.tsx:1392:7)
+  1390 |       )}
+  1391 |
+> 1392 |       {sectionNavItems.length > 1 && (
+       |       ^
+  1393 |         <div className="sticky top-3 z-20 -mx-1">
+  1394 |           <div className="overflow-x-auto rounded-2xl border border-gray-200/80 bg-white/90 p-2 shadow-sm backdrop-blur">
+  1395 |             <div className="flex min-w-max gap-2"> {
+  digest: '1627391481'
+}
+ ⨯ ReferenceError: sectionNavItems is not defined
+    at sectionNavItems (src\components\forms\vendor-job-detail.tsx:1392:7)
+  1390 |       )}
+  1391 |
+> 1392 |       {sectionNavItems.length > 1 && (
+       |       ^
+  1393 |         <div className="sticky top-3 z-20 -mx-1">
+  1394 |           <div className="overflow-x-auto rounded-2xl border border-gray-200/80 bg-white/90 p-2 shadow-sm backdrop-blur">
+  1395 |             <div className="flex min-w-max gap-2"> {
+  digest: '1627391481'
+}
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ ReferenceError: sectionNavItems is not defined
+    at sectionNavItems (src\components\forms\vendor-job-detail.tsx:1397:7)
+  1395 |       )}
+  1396 |
+> 1397 |       {sectionNavItems.length > 1 && (
+       |       ^
+  1398 |         <div className="sticky top-3 z-20 -mx-1">
+  1399 |           <div className="overflow-x-auto rounded-2xl border border-gray-200/80 bg-white/90 p-2 shadow-sm backdrop-blur">
+  1400 |             <div className="flex min-w-max gap-2"> {
+  digest: '1627391481'
+}
+ ⨯ ReferenceError: sectionNavItems is not defined
+    at sectionNavItems (src\components\forms\vendor-job-detail.tsx:1397:7)
+  1395 |       )}
+  1396 |
+> 1397 |       {sectionNavItems.length > 1 && (
+       |       ^
+  1398 |         <div className="sticky top-3 z-20 -mx-1">
+  1399 |           <div className="overflow-x-auto rounded-2xl border border-gray-200/80 bg-white/90 p-2 shadow-sm backdrop-blur">
+  1400 |             <div className="flex min-w-max gap-2"> {
+  digest: '1627391481'
+}
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⨯ Failed to generate static paths for /api/auth/[...nextauth]:
+[Error: Cannot find module './vendor-chunks/@opentelemetry.js'
+Require stack:
+- E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js
+- E:\DispatchToGo\dispatchtogo\.next\server\app\api\auth\[...nextauth]\route.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\require.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\load-components.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\utils.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\dev\static-paths-worker.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\compiled\jest-worker\processChild.js] {
+  type: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ⨯ [Error: Cannot find module './vendor-chunks/@opentelemetry.js'
+Require stack:
+- E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js
+- E:\DispatchToGo\dispatchtogo\.next\server\app\api\jobs\[id]\completion-assist\route.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\require.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\load-components.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\utils.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\dev\static-paths-worker.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\compiled\jest-worker\processChild.js] {
+  type: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/api/jobs/cmmhyr3ho0001qd01bkyogjze/completion-assist'
+}
+ ⨯ Failed to generate static paths for /app/vendor/jobs/[id]:
+[Error: Cannot find module './vendor-chunks/@opentelemetry.js'
+Require stack:
+- E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js
+- E:\DispatchToGo\dispatchtogo\.next\server\app\(app)\app\(dashboard)\vendor\jobs\[id]\page.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\require.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\load-components.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\utils.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\dev\static-paths-worker.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\compiled\jest-worker\processChild.js] {
+  type: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ⨯ Failed to generate static paths for /app/vendor/jobs/[id]:
+[Error: Cannot find module './vendor-chunks/@opentelemetry.js'
+Require stack:
+- E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js
+- E:\DispatchToGo\dispatchtogo\.next\server\app\(app)\app\(dashboard)\vendor\jobs\[id]\page.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\require.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\load-components.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\utils.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\dev\static-paths-worker.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\compiled\jest-worker\processChild.js] {
+  type: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array]
+}
+ ⨯ [Error: Cannot find module './vendor-chunks/@opentelemetry.js'
+Require stack:
+- E:\DispatchToGo\dispatchtogo\.next\server\webpack-runtime.js
+- E:\DispatchToGo\dispatchtogo\.next\server\app\(app)\app\(dashboard)\vendor\jobs\[id]\page.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\require.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\load-components.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\build\utils.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\server\dev\static-paths-worker.js
+- E:\DispatchToGo\dispatchtogo\node_modules\next\dist\compiled\jest-worker\processChild.js] {
+  type: 'Error',
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [Array],
+  page: '/app/vendor/jobs/cmmhyr3ho0001qd01bkyogjze'
+}
+^C^C

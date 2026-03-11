@@ -153,9 +153,8 @@ export async function triageServiceRequest(
         data: {
           aiTriageSummary: normalized.summary,
           aiUrgencyScore: urgencyScore,
-          ...(normalized.statusSuggestion === "NEEDS_CLARIFICATION" &&
-          canUpdateRequestStatusForClarification(request.status)
-            ? { status: "NEEDS_CLARIFICATION" }
+          ...(canUpdateRequestStatusForClarification(request.status)
+            ? { status: normalized.statusSuggestion }
             : {}),
         },
       }),

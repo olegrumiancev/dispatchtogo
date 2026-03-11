@@ -27,6 +27,13 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   CANCELLED: [],
 };
 
+const OPERATOR_CLARIFICATION_EDIT_STATUSES = new Set([
+  "SUBMITTED",
+  "TRIAGING",
+  "NEEDS_CLARIFICATION",
+  "READY_TO_DISPATCH",
+]);
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -90,7 +97,76 @@ export async function PATCH(
   const user = session.user as any;
   const body = await request.json();
 
-  const { action, rejectionType, rejectionReason, status, urgency, description, aiTriageSummary, aiUrgencyScore } = body;
+  const {
+    action,
+    rejectionType,
+    rejectionReason,
+    status,
+    urgency,
+    description,
+    aiTriageSummary,
+    aiUrgencyScore,
+    clarificationAnswers,
+  } = body;
+
+  if (action === "submit_clarification") {
+    if (user.role !== "OPERATOR") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (!user.organizationId) {
+      return NextResponse.json({ error: "No organization linked to user" }, { status: 400 });
+    }
+    if (typeof clarificationAnswers !== "string" || !clarificationAnswers.trim()) {
+      return NextResponse.json(
+        { error: "Clarification answers are required" },
+        { status: 400 }
+      );
+    }
+
+    const current = await prisma.serviceRequest.findFirst({
+      where: { id, organizationId: user.organizationId },
+    });
+    if (!current) {
+      return NextResponse.json({ error: "Service request not found" }, { status: 404 });
+    }
+    if (!OPERATOR_CLARIFICATION_EDIT_STATUSES.has(current.status)) {
+      return NextResponse.json(
+        { error: `Cannot add clarification while request is ${current.status}` },
+        { status: 422 }
+      );
+    }
+
+    const clarificationBlock = [
+      "Clarification update from operator:",
+      clarificationAnswers.trim(),
+    ].join("\n");
+
+    const updated = await prisma.serviceRequest.update({
+      where: { id },
+      data: {
+        description: `${current.description.trim()}\n\n${clarificationBlock}`.trim(),
+      },
+      include: {
+        property: true,
+        photos: true,
+        job: {
+          include: {
+            vendor: true,
+            notes: {
+              include: { author: { select: { id: true, name: true, email: true, role: true } } },
+              orderBy: { createdAt: "asc" },
+            },
+            photos: true,
+            materials: true,
+            proofPacket: true,
+          },
+        },
+        invoice: true,
+      },
+    });
+
+    return NextResponse.json(updated);
+  }
 
   // ── Operator: verify completion ──────────────────────────────────────────
   if (action === "verify_completion") {

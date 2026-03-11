@@ -8,7 +8,8 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { optimizeImageFileForUpload } from "@/lib/client-image";
-import { SERVICE_CATEGORIES, URGENCY_LEVELS } from "@/lib/constants";
+import { URGENCY_LEVELS } from "@/lib/constants";
+import { useCatalogOptions } from "@/hooks/use-catalog-options";
 import {
   ImagePlus,
   ArrowLeft,
@@ -55,8 +56,30 @@ interface ClassificationResult {
 
 type Step = "describe" | "review";
 
+function buildClarificationPayload(
+  questions: string[],
+  answers: Record<string, string>
+) {
+  return questions
+    .map((question, index) => {
+      const answer = answers[question]?.trim() ?? "";
+      return `${index + 1}. ${question}\nAnswer: ${answer}`;
+    })
+    .join("\n\n");
+}
+
+function buildDescriptionWithClarifications(
+  baseDescription: string,
+  clarificationTranscript: string
+) {
+  return [baseDescription.trim(), clarificationTranscript.trim()]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
 export function NewRequestForm({ properties }: NewRequestFormProps) {
   const router = useRouter();
+  const { serviceCategories } = useCatalogOptions();
   const [step, setStep] = useState<Step>("describe");
 
   // Form state
@@ -95,6 +118,10 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [clarificationAnswers, setClarificationAnswers] = useState<Record<string, string>>({});
+  const [clarificationTranscript, setClarificationTranscript] = useState("");
+  const [answeredClarificationQuestions, setAnsweredClarificationQuestions] = useState<string[]>([]);
+  const [clarificationRoundCompleted, setClarificationRoundCompleted] = useState(false);
 
   // ─── Fetch billing usage on mount ────────────────────────────────────────────
   useEffect(() => {
@@ -137,6 +164,29 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     };
   }, [step, editCategory, propertyId]);
 
+  useEffect(() => {
+    if (
+      clarificationRoundCompleted ||
+      !classification ||
+      classification.statusSuggestion !== "NEEDS_CLARIFICATION" ||
+      classification.clarifyingQuestions.length === 0
+    ) {
+      setClarificationAnswers({});
+      return;
+    }
+
+    setClarificationAnswers((currentAnswers) =>
+      Object.fromEntries(
+        classification.clarifyingQuestions
+          .filter((question) => !answeredClarificationQuestions.includes(question))
+          .map((question) => [
+          question,
+          currentAnswers[question] ?? "",
+        ])
+      )
+    );
+  }, [answeredClarificationQuestions, clarificationRoundCompleted, classification]);
+
   // ─── Handlers ───────────────────────────────────────────────────────────────
 
   const handleDrop = (e: React.DragEvent) => {
@@ -148,19 +198,20 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     setFiles((prev) => [...prev, ...dropped]);
   };
 
-  const handleClassify = async () => {
-    setClassifying(true);
-    setClassifyError(null);
+  const requestClassification = async (
+    inputDescription: string,
+    initialStatus: string
+  ): Promise<ClassificationResult> => {
     setClassifyStatus(null);
 
     let lastError = "Classification failed. You can still submit manually.";
 
     for (let attempt = 1; attempt <= AI_MAX_RETRIES; attempt++) {
       if (attempt === 1) {
-        setClassifyStatus("Classifying your request\u2026");
+        setClassifyStatus(initialStatus);
       } else {
         setClassifyStatus(
-          `AI returned unexpected data \u2014 retrying\u2026 (attempt ${attempt} of ${AI_MAX_RETRIES})`
+          `AI returned unexpected data - retrying... (attempt ${attempt} of ${AI_MAX_RETRIES})`
         );
         await sleep(1000);
       }
@@ -170,12 +221,12 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            description: description.trim(),
+            description: inputDescription,
             propertyId: propertyId || undefined,
           }),
         });
 
-        // Don't retry client errors — they won't be fixed by retrying
+        // Don't retry client errors - they won't be fixed by retrying
         if (res.status >= 400 && res.status < 500) {
           const data = await res.json().catch(() => ({}));
           lastError = data.error ?? "Classification failed. You can still submit manually.";
@@ -183,7 +234,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
         }
 
         if (!res.ok) {
-          // 5xx or network-level bad response — retry
+          // 5xx or network-level bad response - retry
           const data = await res.json().catch(() => ({}));
           lastError = data.error ?? "Classification failed. You can still submit manually.";
           continue;
@@ -191,44 +242,143 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
 
         const result: ClassificationResult = await res.json();
         setClassifyStatus(null);
-        setClassifying(false);
-        setClassification(result);
-        setEditCategory(result.category);
-        setEditUrgency(result.urgency);
-        setEditing(false);
-        setStep("review");
-        return;
+        return result;
       } catch {
         lastError = "Network error during classification. You can still submit manually.";
-        // Network error — retry unless this was the last attempt
+        // Network error - retry unless this was the last attempt
       }
     }
 
-    // All attempts exhausted — fall back to manual mode
     setClassifyStatus(null);
-    setClassifyError(lastError);
-    setClassification(null);
-    setStep("review");
-    setEditCategory("");
-    setEditUrgency("MEDIUM");
-    setEditing(true);
-    setClassifying(false);
+    throw new Error(lastError);
+  };
+
+  const handleClassify = async () => {
+    setClassifying(true);
+    setClassifyError(null);
+    setClassifyStatus(null);
+    setSubmitError(null);
+    setClarificationTranscript("");
+    setClarificationAnswers({});
+    setAnsweredClarificationQuestions([]);
+    setClarificationRoundCompleted(false);
+
+    try {
+      const result = await requestClassification(
+        description.trim(),
+        "Classifying your request..."
+      );
+      setClassification(result);
+      setEditCategory(result.category);
+      setEditUrgency(result.urgency);
+      setEditing(false);
+      setStep("review");
+    } catch (err) {
+      const lastError =
+        err instanceof Error
+          ? err.message
+          : "Classification failed. You can still submit manually.";
+      setClassifyError(lastError);
+      setClassification(null);
+      setStep("review");
+      setEditCategory("");
+      setEditUrgency("MEDIUM");
+      setEditing(true);
+    } finally {
+      setClassifying(false);
+    }
   };
 
   const handleReclassify = () => {
     setStep("describe");
     setClassification(null);
     setClassifyError(null);
+    setSubmitError(null);
     setEditing(false);
     setSelectedVendorId("");
+    setClarificationAnswers({});
+    setClarificationTranscript("");
+    setAnsweredClarificationQuestions([]);
+    setClarificationRoundCompleted(false);
+  };
+
+  const handleClarificationReview = async () => {
+    if (
+      !classification ||
+      classification.statusSuggestion !== "NEEDS_CLARIFICATION" ||
+      pendingClarifyingQuestions.length === 0
+    ) {
+      return;
+    }
+
+    const unansweredQuestions = pendingClarifyingQuestions.filter(
+      (question) => !clarificationAnswers[question]?.trim()
+    );
+    if (unansweredQuestions.length > 0) {
+      setSubmitError(
+        'Answer each clarification question before continuing. If something is not confirmed yet, enter "unknown".'
+      );
+      return;
+    }
+
+    setClassifying(true);
+    setClassifyError(null);
+    setSubmitError(null);
+
+    const nextTranscript = [
+      clarificationTranscript,
+      "Clarification provided before submission:",
+      buildClarificationPayload(pendingClarifyingQuestions, clarificationAnswers),
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    try {
+      const refinedClassification = await requestClassification(
+        buildDescriptionWithClarifications(description, nextTranscript),
+        "Re-checking your request with the clarification answers..."
+      );
+
+      setClassification(refinedClassification);
+      setClarificationTranscript(nextTranscript);
+      setAnsweredClarificationQuestions((currentQuestions) =>
+        Array.from(new Set([...currentQuestions, ...pendingClarifyingQuestions]))
+      );
+      setClarificationRoundCompleted(true);
+
+      if (!editing) {
+        setEditCategory(refinedClassification.category);
+        setEditUrgency(refinedClassification.urgency);
+      }
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error
+          ? err.message
+          : "Unable to update the AI review with the clarification answers."
+      );
+    } finally {
+      setClassifying(false);
+    }
   };
 
   const handleSubmit = async () => {
+    if (needsPreSubmitClarification) {
+      setSubmitError(
+        "Answer the clarification questions and update the AI review before submitting."
+      );
+      return;
+    }
+
     setSubmitting(true);
     setSubmitError(null);
     setUploadProgress(null);
 
     try {
+      const finalDescription = buildDescriptionWithClarifications(
+        description,
+        clarificationTranscript
+      );
+
       // Upload photos to S3 first (if any), collect URLs
       const photoUploads: Array<{
         url: string;
@@ -264,7 +414,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           propertyId,
-          description: description.trim(),
+          description: finalDescription,
           category: editCategory || "GENERAL",
           urgency: editUrgency || "MEDIUM",
           photoUploads,
@@ -277,8 +427,8 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                 confidence: classification.confidence,
                 reasoning: classification.reasoning,
                 requiresLicensedTrade: classification.requiresLicensedTrade,
-                clarifyingQuestions: classification.clarifyingQuestions,
-                statusSuggestion: classification.statusSuggestion,
+                clarifyingQuestions: pendingClarifyingQuestions,
+                statusSuggestion: effectiveStatusSuggestion,
                 operatorOverrodeCategory:
                   editCategory.trim().toLowerCase() !==
                   classification.category.trim().toLowerCase(),
@@ -321,7 +471,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   }));
 
   const getCategoryLabel = (value: string) =>
-    SERVICE_CATEGORIES.find(
+    serviceCategories.find(
       (c) => c.value.trim().toLowerCase() === value.trim().toLowerCase()
     )?.label ?? value;
 
@@ -344,6 +494,20 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
   };
 
   const canClassify = propertyId && description.trim().length >= 10;
+  const unresolvedClarifyingQuestions =
+    classification?.clarifyingQuestions.filter(
+      (question) => !answeredClarificationQuestions.includes(question)
+    ) ?? [];
+  const pendingClarifyingQuestions = clarificationRoundCompleted
+    ? []
+    : unresolvedClarifyingQuestions;
+  const needsPreSubmitClarification =
+    classification?.statusSuggestion === "NEEDS_CLARIFICATION" &&
+    pendingClarifyingQuestions.length > 0;
+  const effectiveStatusSuggestion =
+    classification && !needsPreSubmitClarification
+      ? "READY_TO_DISPATCH"
+      : classification?.statusSuggestion ?? "READY_TO_DISPATCH";
 
   const vendorOptions = availableVendors.map((v) => ({
     value: v.id,
@@ -606,6 +770,16 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">
                   {description}
                 </p>
+                {clarificationTranscript && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-amber-700">
+                      Clarification Added
+                    </p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-amber-900">
+                      {clarificationTranscript}
+                    </p>
+                  </div>
+                )}
                 {files.length > 0 && (
                   <p className="text-xs text-gray-500">
                     {files.length} photo{files.length !== 1 ? "s" : ""} attached
@@ -662,14 +836,42 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                 {classification.statusSuggestion === "NEEDS_CLARIFICATION" && (
                   <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3">
                     <p className="text-sm font-medium text-amber-900">
-                      This request will be held for clarification before dispatch.
+                      {needsPreSubmitClarification
+                        ? "This request is not ready to submit yet."
+                        : "Clarification has already been added to this request."}
                     </p>
-                    {classification.clarifyingQuestions.length > 0 && (
-                      <ul className="mt-2 space-y-1 text-sm text-amber-800">
-                        {classification.clarifyingQuestions.map((question, index) => (
-                          <li key={index}>- {question}</li>
+                    <p className="mt-1 text-sm text-amber-800">
+                      {needsPreSubmitClarification
+                        ? "Answer the clarification questions below, then update the AI review before continuing."
+                        : "The answered clarification is already included in the description above, so those same questions are no longer shown here."}
+                    </p>
+                    {needsPreSubmitClarification && (
+                      <div className="mt-3 space-y-3">
+                        {pendingClarifyingQuestions.map((question, index) => (
+                          <div
+                            key={`${index}-${question}`}
+                            className="rounded-md border border-amber-200 bg-white px-4 py-3"
+                          >
+                            <p className="text-sm font-medium text-slate-900">
+                              {index + 1}. {question}
+                            </p>
+                            <Textarea
+                              label="Answer"
+                              value={clarificationAnswers[question] ?? ""}
+                              onChange={(e) =>
+                                setClarificationAnswers((currentAnswers) => ({
+                                  ...currentAnswers,
+                                  [question]: e.target.value,
+                                }))
+                              }
+                              placeholder='Type the answer here. If not confirmed, enter "unknown".'
+                              rows={3}
+                              disabled={classifying || submitting}
+                              wrapperClassName="mt-3"
+                            />
+                          </div>
                         ))}
-                      </ul>
+                      </div>
                     )}
                   </div>
                 )}
@@ -701,7 +903,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Select
                     label="Category"
-                    options={SERVICE_CATEGORIES.map((c) => ({
+                    options={serviceCategories.map((c) => ({
                       value: c.value,
                       label: c.label,
                     }))}
@@ -810,12 +1012,14 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
             <Button
               type="button"
               variant="primary"
-              loading={submitting}
-              disabled={!editCategory}
-              onClick={handleSubmit}
+              loading={needsPreSubmitClarification ? classifying : submitting}
+              disabled={!editCategory || (needsPreSubmitClarification ? submitting : classifying)}
+              onClick={needsPreSubmitClarification ? handleClarificationReview : handleSubmit}
               className="w-full sm:w-auto justify-center"
             >
-              {uploadProgress ?? (submitting ? "Submitting…" : "Submit Request")}
+              {needsPreSubmitClarification
+                ? "Update AI Review"
+                : uploadProgress ?? (submitting ? "Submitting..." : "Submit Request")}
             </Button>
           </div>
         </>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
-import { SERVICE_CATEGORIES, ORGANIZATION_TYPES } from "@/lib/constants";
+import { getOrganizationTypes, getServiceCategories } from "@/lib/catalog";
 import { sendEmail } from "@/lib/email";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 import { verifyTurnstile } from "@/lib/turnstile";
@@ -60,6 +60,11 @@ export async function POST(request: NextRequest) {
     const emailVerificationToken = crypto.randomBytes(32).toString("hex");
     const emailVerificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
+    const [serviceCategories, organizationTypes] = await Promise.all([
+      getServiceCategories(),
+      getOrganizationTypes(),
+    ]);
+
     let user;
 
     if (role === "OPERATOR") {
@@ -70,7 +75,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const allowedOrgTypes = new Set<string>(ORGANIZATION_TYPES.map((t) => t.value));
+      const allowedOrgTypes = new Set<string>(organizationTypes.map((t) => t.value));
       const orgType = typeof organizationType === "string" && allowedOrgTypes.has(organizationType)
         ? organizationType
         : "OTHER";
@@ -116,7 +121,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const allowedCategories = new Set<string>(SERVICE_CATEGORIES.map((c) => c.value));
+      const allowedCategories = new Set<string>(serviceCategories.map((c) => c.value));
       const parsedCategories: string[] = Array.isArray(categories)
         ? categories
             .filter((c: any) => typeof c === "string")

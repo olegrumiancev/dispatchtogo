@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ORGANIZATION_TYPES } from "@/lib/constants";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
+import { useCatalogOptions } from "@/hooks/use-catalog-options";
 
 interface OrgData {
   id: string;
@@ -22,6 +22,7 @@ const inputClass =
 const labelClass = "block text-xs font-medium text-gray-600 mb-1";
 
 export default function OperatorOrganizationForm({ initialOrg }: Props) {
+  const { organizationTypes } = useCatalogOptions();
   const [form, setForm] = useState({
     name: initialOrg.name,
     type: initialOrg.type,
@@ -97,7 +98,7 @@ export default function OperatorOrganizationForm({ initialOrg }: Props) {
                 className={inputClass}
                 disabled={saving}
               >
-                {ORGANIZATION_TYPES.map((t) => (
+                {organizationTypes.map((t) => (
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>

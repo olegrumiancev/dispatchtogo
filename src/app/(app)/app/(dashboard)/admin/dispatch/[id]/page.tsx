@@ -10,13 +10,18 @@ import { AI_ARTIFACT_ACTIONS, getLatestAiArtifact } from "@/lib/ai-artifacts";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  RequestProgressCard,
+  getLinearRequestProgressSteps,
+} from "@/components/ui/request-progress-card";
 import { Button } from "@/components/ui/button";
-import { URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import { URGENCY_LEVELS } from "@/lib/constants";
+import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
 } from "@/lib/admin-operator-request-status";
-import { ArrowLeft, MapPin, Calendar, Phone, Mail, User, CheckCircle, Download, Image } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, Phone, Mail, User, Download, Image } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import AssignModal from "../assign-modal";
 import { TriageSection } from "@/components/forms/triage-section";
@@ -34,53 +39,6 @@ interface DisplayPhoto {
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
-const STATUS_PROGRESSION = [
-  "SUBMITTED",
-  "TRIAGING",
-  "NEEDS_CLARIFICATION",
-  "READY_TO_DISPATCH",
-  "DISPATCHED",
-  "ACCEPTED",
-  "IN_PROGRESS",
-  "COMPLETED",
-  "VERIFIED",
-] as const;
-
-function StatusTimeline({ currentStatus }: { currentStatus: string }) {
-  const currentIdx = STATUS_PROGRESSION.indexOf(currentStatus as any);
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {STATUS_PROGRESSION.map((status, idx) => {
-        const isDone = currentIdx >= idx;
-        const isCurrent = currentIdx === idx;
-        return (
-          <div key={status} className="flex items-center gap-1">
-            <div
-              className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium ${
-                isCurrent
-                  ? "bg-blue-100 text-blue-800 ring-2 ring-blue-300"
-                  : isDone
-                  ? "bg-gray-200 text-gray-700"
-                  : "bg-gray-100 text-gray-400"
-              }`}
-            >
-              {isDone && <CheckCircle className="w-3 h-3" />}
-              {getAdminOperatorRequestStatusLabel(status)}
-            </div>
-            {idx < STATUS_PROGRESSION.length - 1 && (
-              <span className="text-gray-300 text-xs">→</span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 function PhotoGallery({
@@ -151,6 +109,7 @@ export default async function AdminDispatchDetailPage({
 
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
+  const serviceCategories = await getServiceCategories();
 
   const { id } = await params;
 
@@ -282,47 +241,27 @@ export default async function AdminDispatchDetailPage({
           )}
         </div>
       </div>
-
       {/* Status timeline */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Progress</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <StatusTimeline currentStatus={req.status === "DISPUTED" ? req.status : req.status} />
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-gray-500 pt-2">
-            <div>
-              <p className="font-medium text-gray-700">Submitted</p>
-              <p>{formatDate(req.createdAt)}</p>
-            </div>
-            {job?.acceptedAt && (
-              <div>
-                <p className="font-medium text-gray-700">Accepted</p>
-                <p>{formatDate(job.acceptedAt)}</p>
-              </div>
-            )}
-            {job?.enRouteAt && (
-              <div>
-                <p className="font-medium text-gray-700">En Route</p>
-                <p>{formatDate(job.enRouteAt)}</p>
-              </div>
-            )}
-            {job?.arrivedAt && (
-              <div>
-                <p className="font-medium text-gray-700">Arrived</p>
-                <p>{formatDate(job.arrivedAt)}</p>
-              </div>
-            )}
-            {job?.completedAt && (
-              <div>
-                <p className="font-medium text-gray-700">Completed</p>
-                <p>{formatDate(job.completedAt)}</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <RequestProgressCard
+        currentStatus={req.status}
+        steps={getLinearRequestProgressSteps(
+          getAdminOperatorRequestStatusLabel,
+          req.status
+        )}
+        events={[
+          { label: "Submitted", value: req.createdAt },
+          { label: "Accepted", value: job?.acceptedAt },
+          { label: "En Route", value: job?.enRouteAt },
+          { label: "Arrived", value: job?.arrivedAt },
+          {
+            label: "Paused",
+            value: job?.isPaused ? job?.pausedAt : null,
+            tone: "warning",
+          },
+          { label: "Completed", value: job?.completedAt },
+          { label: "Resolved", value: req.resolvedAt },
+        ]}
+      />
 
       {dispatchBlocked && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
@@ -367,7 +306,7 @@ export default async function AdminDispatchDetailPage({
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Category</p>
-              <p className="text-sm text-gray-900 mt-1">{getCategoryLabel(req.category)}</p>
+              <p className="text-sm text-gray-900 mt-1">{getServiceCategoryLabel(serviceCategories, req.category)}</p>
             </div>
           </div>
 
@@ -429,7 +368,13 @@ export default async function AdminDispatchDetailPage({
               confidence: triageArtifact?.data.confidence ?? aiClass?.confidence ?? 0.8,
             }
           : null;
-        return <TriageSection requestId={req.id} initialTriage={initialTriage} />;
+        return (
+          <TriageSection
+            requestId={req.id}
+            initialTriage={initialTriage}
+            requestStatus={req.status}
+          />
+        );
       })()}
 
       {/* Vendor / Job */}
@@ -547,14 +492,14 @@ export default async function AdminDispatchDetailPage({
             {completionAssistArtifact?.data && (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 space-y-3">
                 <div>
-                  <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">AI Proof Summary</p>
+                  <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">AI Completion Insight</p>
                   <p className="text-sm text-emerald-950 whitespace-pre-wrap">
                     {completionAssistArtifact.data.proofSummary}
                   </p>
                 </div>
                 {completionAssistArtifact.data.missingEvidenceFlags.length > 0 && (
                   <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">Evidence Flags</p>
+                    <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">Next Suggested Steps</p>
                     <ul className="space-y-1 text-sm text-emerald-900">
                       {completionAssistArtifact.data.missingEvidenceFlags.map((flag, index) => (
                         <li key={index}>- {flag}</li>
@@ -644,3 +589,4 @@ export default async function AdminDispatchDetailPage({
     </div>
   );
 }
+

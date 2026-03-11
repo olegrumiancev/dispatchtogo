@@ -7,7 +7,8 @@ import Link from "next/link";
 import { formatDate } from "@/lib/utils";
 import { AdminAccountsSubnav } from "@/components/admin/accounts-subnav";
 import { Building2 } from "lucide-react";
-import { BILLING_PLANS, ORGANIZATION_TYPES } from "@/lib/constants";
+import { BILLING_PLANS } from "@/lib/constants";
+import { getOrganizationTypeLabel, getOrganizationTypes } from "@/lib/catalog";
 import { getOrganizationStatusMeta } from "@/lib/organization-lifecycle";
 import { ChangePlanButton } from "./change-plan-button";
 import { ChangeTypeButton } from "./change-type-button";
@@ -19,10 +20,6 @@ export const metadata = {
 };
 
 const PAGE_SIZE = 25;
-
-const ORG_TYPE_LABELS: Record<string, string> = Object.fromEntries(
-  ORGANIZATION_TYPES.map((t) => [t.value, t.label])
-);
 
 const ORG_TYPE_COLORS: Record<string, string> = {
   HOTEL: "bg-blue-100 text-blue-700",
@@ -42,6 +39,7 @@ export default async function AdminOrganizationsPage({
 
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
+  const organizationTypes = await getOrganizationTypes();
 
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
@@ -169,7 +167,7 @@ export default async function AdminOrganizationsPage({
                             ORG_TYPE_COLORS[org.type] ?? "bg-gray-100 text-gray-600"
                           }
                         >
-                          {ORG_TYPE_LABELS[org.type] ?? org.type}
+                          {getOrganizationTypeLabel(organizationTypes, org.type)}
                         </Badge>
                         <ChangeTypeButton orgId={org.id} currentType={org.type} />
                       </div>

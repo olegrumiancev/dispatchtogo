@@ -509,4 +509,8 @@ model SystemSettings {
   // of the real recipient. Use during system testing to avoid messaging real users.
   smsRedirectEnabled Boolean @default(false)
   smsRedirectNumber  String  @default("")
+
+  // Admin-managed service/request catalog configuration
+  serviceCategories Json?
+  organizationTypes Json?
 }

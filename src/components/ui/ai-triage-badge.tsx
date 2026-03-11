@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { SERVICE_CATEGORIES } from "@/lib/constants";
 import {
@@ -47,7 +47,8 @@ export interface AiTriageData {
 interface AiTriage_BadgeProps {
   triage: AiTriageData;
   /** If true, shows a "Re-triage" button that fires the provided callback */
-  onRetriage?: () => Promise<void>;
+  onRetriage?: () => Promise<void | boolean>;
+  defaultExpanded?: boolean;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,8 +75,14 @@ function urgencyBadgeColor(urgency: UrgencyLevel): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
-  const [expanded, setExpanded] = useState(false);
+export function AiTriageBadge({
+  triage,
+  onRetriage,
+  defaultExpanded,
+}: AiTriage_BadgeProps) {
+  const hasClarifyingQuestions = triage.clarifyingQuestions?.length > 0;
+  const shouldAutoExpand = hasClarifyingQuestions;
+  const [expanded, setExpanded] = useState(defaultExpanded ?? shouldAutoExpand);
   const [retriaging, setRetriaging] = useState(false);
 
   const { label: confLabel, color: confColor } = confidenceLabel(triage.confidence);
@@ -89,6 +96,12 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
       setRetriaging(false);
     }
   }
+
+  useEffect(() => {
+    if (defaultExpanded || shouldAutoExpand) {
+      setExpanded(true);
+    }
+  }, [defaultExpanded, shouldAutoExpand, triage.clarifyingQuestions.length]);
 
   if (triage.aiOffline) {
     return (
@@ -169,12 +182,13 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
               {retriaging ? "Running…" : "Re-triage"}
             </button>
           )}
-          {triage.clarifyingQuestions?.length > 0 && (
+          {hasClarifyingQuestions && (
             <button
               onClick={() => setExpanded((e) => !e)}
-              className="text-purple-500 hover:text-purple-700"
-              aria-label={expanded ? "Collapse AI details" : "Expand AI details"}
+              className="inline-flex items-center gap-1 text-xs font-medium text-purple-600 hover:text-purple-800"
+              aria-label={expanded ? "Hide clarifying questions" : "Show clarifying questions"}
             >
+              <span>{expanded ? "Hide questions" : "Show questions"}</span>
               {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
           )}
@@ -182,11 +196,16 @@ export function AiTriageBadge({ triage, onRetriage }: AiTriage_BadgeProps) {
       </div>
 
       {/* Expandable section — clarifying questions only */}
-      {expanded && triage.clarifyingQuestions?.length > 0 && (
+      {expanded && hasClarifyingQuestions && (
         <div className="border-t border-purple-200 px-4 py-3 bg-white">
           <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1.5">
             Clarifying questions
           </p>
+          {triage.statusSuggestion === "NEEDS_CLARIFICATION" && (
+            <p className="mb-2 text-sm text-amber-800">
+              Answer these before dispatch, then run re-triage.
+            </p>
+          )}
           <ul className="space-y-1">
             {triage.clarifyingQuestions.map((q, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-gray-700">

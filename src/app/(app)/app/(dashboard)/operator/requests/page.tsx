@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { REQUEST_STATUSES, URGENCY_LEVELS, SERVICE_CATEGORIES, BILLING_PLANS, BILLING_JOB_TAG_STYLES } from "@/lib/constants";
+import { REQUEST_STATUSES, URGENCY_LEVELS, BILLING_PLANS, BILLING_JOB_TAG_STYLES } from "@/lib/constants";
+import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
@@ -19,10 +20,6 @@ const PAGE_SIZE = 20;
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
 }
 
 const BILLED_STATUSES = new Set(["COMPLETED", "VERIFIED"]);
@@ -57,6 +54,7 @@ export default async function RequestsPage({
 
   const user = session.user as any;
   const orgId: string = user.organizationId!;
+  const serviceCategories = await getServiceCategories();
 
   const sp = await searchParams;
   const view = sp.view === "cancelled" ? "cancelled" : sp.view === "completed" ? "completed" : "active";
@@ -282,7 +280,7 @@ export default async function RequestsPage({
             className="rounded-md border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Categories</option>
-            {SERVICE_CATEGORIES.map((c) => (
+            {serviceCategories.map((c) => (
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </select>
@@ -327,7 +325,7 @@ export default async function RequestsPage({
             )}
             {categoryFilter && (
               <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                Category: {getCategoryLabel(categoryFilter)}
+                Category: {getServiceCategoryLabel(serviceCategories, categoryFilter)}
                 <Link
                   href={buildUrl({ category: "", page: "1" })}
                   className="hover:text-blue-900 ml-0.5"
@@ -450,9 +448,9 @@ export default async function RequestsPage({
                       <Link
                         href={buildUrl({ category: req.category, page: "1" })}
                         className="text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"
-                        title={`Filter by category: ${getCategoryLabel(req.category)}`}
+                        title={`Filter by category: ${getServiceCategoryLabel(serviceCategories, req.category)}`}
                       >
-                        {getCategoryLabel(req.category)}
+                        {getServiceCategoryLabel(serviceCategories, req.category)}
                       </Link>
                     </td>
                     <td className="px-6 py-4 hidden sm:table-cell">

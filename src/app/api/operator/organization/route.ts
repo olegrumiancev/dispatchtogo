@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { ensureOrganizationIsActiveForMutation } from "@/lib/organization-lifecycle";
 import { prisma } from "@/lib/prisma";
-import { ORGANIZATION_TYPES } from "@/lib/constants";
-
-const ALLOWED_TYPES = new Set<string>(ORGANIZATION_TYPES.map((t) => t.value));
+import { getOrganizationTypes } from "@/lib/catalog";
 
 // GET /api/operator/organization — fetch the operator's own organization
 export async function GET() {
@@ -48,13 +46,14 @@ export async function PATCH(request: NextRequest) {
 
   const body = await request.json();
   const { name, type, contactEmail, contactPhone, address } = body;
+  const allowedTypes = new Set<string>((await getOrganizationTypes()).map((t) => t.value));
 
   const data: Record<string, any> = {};
 
   if (typeof name === "string" && name.trim()) {
     data.name = name.trim();
   }
-  if (typeof type === "string" && ALLOWED_TYPES.has(type)) {
+  if (typeof type === "string" && allowedTypes.has(type)) {
     data.type = type;
   }
   if (typeof contactEmail === "string") {

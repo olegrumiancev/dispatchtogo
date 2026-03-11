@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ensureVendorIsActiveForMutation } from "@/lib/vendor-lifecycle";
+import { getServiceCategories } from "@/lib/catalog";
 
 const VALID_AVAILABILITY_STATUSES = ["AVAILABLE", "BUSY", "OFF_DUTY"] as const;
-import { SERVICE_CATEGORIES } from "@/lib/constants";
 
 // GET /api/vendors/[id] — fetch vendor profile (own only)
 export async function GET(
@@ -104,7 +104,7 @@ export async function PATCH(
     if (!Array.isArray(categories)) {
       return NextResponse.json({ error: "categories must be an array" }, { status: 400 });
     }
-    const allowedCategories = new Set<string>(SERVICE_CATEGORIES.map((c) => c.value));
+    const allowedCategories = new Set<string>((await getServiceCategories()).map((c) => c.value));
     validatedCategories = Array.from(
       new Set(
         categories

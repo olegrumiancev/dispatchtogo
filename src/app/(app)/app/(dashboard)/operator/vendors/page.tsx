@@ -5,8 +5,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { SERVICE_CATEGORIES } from "@/lib/constants";
 import { Trash2, Plus, Heart, Building2 } from "lucide-react";
+import { useCatalogOptions } from "@/hooks/use-catalog-options";
 
 interface Vendor {
   id: string;
@@ -30,10 +30,8 @@ interface PreferredVendor {
 
 const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
-const getCategoryLabel = (value: string) =>
-  SERVICE_CATEGORIES.find((c) => norm(c.value) === norm(value))?.label ?? value;
-
 export default function PreferredVendorsPage() {
+  const { serviceCategories } = useCatalogOptions();
   const [prefs, setPrefs] = useState<PreferredVendor[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
@@ -45,6 +43,8 @@ export default function PreferredVendorsPage() {
   const [addPropertyId, setAddPropertyId] = useState("");
   const [addVendorId, setAddVendorId] = useState("");
   const [saving, setSaving] = useState(false);
+  const getCategoryLabel = (value: string) =>
+    serviceCategories.find((c) => norm(c.value) === norm(value))?.label ?? value;
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -163,7 +163,7 @@ export default function PreferredVendorsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Select
               label="Category"
-              options={SERVICE_CATEGORIES.map((c) => ({
+              options={serviceCategories.map((c) => ({
                 value: c.value,
                 label: c.label,
               }))}

@@ -4,9 +4,7 @@ import { getOrGenerateOpsInsightSummary } from "@/lib/ai-assist";
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  SERVICE_CATEGORIES,
-} from "@/lib/constants";
+import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
@@ -25,16 +23,13 @@ export const metadata = {
   title: "Reports | DispatchToGo Admin",
 };
 
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
 export default async function AdminReportsPage() {
   const session = await auth();
   if (!session) redirect("/app/login");
 
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
+  const serviceCategories = await getServiceCategories();
 
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -352,7 +347,7 @@ export default async function AdminReportsPage() {
                   requestsByCategory.map((row) => (
                     <tr key={row.category} className="hover:bg-gray-50">
                       <td className="px-6 py-3 text-gray-700">
-                        {getCategoryLabel(row.category)}
+                        {getServiceCategoryLabel(serviceCategories, row.category)}
                       </td>
                       <td className="px-6 py-3 text-right font-semibold text-gray-900">
                         {row._count.id}

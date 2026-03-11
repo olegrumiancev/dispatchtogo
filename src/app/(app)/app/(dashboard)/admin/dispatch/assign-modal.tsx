@@ -6,7 +6,8 @@ import { Modal } from "@/components/ui/modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Send, Sparkles } from "lucide-react";
-import { SERVICE_CATEGORIES, VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
+import { VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
+import { useCatalogOptions } from "@/hooks/use-catalog-options";
 
 interface Vendor {
   id: string;
@@ -30,22 +31,21 @@ interface DispatchAssist {
   questionsToConfirm: string[];
 }
 
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
 function getAvailabilityConfig(status: string) {
   return VENDOR_AVAILABILITY_STATUSES.find((s) => s.value === status) ?? VENDOR_AVAILABILITY_STATUSES[0];
 }
 
 export default function AssignModal({ requestRef, requestId, vendors }: AssignModalProps) {
   const router = useRouter();
+  const { serviceCategories } = useCatalogOptions();
   const [open, setOpen] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<string>("");
   const [assigning, setAssigning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dispatchAssist, setDispatchAssist] = useState<DispatchAssist | null>(null);
   const [assistLoading, setAssistLoading] = useState(false);
+  const getCategoryLabel = (category: string) =>
+    serviceCategories.find((c) => c.value === category)?.label ?? category;
 
   useEffect(() => {
     if (!open || !selectedVendor) {

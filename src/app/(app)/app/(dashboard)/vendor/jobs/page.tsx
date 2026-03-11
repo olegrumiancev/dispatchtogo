@@ -4,7 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { URGENCY_LEVELS, REQUEST_STATUSES, SERVICE_CATEGORIES } from "@/lib/constants";
+import { URGENCY_LEVELS, REQUEST_STATUSES } from "@/lib/constants";
+import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import {
   MapPin,
   Clock,
@@ -33,10 +34,6 @@ function getStatusLabel(status: string) {
   return REQUEST_STATUSES.find((s) => s.value === status)?.label ?? status;
 }
 
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
 const PAGE_SIZE = 25;
 
 export default async function VendorJobsPage({
@@ -49,6 +46,7 @@ export default async function VendorJobsPage({
 
   const user = session.user as any;
   const vendorId: string = user.vendorId!;
+  const serviceCategories = await getServiceCategories();
 
   const sp = await searchParams;
   const requestedTab =
@@ -215,7 +213,7 @@ export default async function VendorJobsPage({
                               </span>
                               <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
                               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                                {getCategoryLabel(sr.category)}
+                                {getServiceCategoryLabel(serviceCategories, sr.category)}
                               </span>
                             </div>
                             <p className="mt-2 line-clamp-1 text-sm text-gray-700">{sr.description}</p>
@@ -281,7 +279,7 @@ export default async function VendorJobsPage({
                             </span>
                             <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
                             <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                              {getCategoryLabel(sr.category)}
+                              {getServiceCategoryLabel(serviceCategories, sr.category)}
                             </span>
                           </div>
 
@@ -439,7 +437,7 @@ export default async function VendorJobsPage({
                           <span className="text-sm font-semibold text-gray-900">{sr.referenceNumber}</span>
                           <Badge variant={getStatusColor(sr.status)}>{getStatusLabel(sr.status)}</Badge>
                           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                            {getCategoryLabel(sr.category)}
+                            {getServiceCategoryLabel(serviceCategories, sr.category)}
                           </span>
                         </div>
 

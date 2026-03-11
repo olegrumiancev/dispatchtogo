@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SERVICE_CATEGORIES, ORGANIZATION_TYPES } from "@/lib/constants";
 import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 import { AlertCircle, Mail, Globe } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
+import { useCatalogOptions } from "@/hooks/use-catalog-options";
 
 type Role = "OPERATOR" | "VENDOR" | "";
 
@@ -19,6 +19,11 @@ export default function RegisterPage() {
   const [registeredCategories, setRegisteredCategories] = useState<string[]>([]);
   const [captchaToken, setCaptchaToken] = useState("");
   const turnstileRef = useRef<TurnstileInstance>(null);
+  const { serviceCategories, organizationTypes } = useCatalogOptions();
+  const categoryLabelMap = useMemo(
+    () => Object.fromEntries(serviceCategories.map((item) => [item.value, item.label])),
+    [serviceCategories]
+  );
 
   const [form, setForm] = useState({
     name: "",
@@ -123,8 +128,7 @@ export default function RegisterPage() {
         setRegisteredEmail(form.email);
         if (form.role === "VENDOR") {
           setRegisteredCategories(
-            form.categories
-              .map((value) => SERVICE_CATEGORIES.find((c) => c.value === value)?.label ?? value)
+            form.categories.map((value) => categoryLabelMap[value] ?? value)
           );
         } else {
           setRegisteredCategories([]);
@@ -287,7 +291,7 @@ export default function RegisterPage() {
               <div className="space-y-1">
                 <p className="text-sm font-medium text-gray-700">Property Type</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {ORGANIZATION_TYPES.map((orgType) => (
+                  {organizationTypes.map((orgType) => (
                     <label
                       key={orgType.value}
                       className={`flex items-center justify-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-sm ${
@@ -335,7 +339,7 @@ export default function RegisterPage() {
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-700">Service Categories</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {SERVICE_CATEGORIES.map((category) => {
+                  {serviceCategories.map((category) => {
                     const checked = form.categories.includes(category.value);
                     return (
                       <label

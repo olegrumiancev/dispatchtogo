@@ -26,30 +26,38 @@ const sizeClasses = {
   lg: "px-6 py-3 text-base",
 };
 
-export function Button({
-  variant = "primary",
-  size = "md",
-  loading = false,
-  disabled,
-  children,
-  className,
-  ...props
-}: ButtonProps) {
-  return (
-    <button
-      disabled={disabled || loading}
-      className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-md font-medium",
-        "transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2",
-        "disabled:cursor-not-allowed",
-        variantClasses[variant],
-        sizeClasses[size],
-        className
-      )}
-      {...props}
-    >
-      {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-      {children}
-    </button>
-  );
-}
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      variant = "primary",
+      size = "md",
+      loading = false,
+      disabled,
+      children,
+      className,
+      ...props
+    },
+    ref
+  ) => {
+    return (
+      <button
+        ref={ref}
+        disabled={disabled || loading}
+        className={cn(
+          "inline-flex items-center justify-center gap-2 rounded-md font-medium",
+          "transition-colors duration-150 focus:outline-none focus:ring-2 focus:ring-offset-2",
+          "disabled:cursor-not-allowed",
+          variantClasses[variant],
+          sizeClasses[size],
+          className
+        )}
+        {...props}
+      >
+        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+        {children}
+      </button>
+    );
+  }
+);
+
+Button.displayName = "Button";

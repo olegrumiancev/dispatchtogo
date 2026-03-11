@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ORGANIZATION_TYPES } from "@/lib/constants";
 import { useRouter } from "next/navigation";
+import { useCatalogOptions } from "@/hooks/use-catalog-options";
 
 interface Props {
   orgId: string;
@@ -11,6 +11,7 @@ interface Props {
 
 export function ChangeTypeButton({ orgId, currentType }: Props) {
   const router = useRouter();
+  const { organizationTypes } = useCatalogOptions();
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -47,7 +48,7 @@ export function ChangeTypeButton({ orgId, currentType }: Props) {
             onClick={() => setOpen(false)}
           />
           <div className="absolute left-0 top-6 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px]">
-            {ORGANIZATION_TYPES.map((t) => (
+            {organizationTypes.map((t) => (
               <button
                 key={t.value}
                 type="button"

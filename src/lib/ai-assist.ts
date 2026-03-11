@@ -30,6 +30,25 @@ export interface CompletionAssist {
   confidence: number;
 }
 
+interface CompletionEvidenceSnapshot {
+  description: string;
+  propertyName: string;
+  category: string;
+  completionSummary: string | null;
+  vendorNotes: string | null;
+  noteCount: number;
+  materialEntries: Array<{
+    description: string;
+    quantity: number;
+    unitCost?: number | null;
+  }>;
+  beforeCount: number;
+  afterCount: number;
+  totalLabourHours: number | null;
+  totalMaterialsCost: number | null;
+  totalCost: number | null;
+}
+
 export interface CredentialAssist {
   extractedType: string | null;
   extractedNumber: string | null;
@@ -99,9 +118,9 @@ function normalizeUrgency(
   return "MEDIUM";
 }
 
-function normalizeCategory(value: unknown): string {
+function normalizeCategory(value: unknown, allowedCategories: string[] = DEFAULT_CATEGORIES): string {
   const normalized = normalizeString(value, "GENERAL").toUpperCase();
-  return DEFAULT_CATEGORIES.includes(normalized) ? normalized : "GENERAL";
+  return allowedCategories.includes(normalized) ? normalized : "GENERAL";
 }
 
 function shouldHoldForClarification(input: {
@@ -261,7 +280,7 @@ Respond ONLY with valid JSON:
     requiresLicensedTrade,
   });
 
-  const category = normalizeCategory(parsed.category);
+  const category = normalizeCategory(parsed.category, categories);
 
   return {
     category,
@@ -271,7 +290,9 @@ Respond ONLY with valid JSON:
     reasoning: normalizeString(parsed.reasoning, "AI classified the request."),
     clarifyingQuestions: questions,
     suggestedVendorCategories:
-      normalizeStringArray(parsed.suggestedVendorCategories, 3).map(normalizeCategory),
+      normalizeStringArray(parsed.suggestedVendorCategories, 3).map((entry) =>
+        normalizeCategory(entry, categories)
+      ),
     confidence,
     statusSuggestion: hold ? "NEEDS_CLARIFICATION" : "READY_TO_DISPATCH",
   };
@@ -430,36 +451,118 @@ ${request.description}`,
   };
 }
 
-function heuristicCompletionAssist(input: {
-  description: string;
-  propertyName: string;
-  category: string;
-  vendorNotes: string | null;
-  noteCount: number;
-  materialCount: number;
-  beforeCount: number;
-  afterCount: number;
-}): CompletionAssist {
-  const missingEvidenceFlags: string[] = [];
+function deriveCompletionNextActions(
+  input: CompletionEvidenceSnapshot
+): string[] {
+  const actions: string[] = [];
+  const hasCompletionSummary = Boolean(input.completionSummary?.trim());
+  const hasWorkNarrative = Boolean(input.vendorNotes?.trim()) || input.noteCount > 0;
+  const mentionsMaterials =
+    /(replace|repair|install|pipe|part|fixture|valve|switch|bait|treat|treatment|spray|material)/i.test(
+      input.description
+    ) ||
+    input.materialEntries.length > 0 ||
+    input.totalMaterialsCost != null;
 
-  if (input.afterCount === 0) missingEvidenceFlags.push("No after photos uploaded.");
-  if (input.beforeCount === 0) missingEvidenceFlags.push("No before photos uploaded.");
-  if (!input.vendorNotes?.trim() && input.noteCount === 0) {
-    missingEvidenceFlags.push("Work performed is not described in vendor notes.");
-  }
-  if (input.materialCount === 0 && /(replace|repair|install|pipe|part|fixture)/i.test(input.description)) {
-    missingEvidenceFlags.push("No materials recorded despite repair language in the request.");
+  if (input.afterCount === 0) {
+    actions.push("Upload at least one after photo.");
   }
 
-  const summary = input.vendorNotes?.trim()
-    ? input.vendorNotes.trim()
-    : `Completed ${input.category.toLowerCase()} work at ${input.propertyName}.`;
+  if (!hasCompletionSummary) {
+    actions.push(
+      hasWorkNarrative
+        ? "Turn the work details into a concise completion summary."
+        : "Add a short completion summary describing what was done."
+    );
+  }
+
+  if (!hasWorkNarrative) {
+    actions.push("Add vendor notes or a saved note that explains the work performed.");
+  }
+
+  if (
+    mentionsMaterials &&
+    input.materialEntries.length === 0 &&
+    input.totalMaterialsCost == null
+  ) {
+    actions.push("Record materials used, or confirm no materials were needed.");
+  }
+
+  if (input.totalLabourHours == null && (hasWorkNarrative || input.afterCount > 0)) {
+    actions.push("Record labour hours so the proof packet reads as complete.");
+  }
+
+  if (
+    input.totalCost == null &&
+    (input.totalLabourHours != null ||
+      input.totalMaterialsCost != null ||
+      input.materialEntries.length > 0)
+  ) {
+    actions.push("Add a total cost if this job is billable.");
+  }
+
+  if (input.beforeCount === 0 && input.afterCount > 0) {
+    actions.push("Add a before photo if it helps show the repair clearly.");
+  }
+
+  return Array.from(new Set(actions)).slice(0, 3);
+}
+
+function buildHeuristicProofSummary(input: CompletionEvidenceSnapshot): string {
+  const hasCompletionSummary = Boolean(input.completionSummary?.trim());
+  const hasVendorNotes = Boolean(input.vendorNotes?.trim());
+  const hasWorkNarrative = hasVendorNotes || input.noteCount > 0;
+  const hasMaterials = input.materialEntries.length > 0 || input.totalMaterialsCost != null;
+  const hasCosts =
+    input.totalLabourHours != null ||
+    input.totalMaterialsCost != null ||
+    input.totalCost != null;
+
+  if (!hasCompletionSummary && !hasWorkNarrative && input.afterCount === 0) {
+    return "There is not enough documented work yet to draft a reliable completion summary. Right now the record confirms the original request, but not what was done on site.";
+  }
+
+  if (hasWorkNarrative && input.afterCount === 0) {
+    return "There is some useful work context recorded, but the proof packet is still weak because it lacks an after photo. Tighten the final summary after the photo evidence is in place.";
+  }
+
+  if (!hasCompletionSummary && (hasWorkNarrative || input.afterCount > 0)) {
+    return "The job has enough evidence to start a solid completion summary, but the final operator-facing write-up is still missing. Use the current notes and proof to turn this into a crisp completion record.";
+  }
+
+  if (hasCompletionSummary && input.afterCount > 0 && (hasMaterials || hasCosts)) {
+    return "The proof packet is shaping up well: the draft summary, photo evidence, and structured job details tell a coherent story. Give the summary a final pass for clarity, then submit.";
+  }
+
+  if (hasCompletionSummary && input.afterCount > 0) {
+    return "The core completion story is present, and the after photo supports it. A little more operational detail would make the proof packet easier for an operator to approve quickly.";
+  }
+
+  return "The proof packet has partial evidence, but it still needs a clearer completion story before it will be persuasive to an operator. Focus on the next best actions below rather than trying to fill every optional field.";
+}
+
+function heuristicCompletionAssist(input: CompletionEvidenceSnapshot): CompletionAssist {
+  const summary = input.completionSummary?.trim()
+    ? input.completionSummary.trim()
+    : input.vendorNotes?.trim()
+      ? firstSentence(
+          input.vendorNotes,
+          `Completed ${input.category.toLowerCase()} work at ${input.propertyName}.`
+        )
+      : `Completed ${input.category.toLowerCase()} work at ${input.propertyName}.`;
+  const missingEvidenceFlags = deriveCompletionNextActions(input);
 
   return {
     summary,
-    proofSummary: `${summary} ${missingEvidenceFlags.length ? `Open evidence gaps: ${missingEvidenceFlags.join(" ")}` : "Evidence appears complete."}`.trim(),
+    proofSummary: buildHeuristicProofSummary(input),
     missingEvidenceFlags,
-    confidence: missingEvidenceFlags.length === 0 ? 0.65 : 0.45,
+    confidence:
+      input.afterCount > 0 &&
+      (input.completionSummary?.trim() || input.vendorNotes?.trim())
+        ? missingEvidenceFlags.length === 0
+          ? 0.82
+          : 0.68
+        : 0.42,
   };
 }
 
@@ -539,25 +642,44 @@ export async function generateCompletionAssist(
   const totalMaterialsCost = draft?.totalMaterialsCost ?? job.totalMaterialsCost;
   const totalCost = draft?.totalCost ?? job.totalCost;
   const completionSummary = draft?.completionSummary ?? job.completionSummary;
-
-  let assist = heuristicCompletionAssist({
+  const evidenceSnapshot: CompletionEvidenceSnapshot = {
     description: job.serviceRequest.description,
     propertyName: job.serviceRequest.property?.name ?? "property",
     category: job.serviceRequest.category,
+    completionSummary,
     vendorNotes,
     noteCount,
-    materialCount: materialEntries.length,
+    materialEntries,
     beforeCount,
     afterCount,
-  });
+    totalLabourHours,
+    totalMaterialsCost,
+    totalCost,
+  };
+
+  let assist = heuristicCompletionAssist(evidenceSnapshot);
   let source: "ai" | "heuristic" = "heuristic";
 
   if (isAiConfigured()) {
-    const systemPrompt = `You are a completion-review copilot for service jobs.
+    const systemPrompt = `You are a completion coach for service jobs.
 
-Draft a concise completion summary and point out any evidence gaps.
-Do not invent labour, materials, costs, or timestamps.
-Keep the summary operator-ready and factual.
+Your job is to improve the quality of the completion proof, not to inventory every missing field.
+
+Produce:
+1. A concise operator-ready completion summary based only on actual evidence.
+2. A brief proofSummary that explains how usable or convincing the current proof packet is.
+3. Up to 3 next best actions that would most improve the proof packet.
+
+Rules:
+- Use only these supported evidence types: completion summary, vendor notes, saved job notes, materials, before photos, after photos, labour hours, materials cost, and total cost.
+- Do not mention unsupported items like signatures, technician IDs, customer sign-off, service date/time, certificates, or treatment metadata unless they are explicitly present in the provided evidence.
+- Do not inventory everything that is absent.
+- Prioritize only the 1 to 3 highest-value next actions.
+- If there is not enough evidence to draft a reliable completion summary, say so plainly.
+- Keep proofSummary to 1 to 3 sentences, focused on usefulness and confidence.
+- Keep missingEvidenceFlags short and action-oriented.
+- Do not invent labour, materials, costs, or timestamps.
+- Keep the summary operator-ready and factual.
 
 Respond ONLY with valid JSON:
 {"summary":"...","proofSummary":"...","missingEvidenceFlags":["..."],"confidence":80}`;
@@ -601,10 +723,14 @@ Total cost: ${totalCost ?? "N/A"}`,
 
     const parsed = parseJsonObject(raw);
     if (parsed) {
+      const fallbackActions = deriveCompletionNextActions(evidenceSnapshot);
       assist = {
         summary: normalizeString(parsed.summary, assist.summary),
         proofSummary: normalizeString(parsed.proofSummary, assist.proofSummary),
-        missingEvidenceFlags: normalizeStringArray(parsed.missingEvidenceFlags, 5),
+        missingEvidenceFlags:
+          fallbackActions.length > 0
+            ? fallbackActions
+            : normalizeStringArray(parsed.missingEvidenceFlags, 3),
         confidence: normalizeConfidence(parsed.confidence, assist.confidence),
       };
       source = "ai";

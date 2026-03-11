@@ -9,7 +9,7 @@ import { AdminAccountsSubnav } from "@/components/admin/accounts-subnav";
 import { XCircle, FileText, Building2, Phone, Mail, MapPin, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { AdminCredentialVerifyButton } from "@/components/forms/admin-credential-verify-button";
-import { SERVICE_CATEGORIES } from "@/lib/constants";
+import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import { getVendorStatusMeta } from "@/lib/vendor-lifecycle";
 import { VendorLifecycleActions } from "./vendor-lifecycle-actions";
 
@@ -31,10 +31,6 @@ function formatDate(d: Date | string) {
   return new Date(d).toLocaleDateString("en-CA");
 }
 
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
 export default async function AdminVendorDetailPage({
   params,
 }: {
@@ -45,6 +41,7 @@ export default async function AdminVendorDetailPage({
 
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
+  const serviceCategories = await getServiceCategories();
 
   const { id } = await params;
 
@@ -136,7 +133,7 @@ export default async function AdminVendorDetailPage({
             <div className="flex flex-wrap gap-1 pt-1">
               {vendor.skills.map((skill) => (
                 <Badge key={skill.id} className="bg-blue-50 text-xs text-blue-700">
-                  {getCategoryLabel(skill.category)}
+                  {getServiceCategoryLabel(serviceCategories, skill.category)}
                 </Badge>
               ))}
             </div>

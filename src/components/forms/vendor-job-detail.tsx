@@ -1,12 +1,16 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
+import {
+  RequestProgressCard,
+  getLinearRequestProgressSteps,
+} from "@/components/ui/request-progress-card";
 import { optimizeImageFileForUpload } from "@/lib/client-image";
 import {
   URGENCY_LEVELS,
@@ -83,6 +87,8 @@ interface ServiceRequest {
   category: string;
   urgency: string;
   status: string;
+  createdAt: Date | string;
+  resolvedAt: Date | string | null;
   rejectionReason: string | null;
   property: Property;
   photos: JobPhoto[];
@@ -134,6 +140,12 @@ type VendorSectionKey =
   | "workPhotos"
   | "materials"
   | "completion";
+type WorkflowStepKey = "overview" | "proof" | "complete";
+type ValidationFocusTarget =
+  | "afterPhoto"
+  | "beforePhoto"
+  | "materials"
+  | "completionSummary";
 
 function getUrgencyColor(urgency: string) {
   return (
@@ -410,19 +422,154 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const missingRequiredChecklist = completionChecklist.filter(
     (item) => item.required && !item.done,
   );
-  const defaultOpenSections: Record<VendorSectionKey, boolean> = {
-    requestPhotos: !hasAcceptedJob,
-    workPhotos:
-      hasAcceptedJob && sr.status !== "COMPLETED" && sr.status !== "VERIFIED",
-    materials: false,
-    completion:
-      hasAcceptedJob && (sr.status === "COMPLETED" || sr.status === "VERIFIED"),
-  };
-  const [openSections, setOpenSections] =
-    useState<Record<VendorSectionKey, boolean>>(defaultOpenSections);
   const completedChecklistCount = completionChecklist.filter(
     (item) => item.done,
   ).length;
+  const canCompleteNow =
+    missingRequiredChecklist.length === 0 && !hasPendingMaterialDrafts;
+  const blockingCompletionItems = [
+    ...(hasPendingMaterialDrafts
+      ? [
+          {
+            id: "pending-materials",
+            label: "Save or remove pending material items",
+            help: "Finish the draft material list before you submit.",
+            step: "proof" as WorkflowStepKey,
+            focus: "materials" as ValidationFocusTarget,
+          },
+        ]
+      : []),
+    ...missingRequiredChecklist.map((item) => {
+      switch (item.label) {
+        case "After photo":
+          return {
+            id: "after-photo",
+            label: "Upload at least one after photo",
+            help: item.help,
+            step: "proof" as WorkflowStepKey,
+            focus: "afterPhoto" as ValidationFocusTarget,
+          };
+        case "Before photo":
+          return {
+            id: "before-photo",
+            label: "Add a before photo",
+            help: item.help,
+            step: "proof" as WorkflowStepKey,
+            focus: "beforePhoto" as ValidationFocusTarget,
+          };
+        default:
+          return {
+            id: "completion-summary",
+            label: "Add a completion summary",
+            help: item.help,
+            step: "complete" as WorkflowStepKey,
+            focus: "completionSummary" as ValidationFocusTarget,
+          };
+      }
+    }),
+  ];
+  const initialWorkflowStep: WorkflowStepKey = !hasAcceptedJob
+    ? "overview"
+    : sr.status === "COMPLETED" || sr.status === "VERIFIED"
+      ? "complete"
+      : canCompleteNow
+        ? "complete"
+        : "proof";
+  const [activeWorkflowStep, setActiveWorkflowStep] =
+    useState<WorkflowStepKey>(initialWorkflowStep);
+  const overviewPanelRef = useRef<HTMLDivElement | null>(null);
+  const proofPanelRef = useRef<HTMLDivElement | null>(null);
+  const completePanelRef = useRef<HTMLDivElement | null>(null);
+  const beforePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const afterPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const beforePhotoButtonRef = useRef<HTMLButtonElement | null>(null);
+  const afterPhotoButtonRef = useRef<HTMLButtonElement | null>(null);
+  const saveMaterialsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const completionSummaryFieldId = `job-${job.id}-completion-summary`;
+  const workflowSteps = [
+    {
+      key: "overview" as WorkflowStepKey,
+      label: "Overview",
+      hint: hasAcceptedJob
+        ? "Request, property, and intake"
+        : "Review the job before accepting",
+      complete: hasAcceptedJob,
+    },
+    ...(hasAcceptedJob
+      ? [
+          {
+            key: "proof" as WorkflowStepKey,
+            label: "Work Proof",
+            hint: `${beforePhotos.length} before, ${afterPhotos.length} after`,
+            complete: afterPhotos.length > 0 && !hasPendingMaterialDrafts,
+          },
+          {
+            key: "complete" as WorkflowStepKey,
+            label: canEditSubmission ? "Complete Job" : "Submitted Proof",
+            hint: canEditSubmission
+              ? canCompleteNow
+                ? "Ready to submit"
+                : `${blockingCompletionItems.length} item${blockingCompletionItems.length === 1 ? "" : "s"} need attention`
+              : `${completedChecklistCount}/${completionChecklist.length} items captured`,
+            complete: canCompleteNow || !canEditSubmission,
+          },
+        ]
+      : []),
+  ];
+  const currentStage = job.isPaused
+    ? {
+        label: "Paused - Will Return",
+        detail: "Work is paused until you resume the job.",
+        badge: "bg-amber-100 text-amber-800",
+      }
+    : sr.status === "DISPATCHED"
+      ? {
+          label: "Dispatched",
+          detail: "Waiting for you to accept or decline the job.",
+          badge: "bg-slate-100 text-slate-700",
+        }
+      : sr.status === "ACCEPTED" && !job.enRouteAt
+        ? {
+            label: "Accepted",
+            detail: "You have the job, but you have not marked yourself en route yet.",
+            badge: "bg-blue-100 text-blue-800",
+          }
+        : sr.status === "ACCEPTED" && job.enRouteAt && !job.arrivedAt
+          ? {
+              label: "En Route",
+              detail: "Travel is in progress and arrival on site is the next milestone.",
+              badge: "bg-sky-100 text-sky-800",
+            }
+          : sr.status === "IN_PROGRESS" && job.arrivedAt
+            ? {
+                label: "On Site",
+                detail: "You have arrived and the job is now in progress.",
+                badge: "bg-indigo-100 text-indigo-800",
+              }
+            : sr.status === "IN_PROGRESS"
+              ? {
+                  label: "In Progress",
+                  detail: "Work is underway.",
+                  badge: "bg-indigo-100 text-indigo-800",
+                }
+              : {
+                  label: getStatusLabel(sr.status),
+                  detail: "Review the next action below.",
+                  badge: "bg-gray-100 text-gray-700",
+                };
+  const statusPrimaryActionLabel = canCompleteNow
+    ? "Review & Submit"
+    : blockingCompletionItems.some((item) => item.step === "proof")
+      ? "Continue Work Proof"
+      : "Finish Completion Summary";
+  const defaultOpenSections: Record<VendorSectionKey, boolean> = {
+    requestPhotos: true,
+    workPhotos: true,
+    materials: true,
+    completion: true,
+  };
+  const [openSections, setOpenSections] =
+    useState<Record<VendorSectionKey, boolean>>(defaultOpenSections);
   const recommendedSection: VendorSectionKey = !hasAcceptedJob
     ? "requestPhotos"
     : sr.status === "COMPLETED" || sr.status === "VERIFIED"
@@ -478,14 +625,78 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     setCompletionAssist(null);
   };
 
+  const focusWorkflowStep = (
+    step: WorkflowStepKey,
+    target?: ValidationFocusTarget,
+  ) => {
+    setActiveWorkflowStep(step);
+    setOpenSections((prev) => ({
+      ...prev,
+      requestPhotos: step === "overview" ? true : prev.requestPhotos,
+      workPhotos: step === "proof" ? true : prev.workPhotos,
+      materials: step === "proof" ? true : prev.materials,
+      completion: step === "complete" ? true : prev.completion,
+    }));
+    window.setTimeout(() => {
+      const panel =
+        step === "overview"
+          ? overviewPanelRef.current
+          : step === "proof"
+            ? proofPanelRef.current
+            : completePanelRef.current;
+
+      if (panel) {
+        panel.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else if (!target) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      if (target === "afterPhoto") {
+        afterPhotoButtonRef.current?.focus();
+        return;
+      }
+
+      if (target === "beforePhoto") {
+        beforePhotoButtonRef.current?.focus();
+        return;
+      }
+
+      if (target === "materials") {
+        saveMaterialsButtonRef.current?.focus();
+        return;
+      }
+
+      if (target === "completionSummary") {
+        (
+          document.getElementById(
+            completionSummaryFieldId,
+          ) as HTMLTextAreaElement | null
+        )?.focus();
+      }
+    }, 80);
+  };
+
+  const goToCompletionWorkspace = () => {
+    if (blockingCompletionItems.length > 0) {
+      const firstBlockingItem = blockingCompletionItems[0];
+      focusWorkflowStep(firstBlockingItem.step, firstBlockingItem.focus);
+      return;
+    }
+
+    focusWorkflowStep("complete");
+  };
+
   const openAndScrollToSection = (section: VendorSectionKey) => {
     setOpenSections((prev) => ({ ...prev, [section]: true }));
-    window.setTimeout(() => {
-      document.getElementById(`vendor-section-${section}`)?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
-      });
-    }, 0);
+    if (section === "requestPhotos") {
+      focusWorkflowStep("overview");
+      return;
+    }
+    if (section === "completion") {
+      focusWorkflowStep("complete");
+      return;
+    }
+    focusWorkflowStep("proof");
   };
 
   const toggleSection = (section: VendorSectionKey) => {
@@ -643,7 +854,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         setActionError(
           "Save or remove pending material items before marking complete.",
         );
-        openAndScrollToSection("materials");
+        focusWorkflowStep("proof", "materials");
         return;
       }
       if (missingRequiredChecklist.length > 0) {
@@ -651,13 +862,17 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           .map((item) => item.label.toLowerCase())
           .join(" and ");
         setActionError(`Before marking complete, add ${missingLabels}.`);
-        const missingPhotoEvidence = missingRequiredChecklist.some(
-          (item) =>
-            item.label === "Before photo" || item.label === "After photo",
-        );
-        openAndScrollToSection(
-          missingPhotoEvidence ? "workPhotos" : "completion",
-        );
+        if (
+          missingRequiredChecklist.some((item) => item.label === "After photo")
+        ) {
+          focusWorkflowStep("proof", "afterPhoto");
+        } else if (
+          missingRequiredChecklist.some((item) => item.label === "Before photo")
+        ) {
+          focusWorkflowStep("proof", "beforePhoto");
+        } else {
+          focusWorkflowStep("complete", "completionSummary");
+        }
         return;
       }
     }
@@ -942,7 +1157,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4 sm:space-y-6">
+    <div className="mx-auto max-w-5xl space-y-4 sm:space-y-6">
       <Link
         href="/app/vendor/jobs"
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
@@ -1024,6 +1239,119 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </div>
       )}
 
+      <RequestProgressCard
+        currentStatus={sr.status}
+        steps={getLinearRequestProgressSteps(getStatusLabel, sr.status)}
+        events={[
+          { label: "Submitted", value: sr.createdAt },
+          { label: "Accepted", value: job.acceptedAt },
+          { label: "En Route", value: job.enRouteAt },
+          { label: "Arrived", value: job.arrivedAt },
+          {
+            label: "Paused",
+            value: job.isPaused ? job.pausedAt : null,
+            tone: "warning",
+          },
+          { label: "Completed", value: job.completedAt },
+          { label: "Resolved", value: sr.resolvedAt },
+        ]}
+      />
+
+      {workflowSteps.length > 1 && (
+        <Card className="border-gray-200/80">
+          <CardContent className="space-y-4 py-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  Job Workspace
+                </p>
+                <p className="text-xs text-gray-500">
+                  Move through one step at a time instead of hunting through the
+                  full page.
+                </p>
+              </div>
+              {hasAcceptedJob && canEditSubmission && (
+                <div
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${
+                    canCompleteNow
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}
+                >
+                  {canCompleteNow
+                    ? "Required proof complete"
+                    : `${blockingCompletionItems.length} submission item${blockingCompletionItems.length === 1 ? "" : "s"} left`}
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-3">
+              {workflowSteps.map((step, index) => {
+                const isActive = activeWorkflowStep === step.key;
+                return (
+                  <button
+                    key={step.key}
+                    type="button"
+                    onClick={() => focusWorkflowStep(step.key)}
+                    className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                      isActive
+                        ? "border-blue-300 bg-blue-50"
+                        : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`mt-0.5 flex h-7 w-7 items-center justify-center rounded-full border text-xs font-semibold ${
+                          step.complete
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : isActive
+                              ? "border-blue-300 bg-white text-blue-700"
+                              : "border-gray-200 bg-gray-50 text-gray-500"
+                        }`}
+                      >
+                        {step.complete ? (
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        ) : (
+                          index + 1
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {step.label}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {step.hint}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {hasAcceptedJob && canEditSubmission && blockingCompletionItems.length > 0 && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-sm font-medium text-amber-900">
+                  Submission shortcuts
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {blockingCompletionItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => focusWorkflowStep(item.step, item.focus)}
+                      className="rounded-full border border-amber-200 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:border-amber-300 hover:bg-amber-100/70"
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Status action button */}
       {sr.status !== "COMPLETED" &&
         sr.status !== "VERIFIED" &&
@@ -1036,6 +1364,10 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                   <p className="text-sm font-medium text-gray-700">
                     Current Status
                   </p>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant={currentStage.badge}>{currentStage.label}</Badge>
+                    <p className="text-xs text-gray-500">{currentStage.detail}</p>
+                  </div>
                   {actionError && (
                     <p className="text-xs text-red-600 mt-0.5">{actionError}</p>
                   )}
@@ -1092,17 +1424,16 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                       Accept Job
                     </Button>
                   )}
-                  {/* If in progress, show complete + pause */}
+                  {/* If in progress, steer into the workspace instead of completing from the top */}
                   {sr.status === "IN_PROGRESS" && (
                     <>
                       <Button
                         variant="primary"
-                        loading={actionLoading}
-                        onClick={() => handleStatusAction("complete")}
+                        onClick={goToCompletionWorkspace}
                         className="w-full sm:w-auto justify-center min-h-[44px]"
                       >
                         <CheckCircle className="w-4 h-4" />
-                        Mark Complete
+                        {statusPrimaryActionLabel}
                       </Button>
                       <button
                         type="button"
@@ -1215,6 +1546,8 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </div>
       )}
 
+      {activeWorkflowStep === "overview" && (
+        <>
       {/* Job info */}
       <Card>
         <CardHeader>
@@ -1239,51 +1572,6 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
             </p>
             <p className="text-sm text-gray-700 mt-1">{sr.description}</p>
           </div>
-
-          {/* Timeline */}
-          {(job.acceptedAt ||
-            job.enRouteAt ||
-            job.arrivedAt ||
-            job.completedAt ||
-            job.pausedAt) && (
-            <div>
-              <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">
-                Timeline
-              </p>
-              <div className="space-y-1 text-xs text-gray-600">
-                {job.acceptedAt && (
-                  <div>
-                    <span className="font-medium">Accepted:</span>{" "}
-                    {formatDate(job.acceptedAt)}
-                  </div>
-                )}
-                {job.enRouteAt && (
-                  <div>
-                    <span className="font-medium">En Route:</span>{" "}
-                    {formatDate(job.enRouteAt)}
-                  </div>
-                )}
-                {job.arrivedAt && (
-                  <div>
-                    <span className="font-medium">Arrived:</span>{" "}
-                    {formatDate(job.arrivedAt)}
-                  </div>
-                )}
-                {job.pausedAt && job.isPaused && (
-                  <div>
-                    <span className="font-medium text-amber-700">Paused:</span>{" "}
-                    {formatDate(job.pausedAt)}
-                  </div>
-                )}
-                {job.completedAt && (
-                  <div>
-                    <span className="font-medium">Completed:</span>{" "}
-                    {formatDate(job.completedAt)}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -1354,7 +1642,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </Card>
       )}
 
-      {sectionNavItems.length > 1 && (
+      {false && sectionNavItems.length > 1 && (
         <div className="sticky top-3 z-20 -mx-1">
           <div className="overflow-x-auto rounded-2xl border border-gray-200/80 bg-white/90 p-2 shadow-sm backdrop-blur">
             <div className="flex min-w-max gap-2">
@@ -1393,7 +1681,11 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </div>
       )}
 
-      <section id="vendor-section-requestPhotos" className="scroll-mt-24">
+      <section
+        id="vendor-section-requestPhotos"
+        ref={overviewPanelRef}
+        className="scroll-mt-24"
+      >
         <Card className="overflow-hidden">
           <CardHeader>
             {renderSectionHeader(
@@ -1470,10 +1762,16 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           </CardContent>
         </Card>
       )}
+        </>
+      )}
 
-      {hasAcceptedJob && (
+      {activeWorkflowStep === "proof" && hasAcceptedJob && (
         <>
-          <section id="vendor-section-workPhotos" className="scroll-mt-24">
+          <section
+            id="vendor-section-workPhotos"
+            ref={proofPanelRef}
+            className="scroll-mt-24"
+          >
             <Card className="overflow-hidden">
               <CardHeader>
                 {renderSectionHeader(
@@ -1492,6 +1790,14 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                       type === "BEFORE" ? beforePhotos : afterPhotos;
                     const uploading = !!photoUploading[type];
                     const queuedCount = pendingPhotos[type].length;
+                    const photoInputRef =
+                      type === "BEFORE"
+                        ? beforePhotoInputRef
+                        : afterPhotoInputRef;
+                    const photoSelectButtonRef =
+                      type === "BEFORE"
+                        ? beforePhotoButtonRef
+                        : afterPhotoButtonRef;
                     return (
                       <div key={type}>
                         <div className="flex items-center justify-between mb-2">
@@ -1500,29 +1806,31 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                           </p>
                           {canModifyPhotos && (
                             <div className="flex items-center gap-2">
-                              <label
-                                className={`inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer px-2.5 py-1.5 rounded-md border transition-colors ${
-                                  uploading
-                                    ? "opacity-50 cursor-not-allowed border-gray-200 text-gray-400"
-                                    : "border-blue-200 text-blue-600 hover:bg-blue-50"
-                                }`}
+                              <input
+                                ref={photoInputRef}
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                disabled={uploading}
+                                className="sr-only"
+                                onChange={(e) => handlePhotoUpload(e, type)}
+                              />
+                              <Button
+                                ref={photoSelectButtonRef}
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                disabled={uploading}
+                                onClick={() => {
+                                  if (photoInputRef.current) {
+                                    photoInputRef.current.value = "";
+                                    photoInputRef.current.click();
+                                  }
+                                }}
                               >
-                                <>
-                                  <Camera className="w-3.5 h-3.5" /> Select
-                                  Photos
-                                </>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  multiple
-                                  disabled={uploading}
-                                  className="sr-only"
-                                  onClick={(e) => {
-                                    e.currentTarget.value = "";
-                                  }}
-                                  onChange={(e) => handlePhotoUpload(e, type)}
-                                />
-                              </label>
+                                <Camera className="w-3.5 h-3.5" />
+                                Select Photos
+                              </Button>
                               <Button
                                 type="button"
                                 variant="secondary"
@@ -1785,6 +2093,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                           New items total: {formatCurrency(newMaterialsTotal)}
                         </p>
                         <Button
+                          ref={saveMaterialsButtonRef}
                           variant="primary"
                           size="sm"
                           loading={savingMaterials}
@@ -1803,10 +2112,12 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </>
       )}
 
+      {activeWorkflowStep === "proof" && (
+        <>
       {/* Notes */}
       <Card>
         <CardHeader>
-          <CardTitle>{canEditSubmission ? "Add Note" : "Notes"}</CardTitle>
+          <CardTitle>{canEditSubmission ? "Work Notes" : "Notes"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {!canEditSubmission && (
@@ -1836,9 +2147,15 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           )}
         </CardContent>
       </Card>
+        </>
+      )}
 
-      {hasAcceptedJob && (
-        <section id="vendor-section-completion" className="scroll-mt-24">
+      {activeWorkflowStep === "complete" && hasAcceptedJob && (
+        <section
+          id="vendor-section-completion"
+          ref={completePanelRef}
+          className="scroll-mt-24"
+        >
           <Card className="overflow-hidden">
             <CardHeader>
               {renderSectionHeader(
@@ -1869,16 +2186,33 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                 {completionError && (
                   <p className="text-xs text-red-600">{completionError}</p>
                 )}
+                {actionError && (
+                  <p className="text-xs text-red-600">{actionError}</p>
+                )}
 
                 <div
-                  className={`rounded-lg border px-4 py-3 ${canEditSubmission ? "border-gray-200 bg-gray-50" : "border-amber-200 bg-amber-50"}`}
+                  className={`rounded-lg border px-4 py-3 ${
+                    canEditSubmission
+                      ? canCompleteNow
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-amber-200 bg-amber-50"
+                      : "border-amber-200 bg-amber-50"
+                  }`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p
-                      className={`text-sm font-medium ${canEditSubmission ? "text-gray-900" : "text-amber-900"}`}
+                      className={`text-sm font-medium ${
+                        canEditSubmission
+                          ? canCompleteNow
+                            ? "text-emerald-900"
+                            : "text-amber-900"
+                          : "text-amber-900"
+                      }`}
                     >
                       {canEditSubmission
-                        ? "Before marking complete"
+                        ? canCompleteNow
+                          ? "Ready to mark complete"
+                          : "Before marking complete"
                         : "Submitted proof snapshot"}
                     </p>
                     <span className="text-xs text-gray-500">
@@ -1887,10 +2221,18 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                     </span>
                   </div>
                   <p
-                    className={`mt-1 text-xs ${canEditSubmission ? "text-gray-500" : "text-amber-700"}`}
+                    className={`mt-1 text-xs ${
+                      canEditSubmission
+                        ? canCompleteNow
+                          ? "text-emerald-700"
+                          : "text-amber-700"
+                        : "text-amber-700"
+                    }`}
                   >
                     {canEditSubmission
-                      ? "Save drafts while working. When the checklist is covered, submit once and move on."
+                      ? canCompleteNow
+                        ? "The required proof is in place. Review the summary below and submit once."
+                        : "Save drafts while working. When the checklist is covered, submit once and move on."
                       : `This proof was submitted ${job.completedAt ? formatDate(job.completedAt) : "after completion"} and is now read-only.`}
                   </p>
                   <div className="mt-3 space-y-2">
@@ -1934,6 +2276,20 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                       complete.
                     </p>
                   )}
+                  {canEditSubmission && blockingCompletionItems.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {blockingCompletionItems.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => focusWorkflowStep(item.step, item.focus)}
+                          className="rounded-full border border-amber-200 bg-white px-3 py-1.5 text-xs font-medium text-amber-800 transition-colors hover:border-amber-300 hover:bg-amber-100/70"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {completionAssist && (
@@ -1941,11 +2297,11 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <p className="text-sm font-medium text-blue-900">
-                          AI evidence review
+                          AI completion coach
                         </p>
                         <p className="text-xs text-blue-700">
-                          Reviewed against your current draft, photos, saved
-                          notes, and saved materials.
+                          Uses your draft, notes, photos, and saved materials to
+                          tighten the completion story and highlight the next best steps.
                         </p>
                       </div>
                       {canEditSubmission &&
@@ -1967,7 +2323,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                     {completionAssist.missingEvidenceFlags.length > 0 && (
                       <div>
                         <p className="mb-1 text-xs font-medium uppercase tracking-wider text-blue-700">
-                          Recommended fixes
+                          Next best steps
                         </p>
                         <ul className="space-y-1 text-sm text-blue-900">
                           {completionAssist.missingEvidenceFlags.map(
@@ -1982,10 +2338,14 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                 )}
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <label
+                    htmlFor={completionSummaryFieldId}
+                    className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-gray-500"
+                  >
                     Completion Summary
                   </label>
                   <Textarea
+                    id={completionSummaryFieldId}
                     placeholder="Summarize what you completed, what was repaired or replaced, and the final result."
                     value={completionSummary}
                     onChange={(e) => setCompletionSummary(e.target.value)}
@@ -2066,13 +2426,21 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                 </div>
 
                 {canEditSubmission && (
-                  <div className="flex justify-end">
+                  <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:justify-end">
                     <Button
                       variant="secondary"
                       loading={savingCompletion}
                       onClick={handleSaveCompletionDraft}
                     >
                       Save Draft
+                    </Button>
+                    <Button
+                      variant="primary"
+                      loading={actionLoading}
+                      onClick={() => handleStatusAction("complete")}
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Mark Complete
                     </Button>
                   </div>
                 )}

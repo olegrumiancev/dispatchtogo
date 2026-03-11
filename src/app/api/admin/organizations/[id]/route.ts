@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { ORG_PRE_DISPATCH_STATUSES } from "@/lib/organization-lifecycle";
 import { prisma } from "@/lib/prisma";
-import { ORGANIZATION_TYPES } from "@/lib/constants";
-
-const ALLOWED_TYPES = new Set<string>(ORGANIZATION_TYPES.map((t) => t.value));
+import { getOrganizationTypes } from "@/lib/catalog";
 
 export async function PATCH(
   request: NextRequest,
@@ -22,6 +20,7 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
   const { type, name, contactEmail, contactPhone, address } = body;
+  const allowedTypes = new Set<string>((await getOrganizationTypes()).map((t) => t.value));
 
   const org = await prisma.organization.findUnique({ where: { id } });
   if (!org) {
@@ -30,7 +29,7 @@ export async function PATCH(
 
   const data: Record<string, any> = {};
 
-  if (typeof type === "string" && ALLOWED_TYPES.has(type)) {
+  if (typeof type === "string" && allowedTypes.has(type)) {
     data.type = type;
   }
   if (typeof name === "string" && name.trim()) {

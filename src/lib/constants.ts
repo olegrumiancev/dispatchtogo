@@ -1,4 +1,15 @@
-export const SERVICE_CATEGORIES = [
+export type ServiceCategoryOption = {
+  value: string;
+  label: string;
+  requiresLicense: boolean;
+};
+
+export type OrganizationTypeOption = {
+  value: string;
+  label: string;
+};
+
+export const SERVICE_CATEGORIES: readonly ServiceCategoryOption[] = [
   { value: "PLUMBING", label: "Plumbing", requiresLicense: true },
   { value: "ELECTRICAL", label: "Electrical", requiresLicense: true },
   { value: "HVAC", label: "HVAC", requiresLicense: true },
@@ -78,7 +89,7 @@ export const BILLING_JOB_TAG_STYLES = {
   BILLABLE: { label: "Billable · $0.25", className: "bg-amber-100 text-amber-700" },
 } as const;
 
-export const ORGANIZATION_TYPES = [
+export const ORGANIZATION_TYPES: readonly OrganizationTypeOption[] = [
   { value: "HOTEL", label: "Hotel" },
   { value: "CAMPGROUND", label: "Campground" },
   { value: "MARINA", label: "Marina" },

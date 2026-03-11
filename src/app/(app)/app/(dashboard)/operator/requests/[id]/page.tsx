@@ -6,12 +6,17 @@ import { AI_ARTIFACT_ACTIONS, getLatestAiArtifact } from "@/lib/ai-artifacts";
 import { prisma } from "@/lib/prisma";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import {
+  RequestProgressCard,
+  getLinearRequestProgressSteps,
+} from "@/components/ui/request-progress-card";
+import { URGENCY_LEVELS } from "@/lib/constants";
+import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
 } from "@/lib/admin-operator-request-status";
-import { ArrowLeft, MapPin, Calendar, User, Wrench, CheckCircle, Phone, FileText, Package, Download } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, User, Wrench, Phone, FileText, Package, Download } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { CompletionReviewActions } from "@/components/forms/completion-review-actions";
 import { TriageSection } from "@/components/forms/triage-section";
@@ -22,61 +27,6 @@ import type { AiTriageData } from "@/components/ui/ai-triage-badge";
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
-// Timeline steps with labels and timestamp accessors
-const STATUS_PROGRESSION = [
-  "SUBMITTED",
-  "TRIAGING",
-  "READY_TO_DISPATCH",
-  "DISPATCHED",
-  "ACCEPTED",
-  "IN_PROGRESS",
-  "COMPLETED",
-  "VERIFIED",
-  "DISPUTED",
-] as const;
-
-interface TimelineProps {
-  currentStatus: string;
-}
-
-function StatusTimeline({ currentStatus }: TimelineProps) {
-  const currentIdx = STATUS_PROGRESSION.indexOf(currentStatus as any);
-
-  return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {STATUS_PROGRESSION.map((status, idx) => {
-        const isDone = idx < currentIdx;
-        const isCurrent = idx === currentIdx;
-        const label = getAdminOperatorRequestStatusLabel(status);
-
-        return (
-          <div key={status} className="flex items-center gap-1">
-            <div
-              className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${
-                isCurrent
-                  ? "bg-blue-600 text-white"
-                  : isDone
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-gray-100 text-gray-400"
-              }`}
-            >
-              {isDone && <CheckCircle className="w-3 h-3" />}
-              {label}
-            </div>
-            {idx < STATUS_PROGRESSION.length - 1 && (
-              <span className="text-gray-300 text-xs">→</span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
 }
 
 export default async function RequestDetailPage({
@@ -90,6 +40,7 @@ export default async function RequestDetailPage({
   const user = session.user as any;
   const orgId: string = user.organizationId!;
   const { id } = await params;
+  const serviceCategories = await getServiceCategories();
 
   const [req, triageArtifact] = await Promise.all([
     prisma.serviceRequest.findFirst({
@@ -175,56 +126,27 @@ export default async function RequestDetailPage({
           )}
         </div>
       </div>
-
       {/* Status timeline */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Progress</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div>
-            <StatusTimeline currentStatus={req.status} />
-          </div>
-
-          {/* Key timestamps */}
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs text-gray-500">
-            <div>
-              <p className="font-medium text-gray-700">Submitted</p>
-              <p>{formatDate(req.createdAt)}</p>
-            </div>
-            {req.job?.acceptedAt && (
-              <div>
-                <p className="font-medium text-gray-700">Accepted</p>
-                <p>{formatDate(req.job.acceptedAt)}</p>
-              </div>
-            )}
-            {req.job?.enRouteAt && (
-              <div>
-                <p className="font-medium text-gray-700">En Route</p>
-                <p>{formatDate(req.job.enRouteAt)}</p>
-              </div>
-            )}
-            {req.job?.arrivedAt && (
-              <div>
-                <p className="font-medium text-gray-700">Arrived</p>
-                <p>{formatDate(req.job.arrivedAt)}</p>
-              </div>
-            )}
-            {req.job?.completedAt && (
-              <div>
-                <p className="font-medium text-gray-700">Completed</p>
-                <p>{formatDate(req.job.completedAt)}</p>
-              </div>
-            )}
-            {req.resolvedAt && (
-              <div>
-                <p className="font-medium text-gray-700">Resolved</p>
-                <p>{formatDate(req.resolvedAt)}</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <RequestProgressCard
+        currentStatus={req.status}
+        steps={getLinearRequestProgressSteps(
+          getAdminOperatorRequestStatusLabel,
+          req.status
+        )}
+        events={[
+          { label: "Submitted", value: req.createdAt },
+          { label: "Accepted", value: req.job?.acceptedAt },
+          { label: "En Route", value: req.job?.enRouteAt },
+          { label: "Arrived", value: req.job?.arrivedAt },
+          {
+            label: "Paused",
+            value: req.job?.isPaused ? req.job?.pausedAt : null,
+            tone: "warning",
+          },
+          { label: "Completed", value: req.job?.completedAt },
+          { label: "Resolved", value: req.resolvedAt },
+        ]}
+      />
 
       {/* Disputed / rejection info banner */}
       {req.status === "DISPUTED" && (
@@ -282,7 +204,7 @@ export default async function RequestDetailPage({
               </p>
               <div className="flex items-center gap-1 mt-1">
                 <Wrench className="w-4 h-4 text-gray-400" />
-                <p className="text-sm text-gray-900">{getCategoryLabel(req.category)}</p>
+                <p className="text-sm text-gray-900">{getServiceCategoryLabel(serviceCategories, req.category)}</p>
               </div>
             </div>
             {primaryContact && (
@@ -354,6 +276,8 @@ export default async function RequestDetailPage({
           <TriageSection
             requestId={req.id}
             initialTriage={initialTriage}
+            requestStatus={req.status}
+            allowClarificationSubmit
           />
         );
       })()}
@@ -491,7 +415,7 @@ export default async function RequestDetailPage({
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 space-y-3">
                 <div>
                   <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">
-                    AI Proof Summary
+                    AI Completion Insight
                   </p>
                   <p className="text-sm text-emerald-950 whitespace-pre-wrap">
                     {completionAssistArtifact.data.proofSummary}
@@ -500,7 +424,7 @@ export default async function RequestDetailPage({
                 {completionAssistArtifact.data.missingEvidenceFlags.length > 0 && (
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 mb-1">
-                      Evidence Flags
+                      Next Suggested Steps
                     </p>
                     <ul className="space-y-1 text-sm text-emerald-900">
                       {completionAssistArtifact.data.missingEvidenceFlags.map((flag, index) => (
@@ -606,3 +530,4 @@ export default async function RequestDetailPage({
     </div>
   );
 }
+

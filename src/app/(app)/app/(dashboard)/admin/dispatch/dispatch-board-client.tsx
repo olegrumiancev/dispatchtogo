@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { cn, formatDate } from "@/lib/utils";
-import { SERVICE_CATEGORIES, URGENCY_LEVELS, REQUEST_STATUSES } from "@/lib/constants";
+import { URGENCY_LEVELS, REQUEST_STATUSES } from "@/lib/constants";
 import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
@@ -15,13 +15,10 @@ import {
 import type { AdminDispatchBoardData } from "@/lib/admin-dispatch-board";
 import { AlertTriangle, ChevronDown, ChevronUp, ChevronsUpDown, Eye } from "lucide-react";
 import AssignModal from "./assign-modal";
+import { useCatalogOptions } from "@/hooks/use-catalog-options";
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((item) => item.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
-}
-
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((item) => item.value === category)?.label ?? category;
 }
 
 function formatSyncTime(iso: string) {
@@ -33,11 +30,14 @@ function formatSyncTime(iso: string) {
 }
 
 export function AdminDispatchBoardClient({ initialData }: { initialData: AdminDispatchBoardData }) {
+  const { serviceCategories } = useCatalogOptions();
   const [board, setBoard] = useState(initialData);
   const [refreshStatus, setRefreshStatus] = useState<"active" | "paused">("active");
   const initialRequestIdsRef = useRef(new Set(initialData.requests.map((request) => request.id)));
   const seenRequestIdsRef = useRef(new Set(initialData.requests.map((request) => request.id)));
   const [freshRequestIds, setFreshRequestIds] = useState<Set<string>>(new Set());
+  const getCategoryLabel = (category: string) =>
+    serviceCategories.find((item) => item.value === category)?.label ?? category;
 
   useEffect(() => {
     setBoard(initialData);
@@ -222,7 +222,7 @@ export function AdminDispatchBoardClient({ initialData }: { initialData: AdminDi
             className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">All Categories</option>
-            {SERVICE_CATEGORIES.map((category) => (
+            {serviceCategories.map((category) => (
               <option key={category.value} value={category.value}>
                 {category.label}
               </option>

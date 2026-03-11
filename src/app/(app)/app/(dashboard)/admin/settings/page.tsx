@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Settings, Mail, Loader2, CheckCircle2, AlertCircle, Copy, Wrench, KeyRound, Eye, EyeOff } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Settings, Mail, Loader2, CheckCircle2, AlertCircle, Copy, Wrench, KeyRound, Eye, EyeOff, Shapes } from "lucide-react";
+import { CatalogSettingsClient } from "./catalog/catalog-settings-client";
 
 /* ── Types ──────────────────────────────────────────────────────────────────────────── */
 
@@ -117,9 +119,10 @@ const EMAIL_EVENTS: EventMeta[] = [
 
 /* ── Component ──────────────────────────────────────────────────────────────────────────── */
 
-type Tab = "email" | "toolbox";
+type Tab = "email" | "toolbox" | "catalog";
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>("email");
 
   // Email settings state
@@ -135,6 +138,13 @@ export default function SettingsPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkToast, setBulkToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (tab === "email" || tab === "toolbox" || tab === "catalog") {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Fetch current settings on mount
   useEffect(() => {
@@ -242,7 +252,7 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Manage email notifications and admin utilities.
+          Manage email notifications, admin utilities, and operational settings.
         </p>
       </div>
 
@@ -271,6 +281,18 @@ export default function SettingsPage() {
         >
           <Wrench className="w-4 h-4" />
           Toolbox
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("catalog")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeTab === "catalog"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          <Shapes className="w-4 h-4" />
+          Catalog
         </button>
       </div>
 
@@ -548,6 +570,8 @@ export default function SettingsPage() {
           </section>
         </div>
       )}
+
+      {activeTab === "catalog" && <CatalogSettingsClient embedded />}
     </div>
   );
 }

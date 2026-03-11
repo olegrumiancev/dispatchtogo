@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { unstable_noStore as noStore } from "next/cache";
 import {
   Zap,
   Shield,
@@ -13,7 +14,7 @@ import {
   FileText,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand/brand-logo";
-import { HeroCopy } from "./hero-copy";
+import { getRandomHeroVariant, HeroCopy } from "./hero-copy";
 
 function NavBar() {
   return (
@@ -57,6 +58,9 @@ function NavBar() {
 }
 
 function Hero() {
+  noStore();
+  const heroVariant = getRandomHeroVariant();
+
   return (
     <section className="bg-gradient-to-b from-slate-50 to-white pb-20 pt-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -65,7 +69,7 @@ function Hero() {
             <Zap className="h-4 w-4" />
             Built for Cornwall &amp; SDG Tourism Operators
           </div>
-          <HeroCopy />
+          <HeroCopy variant={heroVariant} />
           <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
             <Link
               href="/app/register"

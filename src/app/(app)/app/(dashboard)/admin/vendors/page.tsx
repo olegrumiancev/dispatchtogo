@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AdminAccountsSubnav } from "@/components/admin/accounts-subnav";
 import { PaginationControls } from "@/components/ui/pagination-controls";
-import { SERVICE_CATEGORIES, VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
+import { VENDOR_AVAILABILITY_STATUSES } from "@/lib/constants";
+import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import { getVendorStatusMeta } from "@/lib/vendor-lifecycle";
 import {
   AlertTriangle,
@@ -24,10 +25,6 @@ import {
 } from "lucide-react";
 
 const PAGE_SIZE = 24;
-
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
 
 function getAvailabilityConfig(status: string) {
   return VENDOR_AVAILABILITY_STATUSES.find((s) => s.value === status) ?? VENDOR_AVAILABILITY_STATUSES[0];
@@ -89,6 +86,8 @@ export default async function AdminVendorsPage({
   const user = session.user as any;
   if (user.role !== "ADMIN") redirect("/");
 
+  const serviceCategories = await getServiceCategories();
+
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10) || 1);
   const vendorFilter = sp.vendor ?? "";
@@ -98,7 +97,7 @@ export default async function AdminVendorsPage({
       ? sp.availability
       : "";
   const categoryFilter =
-    typeof sp.category === "string" && SERVICE_CATEGORIES.some((c) => c.value === sp.category)
+    typeof sp.category === "string" && serviceCategories.some((c) => c.value === sp.category)
       ? sp.category
       : "";
   const stateFilter: VendorState =
@@ -253,7 +252,7 @@ export default async function AdminVendorsPage({
               className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All skills</option>
-              {SERVICE_CATEGORIES.map((category) => (
+                  {serviceCategories.map((category) => (
                 <option key={category.value} value={category.value}>
                   {category.label}
                 </option>
@@ -334,7 +333,7 @@ export default async function AdminVendorsPage({
                           {vendor.skills.length > 0 ? (
                             vendor.skills.map((skill) => (
                               <Badge key={skill.id} className="bg-blue-50 text-blue-700 text-xs">
-                                {getCategoryLabel(skill.category)}
+                                {getServiceCategoryLabel(serviceCategories, skill.category)}
                               </Badge>
                             ))
                           ) : (
@@ -449,7 +448,7 @@ export default async function AdminVendorsPage({
                   <div className="flex flex-wrap gap-1">
                     {vendor.skills.slice(0, 3).map((skill) => (
                       <Badge key={skill.id} className="bg-blue-50 text-blue-700 text-[11px]">
-                        {getCategoryLabel(skill.category)}
+                        {getServiceCategoryLabel(serviceCategories, skill.category)}
                       </Badge>
                     ))}
                     {vendor.skills.length > 3 && (

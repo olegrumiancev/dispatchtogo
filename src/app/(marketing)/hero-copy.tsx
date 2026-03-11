@@ -1,14 +1,10 @@
-"use client";
-
-import { useEffect, useState } from "react";
-
-type HeroVariant = {
+export type HeroVariant = {
   headline: string;
   highlight: string;
   description: string;
 };
 
-const HERO_VARIANTS: HeroVariant[] = [
+export const HERO_VARIANTS: HeroVariant[] = [
   {
     headline: "From service request",
     highlight: "to proof of work.",
@@ -29,34 +25,12 @@ const HERO_VARIANTS: HeroVariant[] = [
   },
 ];
 
-function getRandomVariant(excludeIndex?: number) {
-  if (HERO_VARIANTS.length === 1) return HERO_VARIANTS[0];
-
-  let nextIndex = Math.floor(Math.random() * HERO_VARIANTS.length);
-  if (excludeIndex == null) return HERO_VARIANTS[nextIndex];
-
-  while (nextIndex === excludeIndex) {
-    nextIndex = Math.floor(Math.random() * HERO_VARIANTS.length);
-  }
-
-  return HERO_VARIANTS[nextIndex];
+export function getRandomHeroVariant() {
+  const index = Math.floor(Math.random() * HERO_VARIANTS.length);
+  return HERO_VARIANTS[index];
 }
 
-export function HeroCopy() {
-  const [variant, setVariant] = useState(HERO_VARIANTS[0]);
-
-  useEffect(() => {
-    setVariant((current) => {
-      const currentIndex = HERO_VARIANTS.findIndex(
-        (entry) =>
-          entry.headline === current.headline &&
-          entry.highlight === current.highlight
-      );
-
-      return getRandomVariant(currentIndex >= 0 ? currentIndex : undefined);
-    });
-  }, []);
-
+export function HeroCopy({ variant }: { variant: HeroVariant }) {
   return (
     <>
       <h1 className="text-4xl font-bold leading-tight tracking-tight text-gray-900 sm:text-5xl lg:text-6xl">

@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { URGENCY_LEVELS, SERVICE_CATEGORIES } from "@/lib/constants";
+import { URGENCY_LEVELS } from "@/lib/constants";
+import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
@@ -17,16 +18,13 @@ function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
 }
 
-function getCategoryLabel(category: string) {
-  return SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-}
-
 export default async function OperatorDashboard() {
   const session = await auth();
   if (!session) redirect("/app/login");
 
   const user = session.user as any;
   const orgId: string = user.organizationId!;
+  const serviceCategories = await getServiceCategories();
 
   // Fetch organization name
   const org = await prisma.organization.findUnique({
@@ -269,7 +267,7 @@ export default async function OperatorDashboard() {
                       {req.property.name}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500 hidden md:table-cell">
-                      {getCategoryLabel(req.category)}
+                      {getServiceCategoryLabel(serviceCategories, req.category)}
                     </td>
                     <td className="px-6 py-4 hidden sm:table-cell">
                       <Badge variant={getUrgencyColor(req.urgency)}>
