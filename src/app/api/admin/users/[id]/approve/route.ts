@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, writeAuditLog } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
@@ -49,6 +50,17 @@ export async function POST(
         },
       });
 
+      await writeAuditLog({
+        entityType: AUDIT_ENTITY_TYPES.USER,
+        entityId: id,
+        action: AUDIT_ACTIONS.USER_APPROVED,
+        actorUserId: adminUser.id,
+        metadata: {
+          targetRole: targetUser.role,
+          targetEmail: targetUser.email,
+        },
+      });
+
       // Send approval email to the user
       if (NOTIFICATION_SETTINGS.emailEnabled) {
         const appUrl = process.env.NEXTAUTH_URL || "https://dispatchtogo.com";
@@ -85,6 +97,18 @@ export async function POST(
       data: {
         isApproved: false,
         rejectedAt: new Date(),
+        rejectionNote: rejectionNote || null,
+      },
+    });
+
+    await writeAuditLog({
+      entityType: AUDIT_ENTITY_TYPES.USER,
+      entityId: id,
+      action: AUDIT_ACTIONS.USER_REJECTED,
+      actorUserId: adminUser.id,
+      metadata: {
+        targetRole: targetUser.role,
+        targetEmail: targetUser.email,
         rejectionNote: rejectionNote || null,
       },
     });

@@ -41,6 +41,7 @@ model User {
   chatMessages             ChatMessage[]
   auditLogs                AuditLog[]
   passwordResetTokens      PasswordResetToken[]
+  emailChangeTokens        EmailChangeToken[]
   requestViews             RequestView[]
   notificationPreferences  UserNotificationPreferences?
 
@@ -460,6 +461,22 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([expiresAt])
+}
+
+model EmailChangeToken {
+  id        String    @id @default(cuid())
+  userId    String
+  newEmail  String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([newEmail])
   @@index([expiresAt])
 }
 

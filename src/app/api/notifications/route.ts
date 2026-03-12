@@ -11,9 +11,14 @@ export async function PATCH(request: NextRequest) {
 
   const user = session.user as any;
   const body = await request.json().catch(() => ({}));
-  const { id } = body as { id?: string };
+  const { id, ids } = body as { id?: string; ids?: string[] };
 
-  if (id) {
+  if (Array.isArray(ids) && ids.length > 0) {
+    await prisma.notification.updateMany({
+      where: { userId: user.id, id: { in: ids } },
+      data: { read: true },
+    });
+  } else if (id) {
     // Mark a single notification as read – must belong to the current user
     const notif = await prisma.notification.findFirst({
       where: { id, userId: user.id },

@@ -118,6 +118,9 @@ export default async function VendorJobsPage({
     id: n.id,
     title: n.title,
     body: n.body,
+    type: n.type,
+    link: n.link,
+    metadata: (n.metadata ?? null) as VendorNotif["metadata"],
     createdAt: n.createdAt.toISOString(),
   }));
 
@@ -131,8 +134,6 @@ export default async function VendorJobsPage({
 
   return (
     <div className="space-y-6">
-      {notifProps.length > 0 && <VendorNotificationBanner notifications={notifProps} />}
-
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
         {completedTotal > 0 && (
@@ -145,52 +146,55 @@ export default async function VendorJobsPage({
         )}
       </div>
 
-      <div className="sticky top-16 z-20 -mx-4 border-b border-gray-200 bg-white/90 px-4 backdrop-blur-sm md:-mx-6 md:px-6">
-        <nav className="flex gap-3 overflow-x-auto sm:gap-6">
-          <Link
-            href="/app/vendor/jobs?tab=available"
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              tab === "available"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Available Jobs
-            <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-              {availableJobs.length}
-            </span>
-          </Link>
-          <Link
-            href="/app/vendor/jobs?tab=mine"
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              tab === "mine"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            My Jobs
-            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
-              {activeJobs.length}
-            </span>
-          </Link>
-          <Link
-            href="/app/vendor/jobs?tab=completed"
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
-              tab === "completed"
-                ? "border-blue-600 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            Completed
-            <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
-              {completedTotal}
-            </span>
-          </Link>
-        </nav>
+      <div className="sticky top-16 z-20 -mx-4 space-y-3 bg-white/90 px-4 pb-3 pt-2 backdrop-blur-sm md:-mx-6 md:px-6">
+        {notifProps.length > 0 && <VendorNotificationBanner notifications={notifProps} />}
+        <div className="border-b border-gray-200">
+          <nav className="flex gap-3 overflow-x-auto sm:gap-6">
+            <Link
+              href="/app/vendor/jobs?tab=available"
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === "available"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Available Jobs
+              <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                {availableJobs.length}
+              </span>
+            </Link>
+            <Link
+              href="/app/vendor/jobs?tab=mine"
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === "mine"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              My Jobs
+              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                {activeJobs.length}
+              </span>
+            </Link>
+            <Link
+              href="/app/vendor/jobs?tab=completed"
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+                tab === "completed"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Completed
+              <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                {completedTotal}
+              </span>
+            </Link>
+          </nav>
+        </div>
       </div>
 
       {tab === "available" && (
-        <div className="space-y-4">
+        <div id="available-jobs" className="space-y-4">
           {availableJobs.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-gray-400">

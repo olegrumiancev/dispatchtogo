@@ -5,6 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 import { sendVendorDispatchNotification } from "@/lib/sms";
 import { sendVendorDispatchEmail } from "@/lib/email";
+import { SERVICE_CATEGORIES } from "@/lib/constants";
+
+function getCategoryLabel(category: string) {
+  return (
+    SERVICE_CATEGORIES.find((entry) => entry.value === category)?.label ?? category
+  );
+}
 
 export async function POST(
   request: NextRequest,
@@ -17,7 +24,10 @@ export async function POST(
 
   const user = session.user as any;
   if (user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden: only ADMINs can dispatch requests" }, { status: 403 });
+    return NextResponse.json(
+      { error: "Forbidden: only ADMINs can dispatch requests" },
+      { status: 403 }
+    );
   }
 
   const { id } = await params;
@@ -28,13 +38,14 @@ export async function POST(
     return NextResponse.json({ error: "vendorId is required" }, { status: 400 });
   }
 
-  // Fetch service request
   const serviceRequest = await prisma.serviceRequest.findUnique({ where: { id } });
   if (!serviceRequest) {
-    return NextResponse.json({ error: "Service request not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "Service request not found" },
+      { status: 404 }
+    );
   }
 
-  // Ensure not already dispatched with an active (non-declined) job
   if (serviceRequest.status === "CANCELLED") {
     return NextResponse.json(
       { error: "Cannot dispatch a cancelled request" },
@@ -62,7 +73,6 @@ export async function POST(
     );
   }
 
-  // Verify vendor exists and is platform-active
   const vendor = await prisma.vendor.findUnique({ where: { id: vendorId } });
   if (!vendor) {
     return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
@@ -74,13 +84,10 @@ export async function POST(
     );
   }
 
-  // Check for a previously declined job record to reuse
-  // (serviceRequestId is @unique on Job, so we must update rather than create)
   const declinedJob = await prisma.job.findFirst({
     where: { serviceRequestId: id, status: "DECLINED" },
   });
 
-  // Create/reset job and update request status in a transaction
   const jobInclude = {
     vendor: true,
     serviceRequest: {
@@ -122,9 +129,10 @@ export async function POST(
     }),
   ]);
 
-  // Fire-and-forget SMS + email + in-app notification to vendor
   if (NOTIFICATION_SETTINGS.notifyVendorOnDispatch) {
     const property = (job.serviceRequest as any).property;
+    const categoryLabel = getCategoryLabel(serviceRequest.category);
+    const propertyName = property?.name ?? "Assigned property";
     const details = {
       category: serviceRequest.category,
       propertyName: property?.name ?? "Unknown Property",
@@ -133,35 +141,62 @@ export async function POST(
       refNumber: serviceRequest.referenceNumber,
     };
 
-    sendVendorDispatchNotification(vendor.phone, vendor.companyName, details).then((r) => {
-      if (!r.success) console.error(`[dispatch] SMS to vendor ${vendor.companyName} failed:`, r.error);
+    sendVendorDispatchNotification(
+      vendor.phone,
+      vendor.companyName,
+      details
+    ).then((result) => {
+      if (!result.success) {
+        console.error(
+          `[dispatch] SMS to vendor ${vendor.companyName} failed:`,
+          result.error
+        );
+      }
     });
 
     if (NOTIFICATION_SETTINGS.emailEnabled) {
-      sendVendorDispatchEmail(vendor.email, vendor.companyName, details).then((r) => {
-        if (!r.success) console.error(`[dispatch] Email to vendor ${vendor.companyName} failed:`, r.error);
+      sendVendorDispatchEmail(
+        vendor.email,
+        vendor.companyName,
+        details
+      ).then((result) => {
+        if (!result.success) {
+          console.error(
+            `[dispatch] Email to vendor ${vendor.companyName} failed:`,
+            result.error
+          );
+        }
       });
     }
 
-    // In-app notification for the vendor's user account(s)
-    prisma.user.findMany({ where: { vendorId: vendor.id }, select: { id: true } })
+    prisma.user
+      .findMany({ where: { vendorId: vendor.id }, select: { id: true } })
       .then((vendorUsers) => {
         if (!vendorUsers.length) return;
         return prisma.notification.createMany({
-          data: vendorUsers.map((u) => ({
-            userId: u.id,
-            title: `New job dispatched – ${serviceRequest.referenceNumber}`,
-            body: `A new job at ${details.propertyName} (${details.category}) has been dispatched to you. Please log in to accept or decline.`,
+          data: vendorUsers.map((account) => ({
+            userId: account.id,
+            title: "New job waiting",
+            body: `${serviceRequest.referenceNumber} | ${propertyName} | ${categoryLabel}. Review and accept or pass.`,
             type: "JOB_DISPATCHED",
             link: `/app/vendor/jobs/${job.id}`,
+            metadata: {
+              referenceNumber: serviceRequest.referenceNumber,
+              propertyName,
+              category: serviceRequest.category,
+              categoryLabel,
+              jobId: job.id,
+            },
           })),
         });
       })
-      .catch((e) => console.error("[dispatch] In-app notification failed:", e));
+      .catch((error) =>
+        console.error("[dispatch] In-app notification failed:", error)
+      );
   }
 
-  generateDispatchAssist(id, vendorId).catch((err) => {
-    console.error("[dispatch] Failed to persist dispatch handoff assist:", err);
+  generateDispatchAssist(id, vendorId).catch((error) => {
+    console.error("[dispatch] Failed to persist dispatch handoff assist:", error);
   });
 
   return NextResponse.json(job, { status: 201 });

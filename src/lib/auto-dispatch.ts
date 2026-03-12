@@ -2,12 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 import { sendVendorDispatchNotification } from "@/lib/sms";
 import { sendVendorDispatchEmail } from "@/lib/email";
+import { SERVICE_CATEGORIES } from "@/lib/constants";
 
-/**
- * Culture- and case-invariant equality check for category strings.
- * Normalises whitespace, trims, and lowercases both sides so that
- * "PLUMBING", "Plumbing", "plumbing", etc. all match.
- */
 function categoriesMatch(a: string, b: string): boolean {
   return (
     a.trim().toLowerCase().replace(/\s+/g, " ") ===
@@ -15,20 +11,12 @@ function categoriesMatch(a: string, b: string): boolean {
   );
 }
 
-/**
- * Auto-dispatch: find a matching vendor for the given service request
- * and create a job assignment.
- *
- * Cascade logic (most-specific first):
- * 1. Operator explicitly chose a vendor in the form → use that vendor
- * 2. Preferred vendor for this property + category
- * 3. Preferred vendor for this org + category (property = null)
- * 4. Any ACTIVE + AVAILABLE vendor with matching skill (load-balanced by fewest active jobs)
- * 5. No match → READY_TO_DISPATCH for manual admin assignment
- *
- * NOTE: Only vendors with availabilityStatus === "AVAILABLE" are considered
- * for auto-dispatch. BUSY and OFF_DUTY vendors are skipped.
- */
+function getCategoryLabel(category: string) {
+  return (
+    SERVICE_CATEGORIES.find((entry) => entry.value === category)?.label ?? category
+  );
+}
+
 export async function autoDispatch(
   serviceRequestId: string,
   preferredVendorId?: string | null
@@ -44,7 +32,7 @@ export async function autoDispatch(
     const { category: requestCategory, organizationId, propertyId } = request;
     let chosenVendorId: string | null = null;
 
-    // ── Step 1: Operator explicitly chose a vendor ──────────────────────
+    // Step 1: operator explicitly chose a vendor.
     if (preferredVendorId) {
       const vendor = await prisma.vendor.findFirst({
         where: {
@@ -58,41 +46,41 @@ export async function autoDispatch(
       }
     }
 
-    // ── Step 2: Property-level preferred vendor ─────────────────────────
+    // Step 2: property-level preferred vendor.
     if (!chosenVendorId && propertyId) {
       const prefs = await prisma.preferredVendor.findMany({
         where: { organizationId, propertyId },
         include: { vendor: true },
       });
       const match = prefs.find(
-        (p) =>
-          categoriesMatch(p.category, requestCategory) &&
-          p.vendor.status === "ACTIVE" &&
-          p.vendor.availabilityStatus === "AVAILABLE"
+        (preference) =>
+          categoriesMatch(preference.category, requestCategory) &&
+          preference.vendor.status === "ACTIVE" &&
+          preference.vendor.availabilityStatus === "AVAILABLE"
       );
       if (match) {
         chosenVendorId = match.vendorId;
       }
     }
 
-    // ── Step 3: Org-level preferred vendor (property = null) ────────────
+    // Step 3: org-level preferred vendor.
     if (!chosenVendorId) {
       const prefs = await prisma.preferredVendor.findMany({
         where: { organizationId, propertyId: null },
         include: { vendor: true },
       });
       const match = prefs.find(
-        (p) =>
-          categoriesMatch(p.category, requestCategory) &&
-          p.vendor.status === "ACTIVE" &&
-          p.vendor.availabilityStatus === "AVAILABLE"
+        (preference) =>
+          categoriesMatch(preference.category, requestCategory) &&
+          preference.vendor.status === "ACTIVE" &&
+          preference.vendor.availabilityStatus === "AVAILABLE"
       );
       if (match) {
         chosenVendorId = match.vendorId;
       }
     }
 
-    // ── Step 4: Skill-based match with load balancing ───────────────────
+    // Step 4: skill-based match with load balancing.
     if (!chosenVendorId) {
       const allActiveVendors = await prisma.vendor.findMany({
         where: {
@@ -109,19 +97,19 @@ export async function autoDispatch(
         },
       });
 
-      const matchingVendors = allActiveVendors.filter((v) =>
-        v.skills.some((s) => categoriesMatch(s.category, requestCategory))
+      const matchingVendors = allActiveVendors.filter((vendor) =>
+        vendor.skills.some((skill) => categoriesMatch(skill.category, requestCategory))
       );
 
       if (matchingVendors.length > 0) {
         const sorted = matchingVendors.sort(
-          (a, b) => a._count.jobs - b._count.jobs
+          (left, right) => left._count.jobs - right._count.jobs
         );
         chosenVendorId = sorted[0].id;
       }
     }
 
-    // ── Step 5: No match → READY_TO_DISPATCH ────────────────────────────
+    // Step 5: no match, leave the request ready for manual dispatch.
     if (!chosenVendorId) {
       await prisma.serviceRequest.update({
         where: { id: serviceRequestId },
@@ -130,7 +118,6 @@ export async function autoDispatch(
       return false;
     }
 
-    // Create job and update request status in a transaction
     const [createdJob] = await prisma.$transaction([
       prisma.job.create({
         data: {
@@ -146,8 +133,6 @@ export async function autoDispatch(
       }),
     ]);
 
-    // Fire-and-forget: notify the assigned vendor (SMS + email + in-app)
-    // Mirrors the same logic in /api/requests/[id]/dispatch/route.ts
     if (NOTIFICATION_SETTINGS.notifyVendorOnDispatch) {
       const [vendor, property, fullRequest] = await Promise.all([
         prisma.vendor.findUnique({ where: { id: chosenVendorId } }),
@@ -159,6 +144,8 @@ export async function autoDispatch(
       ]);
 
       if (vendor && fullRequest) {
+        const propertyName = property?.name ?? "Assigned property";
+        const categoryLabel = getCategoryLabel(request.category);
         const notifDetails = {
           category: request.category,
           propertyName: property?.name ?? "Unknown Property",
@@ -167,32 +154,55 @@ export async function autoDispatch(
           refNumber: fullRequest.referenceNumber,
         };
 
-        sendVendorDispatchNotification(vendor.phone, vendor.companyName, notifDetails).then((r) => {
-          if (!r.success) console.error("[auto-dispatch] SMS to vendor failed:", r.error);
+        sendVendorDispatchNotification(
+          vendor.phone,
+          vendor.companyName,
+          notifDetails
+        ).then((result) => {
+          if (!result.success) {
+            console.error("[auto-dispatch] SMS to vendor failed:", result.error);
+          }
         });
 
         if (NOTIFICATION_SETTINGS.emailEnabled) {
-          sendVendorDispatchEmail(vendor.email, vendor.companyName, notifDetails).then((r) => {
-            if (!r.success) console.error("[auto-dispatch] Email to vendor failed:", r.error);
+          sendVendorDispatchEmail(
+            vendor.email,
+            vendor.companyName,
+            notifDetails
+          ).then((result) => {
+            if (!result.success) {
+              console.error("[auto-dispatch] Email to vendor failed:", result.error);
+            }
           });
         }
 
-        // In-app notification for the vendor's user account(s)
-        prisma.user.findMany({
-          where: { vendorId: chosenVendorId },
-          select: { id: true },
-        }).then((vendorUsers) => {
-          if (vendorUsers.length === 0) return;
-          return prisma.notification.createMany({
-            data: vendorUsers.map((u) => ({
-              userId: u.id,
-              title: `New job dispatched – ${fullRequest.referenceNumber}`,
-              body: `A new job at ${property?.name ?? "your assigned property"} (${request.category}) has been dispatched to you. Please log in to accept or decline.`,
-              type: "JOB_DISPATCHED",
-              link: `/app/vendor/jobs/${createdJob.id}`,
-            })),
-          });
-        }).catch((e) => console.error("[auto-dispatch] In-app notification failed:", e));
+        prisma.user
+          .findMany({
+            where: { vendorId: chosenVendorId },
+            select: { id: true },
+          })
+          .then((vendorUsers) => {
+            if (vendorUsers.length === 0) return;
+            return prisma.notification.createMany({
+              data: vendorUsers.map((user) => ({
+                userId: user.id,
+                title: "New job waiting",
+                body: `${fullRequest.referenceNumber} | ${propertyName} | ${categoryLabel}. Review and accept or pass.`,
+                type: "JOB_DISPATCHED",
+                link: `/app/vendor/jobs/${createdJob.id}`,
+                metadata: {
+                  referenceNumber: fullRequest.referenceNumber,
+                  propertyName,
+                  category: request.category,
+                  categoryLabel,
+                  jobId: createdJob.id,
+                },
+              })),
+            });
+          })
+          .catch((error) =>
+            console.error("[auto-dispatch] In-app notification failed:", error)
+          );
       }
     }
 

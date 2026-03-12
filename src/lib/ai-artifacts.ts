@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { writeAuditLog } from "@/lib/audit-log";
 
 export const AI_ARTIFACT_ACTIONS = {
   TRIAGE: "AI_TRIAGE_ARTIFACT",
@@ -49,17 +50,14 @@ export async function saveAiArtifact<T>({
   source = "ai",
   userId,
 }: SaveAiArtifactParams<T>) {
-  return prisma.auditLog.create({
-    data: {
-      entityType,
-      entityId,
-      action,
-      userId: userId ?? null,
-      metadata: {
-        version: 1,
-        source,
-        data,
-      } as any,
+  return writeAuditLog({
+    entityType,
+    entityId,
+    action,
+    actorUserId: userId,
+    metadata: {
+      source,
+      data,
     },
   });
 }

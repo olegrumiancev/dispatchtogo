@@ -44,11 +44,25 @@ function LoginForm() {
         setInfo("Email verified successfully! You can now sign in.");
       }
     }
+    if (searchParams.get("emailChanged") === "true") {
+      const nextEmail = searchParams.get("email");
+      setInfo(
+        nextEmail
+          ? `Your login email has been changed to ${nextEmail}. Sign in with the new address.`
+          : "Your login email has been changed successfully. Sign in with your new address."
+      );
+    }
     if (searchParams.get("error") === "invalid-verification") {
       setError("Invalid or expired verification link.");
     }
     if (searchParams.get("error") === "verification-failed") {
       setError("Verification failed. Please try again.");
+    }
+    if (searchParams.get("error") === "email-change-invalid") {
+      setError("This email change link is invalid or has expired. Request a new email change from My Account.");
+    }
+    if (searchParams.get("error") === "email-change-conflict") {
+      setError("That email address is no longer available. Request a different email change from My Account.");
     }
   }, [searchParams]);
 

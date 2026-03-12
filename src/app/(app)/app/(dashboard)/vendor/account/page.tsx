@@ -6,20 +6,20 @@ export const metadata = {
   title: "My Account | DispatchToGo",
 };
 
-export default async function OperatorAccountPage() {
+export default async function VendorAccountPage() {
   const session = await auth();
   if (!session) redirect("/app/login");
 
   const user = session.user as any;
-  if (user.role !== "OPERATOR") redirect("/app/login");
+  if (user.role !== "VENDOR") redirect("/app/login");
 
   return (
     <MyAccountPage
       userId={user.id}
       relatedSettings={{
-        href: "/app/operator/organization",
-        label: "Open Organization Settings",
-        description: "Organization contact details and property profile settings live separately from your login account.",
+        href: "/app/vendor/company",
+        label: "Open Company Profile",
+        description: "Availability, credentials, and customer-facing company details are managed separately from your login account.",
       }}
     />
   );

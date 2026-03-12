@@ -40,13 +40,15 @@ const OPERATOR_NAV: NavItem[] = [
   { href: "/app/operator/invoices", label: "Invoices", icon: FileText },
   { href: "/app/operator/proof-packets", label: "Proof Packets", icon: ShieldCheck },
   { href: "/app/operator/billing", label: "Billing", icon: CreditCard },
-  { href: "/app/operator/account", label: "Account Settings", icon: SlidersHorizontal },
+  { href: "/app/operator/organization", label: "Organization Settings", icon: SlidersHorizontal },
+  { href: "/app/operator/account", label: "My Account", icon: UserCircle },
 ];
 
 const VENDOR_NAV: NavItem[] = [
   { href: "/app/vendor/jobs", label: "Available Jobs", icon: Briefcase },
   { href: "/app/vendor/proof-packets", label: "Proof Packets", icon: ShieldCheck },
-  { href: "/app/vendor/profile", label: "My Profile", icon: UserCircle },
+  { href: "/app/vendor/company", label: "Company Profile", icon: Building2 },
+  { href: "/app/vendor/account", label: "My Account", icon: UserCircle },
 ];
 
 const ADMIN_NAV: NavItem[] = [
@@ -57,6 +59,7 @@ const ADMIN_NAV: NavItem[] = [
   { href: "/app/admin/billing", label: "Billing", icon: CreditCard },
   { href: "/app/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/app/admin/proof-packets", label: "Proof Packets", icon: ShieldCheck },
+  { href: "/app/admin/account", label: "My Account", icon: UserCircle },
   { href: "/app/admin/settings", label: "Settings", icon: Settings },
 ];
 
@@ -96,10 +99,10 @@ export function Sidebar({
     }
     if (href === "/app/admin/accounts") {
       return ["/app/admin/accounts", "/app/admin/organizations", "/app/admin/vendors", "/app/admin/users"].some((path) =>
-        pathname.startsWith(path)
+        pathname === path || pathname.startsWith(`${path}/`)
       );
     }
-    return pathname.startsWith(href);
+    return pathname === href || pathname.startsWith(`${href}/`);
   };
 
   const SidebarContent = () => (

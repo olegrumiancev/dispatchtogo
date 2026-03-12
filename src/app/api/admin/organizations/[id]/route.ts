@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, writeAuditLog } from "@/lib/audit-log";
 import { ORG_PRE_DISPATCH_STATUSES } from "@/lib/organization-lifecycle";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationTypes } from "@/lib/catalog";
@@ -113,14 +114,12 @@ export async function POST(
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        entityType: "ORGANIZATION",
-        entityId: id,
-        action: "ORG_REACTIVATED",
-        userId: user.id,
-        metadata: { reason },
-      },
+    await writeAuditLog({
+      entityType: AUDIT_ENTITY_TYPES.ORGANIZATION,
+      entityId: id,
+      action: AUDIT_ACTIONS.ORG_REACTIVATED,
+      actorUserId: user.id,
+      metadata: { reason },
     });
 
     return NextResponse.json(updated);
@@ -143,14 +142,12 @@ export async function POST(
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        entityType: "ORGANIZATION",
-        entityId: id,
-        action: "ORG_SUSPENDED",
-        userId: user.id,
-        metadata: { reason },
-      },
+    await writeAuditLog({
+      entityType: AUDIT_ENTITY_TYPES.ORGANIZATION,
+      entityId: id,
+      action: AUDIT_ACTIONS.ORG_SUSPENDED,
+      actorUserId: user.id,
+      metadata: { reason },
     });
 
     return NextResponse.json(updated);
@@ -193,8 +190,8 @@ export async function POST(
   const offboardReason =
     reason ?? `Organization offboarded by admin on ${now.toLocaleDateString("en-CA")}`;
 
-  const [updated] = await prisma.$transaction([
-    prisma.organization.update({
+  const updated = await prisma.$transaction(async (tx) => {
+    const nextOrg = await tx.organization.update({
       where: { id },
       data: {
         status: "OFFBOARDED",
@@ -202,8 +199,9 @@ export async function POST(
         statusReason: offboardReason,
         suspendedAt: now,
       },
-    }),
-    prisma.user.updateMany({
+    });
+
+    await tx.user.updateMany({
       where: {
         organizationId: id,
         role: { not: "ADMIN" },
@@ -212,12 +210,12 @@ export async function POST(
         isDisabled: true,
         disabledAt: now,
       },
-    }),
-    prisma.property.updateMany({
+    });
+    await tx.property.updateMany({
       where: { organizationId: id },
       data: { isActive: false },
-    }),
-    prisma.serviceRequest.updateMany({
+    });
+    await tx.serviceRequest.updateMany({
       where: {
         organizationId: id,
         status: { in: [...ORG_PRE_DISPATCH_STATUSES] },
@@ -226,20 +224,21 @@ export async function POST(
         status: "CANCELLED",
         rejectionReason: offboardReason,
       },
-    }),
-    prisma.auditLog.create({
-      data: {
-        entityType: "ORGANIZATION",
-        entityId: id,
-        action: "ORG_OFFBOARDED",
-        userId: user.id,
-        metadata: {
-          reason: offboardReason,
-          cancelledPreDispatchRequests: true,
-        },
+    });
+    await writeAuditLog({
+      client: tx,
+      entityType: AUDIT_ENTITY_TYPES.ORGANIZATION,
+      entityId: id,
+      action: AUDIT_ACTIONS.ORG_OFFBOARDED,
+      actorUserId: user.id,
+      metadata: {
+        reason: offboardReason,
+        cancelledPreDispatchRequests: true,
       },
-    }),
-  ]);
+    });
+
+    return nextOrg;
+  });
 
   return NextResponse.json(updated);
 }

@@ -340,7 +340,14 @@ export async function PATCH(
             ? `Your assignment on job ${refNum} has been removed and will be re-dispatched. Reason: ${rejectionReason.trim()}`
             : `Job ${refNum} has been escalated to an administrator for review. Reason: ${rejectionReason.trim()}`;
         await prisma.notification.create({
-          data: { userId: vendorUser.id, title: notifTitle, body: notifBody, type: "WORK_REJECTED", link: `/app/vendor/jobs/${current.job.id}` },
+          data: {
+            userId: vendorUser.id,
+            title: notifTitle,
+            body: notifBody,
+            type: "WORK_REJECTED",
+            link: `/app/vendor/jobs/${current.job.id}`,
+            metadata: { rejectionType },
+          },
         });
       }
     }

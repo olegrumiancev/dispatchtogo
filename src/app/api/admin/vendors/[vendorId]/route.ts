@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, writeAuditLog } from "@/lib/audit-log";
 import {
   VENDOR_ACTIVE_WORK_JOB_STATUSES,
   VENDOR_RELEASEABLE_JOB_STATUSES,
@@ -62,14 +63,12 @@ export async function POST(
       },
     });
 
-    await prisma.auditLog.create({
-      data: {
-        entityType: "VENDOR",
-        entityId: vendorId,
-        action: "VENDOR_REACTIVATED",
-        userId: user.id,
-        metadata: { reason },
-      },
+    await writeAuditLog({
+      entityType: AUDIT_ENTITY_TYPES.VENDOR,
+      entityId: vendorId,
+      action: AUDIT_ACTIONS.VENDOR_REACTIVATED,
+      actorUserId: user.id,
+      metadata: { reason },
     });
 
     return NextResponse.json(updated);
@@ -176,17 +175,16 @@ export async function POST(
       },
     });
 
-    await tx.auditLog.create({
-      data: {
-        entityType: "VENDOR",
-        entityId: vendorId,
-        action: action === "offboard" ? "VENDOR_OFFBOARDED" : "VENDOR_SUSPENDED",
-        userId: user.id,
-        metadata: {
-          reason: lifecycleReason,
-          releasedOfferedJobs: offeredJobIds.length,
-          removedPreferredVendorMappings: action === "offboard",
-        },
+    await writeAuditLog({
+      client: tx,
+      entityType: AUDIT_ENTITY_TYPES.VENDOR,
+      entityId: vendorId,
+      action: action === "offboard" ? AUDIT_ACTIONS.VENDOR_OFFBOARDED : AUDIT_ACTIONS.VENDOR_SUSPENDED,
+      actorUserId: user.id,
+      metadata: {
+        reason: lifecycleReason,
+        releasedOfferedJobs: offeredJobIds.length,
+        removedPreferredVendorMappings: action === "offboard",
       },
     });
 

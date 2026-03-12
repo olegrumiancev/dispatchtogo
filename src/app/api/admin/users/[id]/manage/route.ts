@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, writeAuditLog } from "@/lib/audit-log";
 import { prisma } from "@/lib/prisma";
 
 export async function POST(
@@ -47,6 +48,16 @@ export async function POST(
           disabledAt: new Date(),
         },
       });
+      await writeAuditLog({
+        entityType: AUDIT_ENTITY_TYPES.USER,
+        entityId: id,
+        action: AUDIT_ACTIONS.USER_DISABLED,
+        actorUserId: adminUser.id,
+        metadata: {
+          targetRole: targetUser.role,
+          targetEmail: targetUser.email,
+        },
+      });
       return NextResponse.json({ success: true, action: "disabled" });
     }
 
@@ -58,21 +69,42 @@ export async function POST(
           disabledAt: null,
         },
       });
+      await writeAuditLog({
+        entityType: AUDIT_ENTITY_TYPES.USER,
+        entityId: id,
+        action: AUDIT_ACTIONS.USER_ENABLED,
+        actorUserId: adminUser.id,
+        metadata: {
+          targetRole: targetUser.role,
+          targetEmail: targetUser.email,
+        },
+      });
       return NextResponse.json({ success: true, action: "enabled" });
     }
 
     // Delete — cascade-remove related records first
     if (action === "delete") {
       // Delete related records that reference the user
-      await prisma.$transaction([
-        prisma.requestView.deleteMany({ where: { userId: id } }),
-        prisma.passwordResetToken.deleteMany({ where: { userId: id } }),
-        prisma.notification.deleteMany({ where: { userId: id } }),
-        prisma.chatMessage.deleteMany({ where: { userId: id } }),
-        prisma.jobNote.deleteMany({ where: { userId: id } }),
-        prisma.auditLog.deleteMany({ where: { userId: id } }),
-        prisma.user.delete({ where: { id } }),
-      ]);
+      await prisma.$transaction(async (tx) => {
+        await tx.requestView.deleteMany({ where: { userId: id } });
+        await tx.passwordResetToken.deleteMany({ where: { userId: id } });
+        await tx.notification.deleteMany({ where: { userId: id } });
+        await tx.chatMessage.deleteMany({ where: { userId: id } });
+        await tx.jobNote.deleteMany({ where: { userId: id } });
+        await tx.auditLog.deleteMany({ where: { userId: id } });
+        await writeAuditLog({
+          client: tx,
+          entityType: AUDIT_ENTITY_TYPES.USER,
+          entityId: id,
+          action: AUDIT_ACTIONS.USER_DELETED,
+          actorUserId: adminUser.id,
+          metadata: {
+            targetRole: targetUser.role,
+            targetEmail: targetUser.email,
+          },
+        });
+        await tx.user.delete({ where: { id } });
+      });
       return NextResponse.json({ success: true, action: "deleted" });
     }
 
