@@ -125,8 +125,39 @@ export default async function OperatorDashboard() {
     return { ...req, hasNewActivity };
   });
 
+  const stats = [
+    {
+      label: "Open Requests",
+      mobileLabel: "Open",
+      value: openRequests,
+      icon: ClipboardList,
+      color: "bg-blue-100 text-blue-600",
+    },
+    {
+      label: "In Progress",
+      mobileLabel: "Active",
+      value: inProgress,
+      icon: Clock,
+      color: "bg-cyan-100 text-cyan-600",
+    },
+    {
+      label: "Completed This Month",
+      mobileLabel: "Done",
+      value: completedThisMonth,
+      icon: CheckCircle,
+      color: "bg-emerald-100 text-emerald-600",
+    },
+    {
+      label: "Avg Resolution Time",
+      mobileLabel: "Avg Time",
+      value: avgResolutionHours,
+      icon: TrendingUp,
+      color: "bg-orange-100 text-orange-600",
+    },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       {/* Welcome header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -148,59 +179,39 @@ export default async function OperatorDashboard() {
       </div>
 
       {/* Stat cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="flex items-center gap-4 py-5">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <ClipboardList className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{openRequests}</p>
-              <p className="text-xs text-gray-500">Open Requests</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-4 py-5">
-            <div className="p-2 bg-cyan-100 rounded-lg">
-              <Clock className="w-6 h-6 text-cyan-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{inProgress}</p>
-              <p className="text-xs text-gray-500">In Progress</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-4 py-5">
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <CheckCircle className="w-6 h-6 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{completedThisMonth}</p>
-              <p className="text-xs text-gray-500">Completed This Month</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="flex items-center gap-4 py-5">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <TrendingUp className="w-6 h-6 text-orange-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-gray-900">{avgResolutionHours}</p>
-              <p className="text-xs text-gray-500">Avg Resolution Time</p>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {stats.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className="h-full">
+              <CardContent className="flex items-center gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5">
+                <div
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md ${stat.color} sm:h-11 sm:w-11 sm:rounded-lg`}
+                >
+                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1">
+                    <p className="text-base font-bold leading-none text-gray-900 sm:text-2xl">
+                      {stat.value}
+                    </p>
+                    <p className="min-w-0 text-[11px] font-medium leading-4 text-gray-500 sm:hidden">
+                      {stat.mobileLabel}
+                    </p>
+                  </div>
+                  <p className="mt-1 hidden text-xs text-gray-500 sm:block">
+                    {stat.label}
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* Recent requests */}
       <Card>
-        <CardHeader>
+        <CardHeader className="px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center justify-between">
             <CardTitle>Recent Requests</CardTitle>
             <Link
@@ -213,7 +224,7 @@ export default async function OperatorDashboard() {
         </CardHeader>
         <div className="overflow-x-auto">
           {recentRequests.length === 0 ? (
-            <div className="px-6 py-10 text-center text-sm text-gray-400">
+            <div className="px-4 py-8 text-center text-sm text-gray-400 sm:px-6 sm:py-10">
               No service requests yet.{" "}
               <Link href="/app/operator/requests/new" className="text-blue-600 hover:underline">
                 Create one
@@ -221,25 +232,25 @@ export default async function OperatorDashboard() {
               .
             </div>
           ) : (
-            <table className="w-full">
+            <table className="w-full table-fixed sm:table-auto">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[38%] px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-gray-500 sm:w-auto sm:px-6 sm:py-3">
                     Ref #
                   </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[34%] px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-gray-500 sm:w-auto sm:px-6 sm:py-3">
                     Property
                   </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                  <th className="hidden px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 md:table-cell">
                     Category
                   </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">
+                  <th className="hidden px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 sm:table-cell">
                     Urgency
                   </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="w-[28%] px-3 py-2.5 text-right text-xs font-medium uppercase tracking-wider text-gray-500 sm:w-auto sm:px-6 sm:py-3 sm:text-left">
                     Status
                   </th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider hidden lg:table-cell">
+                  <th className="hidden px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 lg:table-cell">
                     Created
                   </th>
                 </tr>
@@ -247,7 +258,7 @@ export default async function OperatorDashboard() {
               <tbody className="divide-y divide-gray-200">
                 {recentRequestsWithActivity.map((req) => (
                   <tr key={req.id} className={`hover:bg-gray-50 transition-colors ${req.hasNewActivity ? "bg-amber-50 hover:bg-amber-100" : ""}`}>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3 align-top sm:px-6 sm:py-4">
                       <div className="flex items-center gap-1.5">
                         {req.hasNewActivity && (
                           <span
@@ -257,29 +268,32 @@ export default async function OperatorDashboard() {
                         )}
                         <Link
                           href={`/app/operator/requests/${req.id}`}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                          className="text-sm font-medium leading-5 text-blue-600 hover:text-blue-700"
                         >
                           {req.referenceNumber}
                         </Link>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-700 max-w-[160px] truncate">
+                    <td className="max-w-[110px] px-3 py-3 text-sm text-gray-700 align-top sm:max-w-[160px] sm:px-6 sm:py-4">
                       {req.property.name}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 hidden md:table-cell">
+                    <td className="hidden px-6 py-4 text-sm text-gray-500 md:table-cell">
                       {getServiceCategoryLabel(serviceCategories, req.category)}
                     </td>
-                    <td className="px-6 py-4 hidden sm:table-cell">
+                    <td className="hidden px-6 py-4 sm:table-cell">
                       <Badge variant={getUrgencyColor(req.urgency)}>
                         {req.urgency}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4">
-                      <Badge variant={getAdminOperatorRequestStatusColor(req.status)}>
+                    <td className="px-3 py-3 text-right align-top sm:px-6 sm:py-4 sm:text-left">
+                      <Badge
+                        variant={getAdminOperatorRequestStatusColor(req.status)}
+                        className="whitespace-nowrap px-2 py-0 text-[11px] sm:px-2.5 sm:py-0.5 sm:text-xs"
+                      >
                         {getAdminOperatorRequestStatusLabel(req.status)}
                       </Badge>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 hidden lg:table-cell">
+                    <td className="hidden px-6 py-4 text-sm text-gray-500 lg:table-cell">
                       {formatDate(req.createdAt)}
                     </td>
                   </tr>

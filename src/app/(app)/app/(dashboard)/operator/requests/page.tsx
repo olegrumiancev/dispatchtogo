@@ -11,10 +11,16 @@ import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
 } from "@/lib/admin-operator-request-status";
-import { Plus, Eye, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Archive, CheckCircle2, BadgeCheck, Camera } from "lucide-react";
+import { Plus, Eye, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Camera } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
 import { currentPeriodStart, currentPeriodEnd, getOrgBillingRankMap } from "@/lib/billing";
+import { RequestsViewToggle } from "@/components/operator/requests-view-toggle";
+import { RequestsViewSwipeShell } from "@/components/operator/requests-view-swipe-shell";
+import {
+  getCommercialIndicator,
+  latestQuoteSummaryRelationArgs,
+} from "@/lib/quotes";
 
 const PAGE_SIZE = 20;
 
@@ -115,6 +121,7 @@ export default async function RequestsPage({
       orderBy,
       include: {
         property: { select: { id: true, name: true } },
+        quotes: latestQuoteSummaryRelationArgs,
         job: {
           include: {
             vendor: { select: { companyName: true } },
@@ -150,7 +157,12 @@ export default async function RequestsPage({
       return !max || d > max ? d : max;
     }, null);
     const hasNewActivity = !!latestActivity && (!viewedAt || latestActivity > viewedAt);
-    return { ...req, hasNewActivity };
+    const commercialIndicator = getCommercialIndicator({
+      quotePolicy: req.quotePolicy,
+      quoteDisposition: req.job?.quoteDisposition,
+      quotes: req.quotes,
+    });
+    return { ...req, hasNewActivity, commercialIndicator };
   });
 
   // Resolve property name for filter pill if filtering by property
@@ -187,9 +199,29 @@ export default async function RequestsPage({
 
   // URL that clears the property filter but keeps other active filters
   const clearPropertyUrl = buildUrl({ property: "", page: "1" });
+  const hasActiveFilters = Boolean(
+    propertyFilter ||
+      searchFilter ||
+      urgencyFilter ||
+      categoryFilter ||
+      (view === "active" && statusFilter)
+  );
+  const activeFilterCount = [
+    propertyFilter,
+    searchFilter,
+    urgencyFilter,
+    categoryFilter,
+    view === "active" ? statusFilter : "",
+  ].filter(Boolean).length;
+  const viewLinks = {
+    active: buildUrl({ view: "active", status: "", page: "1" }),
+    completed: buildUrl({ view: "completed", status: "", page: "1" }),
+    cancelled: buildUrl({ view: "cancelled", status: "", page: "1" }),
+  };
 
   return (
-    <div className="space-y-6">
+    <RequestsViewSwipeShell view={view} links={viewLinks}>
+      <div className="space-y-5 sm:space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -211,45 +243,27 @@ export default async function RequestsPage({
       </div>
 
       {/* Active / Completed / Cancelled toggle */}
-      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg w-fit">
-        <Link
-          href={buildUrl({ view: "active", status: "", page: "1" })}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            view === "active"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          <CheckCircle2 className="w-3.5 h-3.5" />
-          Active
-        </Link>
-        <Link
-          href={buildUrl({ view: "completed", status: "", page: "1" })}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            view === "completed"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          <BadgeCheck className="w-3.5 h-3.5" />
-          Completed
-        </Link>
-        <Link
-          href={buildUrl({ view: "cancelled", status: "", page: "1" })}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
-            view === "cancelled"
-              ? "bg-white text-gray-900 shadow-sm"
-              : "text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          <Archive className="w-3.5 h-3.5" />
-          Cancelled
-        </Link>
-      </div>
+      <RequestsViewToggle view={view} links={viewLinks} />
 
       {/* Filter bar — uses GET form for server-side filtering */}
       <Card>
-        <form method="GET" action="/app/operator/requests" className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center">
+        <details
+          className="group [&_summary::-webkit-details-marker]:hidden sm:[&:not([open])>.filters-panel]:block"
+          open={hasActiveFilters}
+        >
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-gray-900 sm:hidden">
+            <span className="inline-flex items-center gap-2">
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                  {activeFilterCount} active
+                </span>
+              )}
+            </span>
+            <ChevronDown className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="filters-panel hidden border-t border-gray-200 group-open:block sm:border-t-0">
+            <form method="GET" action="/app/operator/requests" className="px-4 sm:px-6 py-4 flex flex-col sm:flex-row flex-wrap gap-3 items-stretch sm:items-center">
           {view === "cancelled" && <input type="hidden" name="view" value="cancelled" />}
           {view === "completed" && <input type="hidden" name="view" value="completed" />}
           {view === "active" && (
@@ -361,13 +375,15 @@ export default async function RequestsPage({
             )}
           </div>
         )}
+          </div>
+        </details>
       </Card>
 
       {/* Table */}
       <Card>
         <div className="overflow-x-auto">
           {requestsWithActivity.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-gray-400">
+            <div className="px-4 py-8 text-center text-sm text-gray-400 sm:px-6 sm:py-12">
               No requests found.{" "}
               {statusFilter || urgencyFilter || searchFilter ? (
                 <Link href="/app/operator/requests" className="text-blue-600 hover:underline">Clear filters</Link>
@@ -376,21 +392,24 @@ export default async function RequestsPage({
               )}
             </div>
           ) : (
-            <table className="w-full">
+            <table className="w-full table-fixed sm:table-auto">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200">
                   {([
-                    { col: "referenceNumber", label: "Ref #",   cls: "" },
-                    { col: "property",         label: "Property", cls: "" },
-                    { col: "category",         label: "Category", cls: "hidden md:table-cell" },
-                    { col: "urgency",          label: "Urgency",  cls: "hidden sm:table-cell" },
-                    { col: "status",           label: "Status",   cls: "" },
-                    { col: "createdAt",        label: "Created",  cls: "hidden lg:table-cell" },
+                    { col: "referenceNumber", label: "Ref #", cls: "w-[34%] sm:w-auto" },
+                    { col: "property", label: "Property", cls: "w-[28%] sm:w-auto" },
+                    { col: "category", label: "Category", cls: "hidden md:table-cell" },
+                    { col: "urgency", label: "Urgency", cls: "hidden sm:table-cell" },
+                    { col: "status", label: "Status", cls: "w-[24%] sm:w-auto" },
+                    { col: "createdAt", label: "Created", cls: "hidden lg:table-cell" },
                   ] as const).map(({ col, label, cls }) => {
                     const active = sortBy === col;
                     const Icon = active ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
                     return (
-                      <th key={col} className={`text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider ${cls}`}>
+                      <th
+                        key={col}
+                        className={`px-3 py-2.5 text-left text-xs font-medium uppercase tracking-wider text-gray-500 sm:px-6 sm:py-3 ${cls}`}
+                      >
                         <Link
                           href={sortUrl(col)}
                           className={`inline-flex items-center gap-1 hover:text-gray-800 transition-colors ${
@@ -403,13 +422,16 @@ export default async function RequestsPage({
                       </th>
                     );
                   })}
-                  <th className="text-right px-6 py-3 text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  <th className="w-[14%] px-3 py-2.5 text-right text-xs font-medium uppercase tracking-wider text-gray-500 sm:w-auto sm:px-6 sm:py-3">
+                    <span className="sm:hidden">Act</span>
+                    <span className="hidden sm:inline">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {requestsWithActivity.map((req) => (
                   <tr key={req.id} className={`hover:bg-gray-50 transition-colors ${req.hasNewActivity ? "bg-amber-50 hover:bg-amber-100" : ""}`}>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3 align-top sm:px-6 sm:py-4">
                       <div className="flex items-center gap-1.5">
                         {req.hasNewActivity && (
                           <span
@@ -419,7 +441,7 @@ export default async function RequestsPage({
                         )}
                         <Link
                           href={`/app/operator/requests/${req.id}`}
-                          className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                          className="text-sm font-medium leading-5 text-blue-600 hover:text-blue-700"
                         >
                           {req.referenceNumber}
                         </Link>
@@ -435,7 +457,7 @@ export default async function RequestsPage({
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm max-w-[160px] truncate">
+                    <td className="max-w-[110px] px-3 py-3 align-top text-sm sm:max-w-[160px] sm:px-6 sm:py-4">
                       <Link
                         href={buildUrl({ property: req.property.id, page: "1" })}
                         className="text-gray-700 hover:text-blue-600 hover:underline cursor-pointer"
@@ -444,7 +466,7 @@ export default async function RequestsPage({
                         {req.property.name}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 text-sm hidden md:table-cell">
+                    <td className="hidden px-6 py-4 text-sm md:table-cell">
                       <Link
                         href={buildUrl({ category: req.category, page: "1" })}
                         className="text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"
@@ -453,7 +475,7 @@ export default async function RequestsPage({
                         {getServiceCategoryLabel(serviceCategories, req.category)}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 hidden sm:table-cell">
+                    <td className="hidden px-6 py-4 sm:table-cell">
                       <Link
                         href={buildUrl({ urgency: req.urgency, page: "1" })}
                         title={`Filter by urgency: ${req.urgency}`}
@@ -461,7 +483,7 @@ export default async function RequestsPage({
                         <Badge variant={getUrgencyColor(req.urgency)} className="cursor-pointer hover:opacity-80 transition-opacity">{req.urgency}</Badge>
                       </Link>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-3 align-top sm:px-6 sm:py-4">
                       <div className="flex flex-col gap-1 items-start">
                         <Link
                           href={buildUrl({ status: req.status, page: "1" })}
@@ -469,7 +491,7 @@ export default async function RequestsPage({
                         >
                           <Badge
                             variant={getAdminOperatorRequestStatusColor(req.status)}
-                            className="cursor-pointer hover:opacity-80 transition-opacity"
+                            className="cursor-pointer px-2 py-0 text-[11px] leading-4 hover:opacity-80 transition-opacity sm:whitespace-nowrap sm:px-2.5 sm:py-0.5 sm:text-xs"
                           >
                             {getAdminOperatorRequestStatusLabel(req.status)}
                           </Badge>
@@ -479,23 +501,30 @@ export default async function RequestsPage({
                           if (!tag) return null;
                           const style = BILLING_JOB_TAG_STYLES[tag];
                           return (
-                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap ${style.className}`}>
+                            <span className={`inline-flex items-center rounded-full px-2 py-0 text-[11px] font-medium whitespace-nowrap sm:px-2 sm:py-0.5 sm:text-xs ${style.className}`}>
                               {style.label}
                             </span>
                           );
                         })()}
+                        {req.commercialIndicator && (
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0 text-[11px] font-medium whitespace-nowrap sm:px-2 sm:py-0.5 sm:text-xs ${req.commercialIndicator.className}`}
+                          >
+                            {req.commercialIndicator.label}
+                          </span>
+                        )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-500 hidden lg:table-cell">
+                    <td className="hidden px-6 py-4 text-sm text-gray-500 lg:table-cell">
                       {formatDate(req.createdAt)}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-3">
+                    <td className="px-3 py-3 text-right align-top sm:px-6 sm:py-4">
+                      <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-3">
                         {view === "active" && ["SUBMITTED", "TRIAGING", "NEEDS_CLARIFICATION", "READY_TO_DISPATCH"].includes(req.status) && (
                           <CancelRequestButton requestId={req.id} compact />
                         )}
                         <Link href={`/app/operator/requests/${req.id}`}>
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" className="px-2 sm:px-3">
                             <Eye className="w-4 h-4" />
                             <span className="hidden sm:inline">View</span>
                           </Button>
@@ -511,7 +540,7 @@ export default async function RequestsPage({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
+          <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
             <p className="text-sm text-gray-500">
               Page {page} of {totalPages} &mdash; {total} results
             </p>
@@ -546,6 +575,7 @@ export default async function RequestsPage({
           </div>
         )}
       </Card>
-    </div>
+      </div>
+    </RequestsViewSwipeShell>
   );
 }

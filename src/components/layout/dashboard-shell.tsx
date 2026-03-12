@@ -7,6 +7,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 interface DashboardShellProps {
   role: "OPERATOR" | "VENDOR" | "ADMIN";
   userName?: string | null;
+  userEmail?: string | null;
   smsRedirectEnabled?: boolean;
   children: React.ReactNode;
 }
@@ -14,6 +15,7 @@ interface DashboardShellProps {
 export function DashboardShell({
   role,
   userName,
+  userEmail,
   smsRedirectEnabled = false,
   children,
 }: DashboardShellProps) {
@@ -31,6 +33,7 @@ export function DashboardShell({
       <div className="flex min-h-screen flex-col md:pl-64">
         <Header
           userName={userName}
+          userEmail={userEmail}
           userRole={role}
           onMenuClick={() => setMobileOpen(true)}
         />

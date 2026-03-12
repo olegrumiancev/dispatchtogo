@@ -11,6 +11,10 @@ import {
   sendWorkVerifiedToVendorEmail,
 } from "@/lib/email";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
+import {
+  buildCommercialSnapshot,
+  latestQuoteSummaryRelationArgs,
+} from "@/lib/quotes";
 
 // Valid status transitions map
 const VALID_TRANSITIONS: Record<string, string[]> = {
@@ -33,6 +37,50 @@ const OPERATOR_CLARIFICATION_EDIT_STATUSES = new Set([
   "NEEDS_CLARIFICATION",
   "READY_TO_DISPATCH",
 ]);
+
+const REQUEST_DETAIL_INCLUDE = {
+  property: true,
+  photos: true,
+  quotes: latestQuoteSummaryRelationArgs,
+  job: {
+    include: {
+      vendor: true,
+      notes: {
+        include: {
+          author: { select: { id: true, name: true, email: true, role: true } },
+        },
+        orderBy: { createdAt: "asc" as const },
+      },
+      photos: true,
+      materials: true,
+      proofPacket: true,
+    },
+  },
+  invoice: true,
+};
+
+function withCommercialSnapshot(
+  serviceRequest:
+    | ({
+        quotePolicy: string;
+        quotes: Parameters<typeof buildCommercialSnapshot>[0]["quotes"];
+        job: { quoteDisposition: string | null } | null;
+      } & Record<string, unknown>)
+    | null
+) {
+  if (!serviceRequest) {
+    return serviceRequest;
+  }
+
+  return {
+    ...serviceRequest,
+    commercialSnapshot: buildCommercialSnapshot({
+      quotePolicy: serviceRequest.quotePolicy,
+      quoteDisposition: serviceRequest.job?.quoteDisposition,
+      quotes: serviceRequest.quotes,
+    }),
+  };
+}
 
 export async function GET(
   request: NextRequest,
@@ -58,30 +106,14 @@ export async function GET(
 
   const serviceRequest = await prisma.serviceRequest.findFirst({
     where,
-    include: {
-      property: true,
-      photos: true,
-      job: {
-        include: {
-          vendor: true,
-          notes: {
-            include: { author: { select: { id: true, name: true, email: true, role: true } } },
-            orderBy: { createdAt: "asc" },
-          },
-          photos: true,
-          materials: true,
-          proofPacket: true,
-        },
-      },
-      invoice: true,
-    },
+    include: REQUEST_DETAIL_INCLUDE,
   });
 
   if (!serviceRequest) {
     return NextResponse.json({ error: "Service request not found" }, { status: 404 });
   }
 
-  return NextResponse.json(serviceRequest);
+  return NextResponse.json(withCommercialSnapshot(serviceRequest));
 }
 
 export async function PATCH(
@@ -146,26 +178,10 @@ export async function PATCH(
       data: {
         description: `${current.description.trim()}\n\n${clarificationBlock}`.trim(),
       },
-      include: {
-        property: true,
-        photos: true,
-        job: {
-          include: {
-            vendor: true,
-            notes: {
-              include: { author: { select: { id: true, name: true, email: true, role: true } } },
-              orderBy: { createdAt: "asc" },
-            },
-            photos: true,
-            materials: true,
-            proofPacket: true,
-          },
-        },
-        invoice: true,
-      },
+      include: REQUEST_DETAIL_INCLUDE,
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json(withCommercialSnapshot(updated));
   }
 
   // ── Operator: verify completion ──────────────────────────────────────────
@@ -190,20 +206,7 @@ export async function PATCH(
     const updated = await prisma.serviceRequest.update({
       where: { id },
       data: { status: "VERIFIED", resolvedAt: new Date() },
-      include: {
-        property: true,
-        photos: true,
-        job: {
-          include: {
-            vendor: true,
-            notes: { include: { author: { select: { id: true, name: true, email: true, role: true } } }, orderBy: { createdAt: "asc" } },
-            photos: true,
-            materials: true,
-            proofPacket: true,
-          },
-        },
-        invoice: true,
-      },
+      include: REQUEST_DETAIL_INCLUDE,
     });
 
     // Notify the vendor: their work has been approved
@@ -236,7 +239,7 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json(updated);
+    return NextResponse.json(withCommercialSnapshot(updated));
   }
 
   // ── Operator: reject completion ──────────────────────────────────────────
@@ -284,20 +287,7 @@ export async function PATCH(
         status: newStatus,
         rejectionReason: rejectionReason.trim(),
       },
-      include: {
-        property: true,
-        photos: true,
-        job: {
-          include: {
-            vendor: true,
-            notes: { include: { author: { select: { id: true, name: true, email: true, role: true } } }, orderBy: { createdAt: "asc" } },
-            photos: true,
-            materials: true,
-            proofPacket: true,
-          },
-        },
-        invoice: true,
-      },
+      include: REQUEST_DETAIL_INCLUDE,
     });
 
     // Job record updates based on rejection type
@@ -371,7 +361,7 @@ export async function PATCH(
         .catch((e) => console.error("[notify] admin email rejection failed", e));
     }
 
-    return NextResponse.json(updated);
+    return NextResponse.json(withCommercialSnapshot(updated));
   }
 
   // ── Admin: status transitions and triage updates ─────────────────────────
@@ -408,24 +398,8 @@ export async function PATCH(
   const updated = await prisma.serviceRequest.update({
     where: { id },
     data,
-    include: {
-      property: true,
-      photos: true,
-      job: {
-        include: {
-          vendor: true,
-          notes: {
-            include: { author: { select: { id: true, name: true, email: true, role: true } } },
-            orderBy: { createdAt: "asc" },
-          },
-          photos: true,
-          materials: true,
-          proofPacket: true,
-        },
-      },
-      invoice: true,
-    },
+    include: REQUEST_DETAIL_INCLUDE,
   });
 
-  return NextResponse.json(updated);
+  return NextResponse.json(withCommercialSnapshot(updated));
 }

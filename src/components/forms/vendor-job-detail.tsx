@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Modal } from "@/components/ui/modal";
+import {
+  VendorCommercialCard,
+  type CommercialSnapshot,
+} from "@/components/forms/vendor-commercial-card";
 import {
   RequestProgressCard,
   getLinearRequestProgressSteps,
@@ -38,6 +42,7 @@ import {
   Brain,
   AlertTriangle,
   HelpCircle,
+  CircleDollarSign,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -111,10 +116,13 @@ interface Job {
   pauseReason: string | null;
   estimatedReturnDate: string | null;
   pausedAt: string | null;
+  quoteDisposition: string | null;
+  quoteDispositionNote: string | null;
   notes: JobNote[];
   materials: JobMaterial[];
   photos: JobPhoto[];
   serviceRequest: ServiceRequest;
+  commercialSnapshot: CommercialSnapshot;
   vendorBrief?: {
     summary: string | null;
     category: string;
@@ -142,7 +150,7 @@ type VendorSectionKey =
   | "workPhotos"
   | "materials"
   | "completion";
-type WorkflowStepKey = "overview" | "proof" | "complete";
+type WorkflowStepKey = "overview" | "quote" | "proof" | "complete";
 type ValidationFocusTarget =
   | "afterPhoto"
   | "beforePhoto"
@@ -171,6 +179,31 @@ function getCategoryLabel(category: string) {
   return (
     SERVICE_CATEGORIES.find((c) => c.value === category)?.label ?? category
   );
+}
+
+function formatQuoteLabel(value: string | null | undefined) {
+  if (!value) return "Not set";
+
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function formatQuoteMoney(amount: number, currency: string) {
+  if (currency === "CAD") {
+    return formatCurrency(amount);
+  }
+
+  try {
+    return new Intl.NumberFormat("en-CA", {
+      style: "currency",
+      currency,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount.toFixed(2)}`;
+  }
 }
 
 function parseOptionalNumber(value: string): number | null {
@@ -412,6 +445,21 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   const hasPendingMaterialDrafts = newMaterials.some(
     (m) => m.description.trim() || Number(m.unitCost) > 0,
   );
+  const commercialSnapshot = job.commercialSnapshot;
+  const quoteDisposition = commercialSnapshot.quoteDisposition;
+  const latestQuoteSummary = commercialSnapshot.latestQuoteSummary;
+  const latestSubmittedQuoteSummary =
+    commercialSnapshot.latestSubmittedQuoteSummary;
+  const latestVisibleQuote = latestQuoteSummary ?? latestSubmittedQuoteSummary;
+  const quoteStepTriggeredByState =
+    commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK" ||
+    quoteDisposition === "QUOTE_NOW" ||
+    quoteDisposition === "ASSESS_FIRST" ||
+    Boolean(latestQuoteSummary || latestSubmittedQuoteSummary);
+  const [quoteWorkspaceVisible, setQuoteWorkspaceVisible] = useState(
+    quoteStepTriggeredByState,
+  );
+  const [quoteFocusPending, setQuoteFocusPending] = useState(false);
   const materialEntriesForReview = [
     ...job.materials.map((material) => ({
       description: material.description,
@@ -528,16 +576,49 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
       }
     }),
   ];
-  const initialWorkflowStep: WorkflowStepKey = !hasAcceptedJob
-    ? "overview"
-    : sr.status === "COMPLETED" || sr.status === "VERIFIED"
-      ? "complete"
-      : canCompleteNow
-        ? "complete"
-        : "proof";
+  const quoteStepStatus = latestQuoteSummary?.status ?? null;
+  const quoteStepComplete =
+    quoteDisposition === "NO_QUOTE" ||
+    quoteStepStatus === "SUBMITTED" ||
+    quoteStepStatus === "APPROVED";
+  const quoteStepHint =
+    quoteDisposition === "NO_QUOTE"
+      ? "Not needed"
+      : quoteStepStatus === "DRAFT"
+        ? "Draft saved"
+        : quoteStepStatus === "SUBMITTED"
+          ? "Waiting review"
+          : quoteStepStatus === "APPROVED"
+            ? "Approved"
+            : quoteStepStatus === "REJECTED"
+              ? "Revision needed"
+              : quoteDisposition === "ASSESS_FIRST"
+                ? hasAcceptedJob
+                  ? "Assess, then quote"
+                  : "Accept to assess"
+                : commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK"
+                  ? "Quote required"
+                  : quoteDisposition === "QUOTE_NOW"
+                    ? "Ready to quote"
+                    : "Optional";
+  const initialWorkflowStep: WorkflowStepKey =
+    quoteStepTriggeredByState &&
+    (!hasAcceptedJob ||
+      latestQuoteSummary?.status === "DRAFT" ||
+      (commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK" &&
+        !latestSubmittedQuoteSummary))
+      ? "quote"
+      : !hasAcceptedJob
+        ? "overview"
+        : sr.status === "COMPLETED" || sr.status === "VERIFIED"
+          ? "complete"
+          : canCompleteNow
+            ? "complete"
+            : "proof";
   const [activeWorkflowStep, setActiveWorkflowStep] =
     useState<WorkflowStepKey>(initialWorkflowStep);
   const overviewPanelRef = useRef<HTMLDivElement | null>(null);
+  const quotePanelRef = useRef<HTMLDivElement | null>(null);
   const proofPanelRef = useRef<HTMLDivElement | null>(null);
   const completePanelRef = useRef<HTMLDivElement | null>(null);
   const beforePhotoInputRef = useRef<HTMLInputElement | null>(null);
@@ -555,6 +636,16 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         : "Review the job before accepting",
       complete: hasAcceptedJob,
     },
+    ...(quoteWorkspaceVisible
+      ? [
+          {
+            key: "quote" as WorkflowStepKey,
+            label: "Quote",
+            hint: quoteStepHint,
+            complete: quoteStepComplete,
+          },
+        ]
+      : []),
     ...(hasAcceptedJob
       ? [
           {
@@ -622,6 +713,50 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     : blockingCompletionItems.some((item) => item.step === "proof")
       ? "Continue Work Proof"
       : "Finish Completion Summary";
+  const quoteSummaryStatus =
+    quoteDisposition === "NO_QUOTE"
+      ? "No quote needed"
+      : latestQuoteSummary?.status === "DRAFT"
+        ? "Draft saved"
+        : latestQuoteSummary?.status === "SUBMITTED"
+          ? "Submitted"
+          : latestQuoteSummary?.status === "APPROVED"
+            ? "Approved"
+            : latestQuoteSummary?.status === "REJECTED"
+              ? "Revision needed"
+              : quoteDisposition === "ASSESS_FIRST"
+                ? "Assessment first"
+                : quoteDisposition === "QUOTE_NOW"
+                  ? "Quote now"
+                  : commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK"
+                    ? "Quote required"
+                    : "Optional";
+  const quoteSummaryDetail =
+    quoteDisposition === "NO_QUOTE"
+      ? "Proceed without a separate quote unless scope changes later."
+      : latestQuoteSummary?.status === "DRAFT"
+        ? "A draft quote is saved and ready to finish."
+        : latestQuoteSummary?.status === "SUBMITTED"
+          ? "The latest quote is waiting for operator review."
+          : latestQuoteSummary?.status === "APPROVED"
+            ? "The latest submitted quote has been approved."
+            : latestQuoteSummary?.status === "REJECTED"
+              ? "The last submitted quote needs a revision before work proceeds."
+              : quoteDisposition === "ASSESS_FIRST"
+                ? hasAcceptedJob
+                  ? "Use the quote step to capture site-based pricing after assessment."
+                  : "Accept the job when you are ready to visit the site and price it."
+                : quoteDisposition === "QUOTE_NOW"
+                  ? "Use the quote step to price the work from the current request details."
+                  : commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK"
+                    ? "A quote is expected before repair work proceeds."
+                    : "Open the quote step only if you want to price the work or document the path.";
+  const quoteSummaryActionLabel =
+    latestQuoteSummary?.status === "DRAFT"
+      ? "Resume Draft"
+      : quoteWorkspaceVisible
+        ? "Open Quote"
+        : "Set Quote Path";
   const progressEvents: RequestProgressEvent[] = [
     { label: "Submitted", value: sr.createdAt },
     { label: "Accepted", value: job.acceptedAt },
@@ -694,6 +829,19 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
       : []),
   ];
 
+  useEffect(() => {
+    if (quoteStepTriggeredByState) {
+      setQuoteWorkspaceVisible(true);
+    }
+  }, [quoteStepTriggeredByState]);
+
+  useEffect(() => {
+    if (!quoteWorkspaceVisible || !quoteFocusPending) return;
+
+    focusWorkflowStep("quote");
+    setQuoteFocusPending(false);
+  }, [quoteFocusPending, quoteWorkspaceVisible]);
+
   const resetCompletionReview = () => {
     setCompletionAssist(null);
   };
@@ -714,6 +862,8 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
       const panel =
         step === "overview"
           ? overviewPanelRef.current
+          : step === "quote"
+            ? quotePanelRef.current
           : step === "proof"
             ? proofPanelRef.current
             : completePanelRef.current;
@@ -757,6 +907,16 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     }
 
     focusWorkflowStep("complete");
+  };
+
+  const openQuoteWorkspace = () => {
+    if (quoteWorkspaceVisible) {
+      focusWorkflowStep("quote");
+      return;
+    }
+
+    setQuoteWorkspaceVisible(true);
+    setQuoteFocusPending(true);
   };
 
   const openAndScrollToSection = (section: VendorSectionKey) => {
@@ -1427,6 +1587,103 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           </Card>
         )}
 
+      <Card className="border-gray-200/80">
+        <CardContent className="space-y-4 py-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <CircleDollarSign className="h-4 w-4 text-blue-600" />
+                <p className="text-sm font-semibold text-gray-900">Quote</p>
+              </div>
+              <p className="text-sm text-gray-600">{quoteSummaryDetail}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="bg-slate-100 text-slate-800">
+                {quoteSummaryStatus}
+              </Badge>
+              <Badge variant="bg-white text-slate-700 ring-1 ring-gray-200">
+                {formatQuoteLabel(commercialSnapshot.quotePolicy)}
+              </Badge>
+              {quoteDisposition && (
+                <Badge variant="bg-white text-slate-700 ring-1 ring-gray-200">
+                  {formatQuoteLabel(quoteDisposition)}
+                </Badge>
+              )}
+            </div>
+          </div>
+
+          {latestVisibleQuote ? (
+            <div className="grid gap-3 text-sm sm:grid-cols-3">
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Latest Amount
+                </p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  {formatQuoteMoney(
+                    latestVisibleQuote.amount,
+                    latestVisibleQuote.currency,
+                  )}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Latest Status
+                </p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  {formatQuoteLabel(latestVisibleQuote.status)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                  Evidence
+                </p>
+                <p className="mt-1 font-semibold text-gray-900">
+                  {latestVisibleQuote._count.requestPhotoLinks +
+                    latestVisibleQuote._count.jobPhotoLinks}{" "}
+                  linked photo
+                  {latestVisibleQuote._count.requestPhotoLinks +
+                    latestVisibleQuote._count.jobPhotoLinks ===
+                  1
+                    ? ""
+                    : "s"}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-4 text-sm text-gray-500">
+              No quote has been created yet. Open the quote step when you need
+              to price the work or document a no-quote path.
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="text-xs text-gray-500">
+              {latestVisibleQuote ? (
+                <span>
+                  Latest update{" "}
+                  {formatDate(
+                    latestVisibleQuote.submittedAt ?? latestVisibleQuote.createdAt,
+                  )}
+                </span>
+              ) : (
+                <span>
+                  {sr.photos.length} request photo{sr.photos.length === 1 ? "" : "s"} and{" "}
+                  {photos.length} work photo{photos.length === 1 ? "" : "s"} are
+                  available for quote evidence.
+                </span>
+              )}
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={openQuoteWorkspace}
+            >
+              {quoteSummaryActionLabel}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {workflowSteps.length > 1 && (
         <Card className="border-gray-200/80">
           <CardContent className="space-y-4 py-4">
@@ -1455,7 +1712,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
               )}
             </div>
 
-            <div className="grid gap-2 md:grid-cols-3">
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
               {workflowSteps.map((step, index) => {
                 const isActive = activeWorkflowStep === step.key;
                 return (
@@ -1936,6 +2193,25 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </Card>
       )}
         </>
+      )}
+
+      {activeWorkflowStep === "quote" && (
+        <section
+          id="vendor-section-quote"
+          ref={quotePanelRef}
+          className="scroll-mt-24"
+        >
+          <VendorCommercialCard
+            jobId={job.id}
+            requestId={sr.id}
+            requestStatus={sr.status}
+            hasAcceptedJob={hasAcceptedJob}
+            commercialSnapshot={job.commercialSnapshot}
+            initialDispositionNote={job.quoteDispositionNote}
+            requestPhotos={sr.photos}
+            workPhotos={photos}
+          />
+        </section>
       )}
 
       {activeWorkflowStep === "proof" && hasAcceptedJob && (

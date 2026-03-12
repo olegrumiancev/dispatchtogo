@@ -1,13 +1,17 @@
 "use client";
 
+import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { Badge } from "@/components/ui/badge";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import { cn } from "@/lib/utils";
-import { Menu } from "lucide-react";
+import { ChevronDown, LogOut, Menu, UserCircle2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface HeaderProps {
   pageTitle?: string;
   userName?: string | null;
+  userEmail?: string | null;
   userRole?: "OPERATOR" | "VENDOR" | "ADMIN";
   className?: string;
   onMenuClick?: () => void;
@@ -28,10 +32,13 @@ const roleLabels: Record<string, string> = {
 export function Header({
   pageTitle,
   userName,
+  userEmail,
   userRole,
   className,
   onMenuClick,
 }: HeaderProps) {
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const homeHref =
     userRole === "OPERATOR"
       ? "/app/operator"
@@ -40,6 +47,45 @@ export function Header({
         : userRole === "ADMIN"
           ? "/app/admin"
           : "/app";
+  const accountHref =
+    userRole === "OPERATOR"
+      ? "/app/operator/account"
+      : userRole === "VENDOR"
+        ? "/app/vendor/account"
+        : userRole === "ADMIN"
+          ? "/app/admin/account"
+          : "/app";
+  const displayName = useMemo(
+    () => userName?.trim() || userEmail?.trim() || "User",
+    [userEmail, userName]
+  );
+  const showSecondaryLine = Boolean(
+    userEmail?.trim() && userEmail.trim() !== displayName
+  );
+  const userInitial = displayName.charAt(0).toUpperCase() || "U";
+
+  useEffect(() => {
+    if (!isUserMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (userMenuRef.current?.contains(event.target as Node)) return;
+      setIsUserMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isUserMenuOpen]);
 
   return (
     <header
@@ -70,7 +116,7 @@ export function Header({
       </div>
 
       {/* Right: User info */}
-      <div className="relative z-10 flex items-center gap-3">
+      <div ref={userMenuRef} className="relative z-10 flex items-center gap-3">
         {userRole && (
           <Badge
             variant={roleBadgeColors[userRole] || "bg-gray-100 text-gray-800"}
@@ -79,14 +125,92 @@ export function Header({
             {roleLabels[userRole] || userRole}
           </Badge>
         )}
-        {userName && (
-          <span className="max-w-[110px] truncate text-sm font-medium text-slate-700 md:max-w-[140px]">
-            {userName}
+        <button
+          type="button"
+          onClick={() => setIsUserMenuOpen((open) => !open)}
+          aria-haspopup="menu"
+          aria-expanded={isUserMenuOpen}
+          aria-label="Open user menu"
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-1.5 py-1 shadow-sm transition hover:border-brand-primary/30 hover:bg-brand-mist focus:outline-none focus:ring-2 focus:ring-brand-primary/20",
+            isUserMenuOpen && "border-brand-primary/40 bg-brand-mist"
+          )}
+        >
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-primary text-sm font-semibold text-white shadow-sm">
+            {userInitial}
           </span>
+          <ChevronDown
+            className={cn(
+              "hidden h-4 w-4 text-slate-500 transition-transform sm:block",
+              isUserMenuOpen && "rotate-180"
+            )}
+          />
+        </button>
+
+        {isUserMenuOpen && (
+          <div
+            className="absolute right-0 top-[calc(100%+0.75rem)] w-72 max-w-[calc(100vw-2rem)] rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_24px_60px_rgba(15,23,42,0.16)]"
+            role="menu"
+            aria-label="User menu"
+          >
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-brand-primary text-base font-semibold text-white">
+                {userInitial}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Signed in as
+                </p>
+                <p className="truncate text-sm font-semibold text-slate-900">
+                  {displayName}
+                </p>
+                {showSecondaryLine ? (
+                  <p className="truncate text-sm text-slate-500">{userEmail}</p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="mt-4 flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Role
+              </span>
+              {userRole ? (
+                <Badge
+                  variant={roleBadgeColors[userRole] || "bg-gray-100 text-gray-800"}
+                  className="shadow-none"
+                >
+                  {roleLabels[userRole] || userRole}
+                </Badge>
+              ) : (
+                <span className="text-sm font-medium text-slate-700">User</span>
+              )}
+            </div>
+
+            <div className="mt-4 grid gap-2">
+              <Link
+                href={accountHref}
+                onClick={() => setIsUserMenuOpen(false)}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                role="menuitem"
+              >
+                <UserCircle2 className="h-4 w-4" />
+                My Account
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsUserMenuOpen(false);
+                  signOut({ callbackUrl: "/app/login" });
+                }}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
+                role="menuitem"
+              >
+                <LogOut className="h-4 w-4" />
+                Sign Out
+              </button>
+            </div>
+          </div>
         )}
-        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-brand-primary text-sm font-semibold text-white shadow-sm">
-          {userName?.charAt(0).toUpperCase() || "U"}
-        </div>
       </div>
     </header>
   );

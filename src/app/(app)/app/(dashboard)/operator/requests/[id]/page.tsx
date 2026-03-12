@@ -23,10 +23,25 @@ import { TriageSection } from "@/components/forms/triage-section";
 import { AddPhotosButton } from "@/components/forms/add-photos-button";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
 import { MarkViewed } from "@/components/forms/mark-viewed";
+import { OperatorQuoteReviewCard } from "@/components/forms/operator-quote-review-card";
 import type { AiTriageData } from "@/components/ui/ai-triage-badge";
+import {
+  buildCommercialSnapshot,
+  latestQuoteSummaryRelationArgs,
+} from "@/lib/quotes";
 
 function getUrgencyColor(urgency: string) {
   return URGENCY_LEVELS.find((u) => u.value === urgency)?.color ?? "bg-gray-100 text-gray-800";
+}
+
+function formatCommercialLabel(value: string | null | undefined) {
+  if (!value) return "Not set";
+
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 }
 
 export default async function RequestDetailPage({
@@ -48,6 +63,7 @@ export default async function RequestDetailPage({
       include: {
         property: true,
         photos: true,
+        quotes: latestQuoteSummaryRelationArgs,
         job: {
           include: {
             vendor: true,
@@ -82,6 +98,18 @@ export default async function RequestDetailPage({
     : null;
 
   const primaryContact = null;
+  const commercialSnapshot = buildCommercialSnapshot({
+    quotePolicy: req.quotePolicy,
+    quoteDisposition: req.job?.quoteDisposition,
+    quotes: req.quotes,
+  });
+  const activeCommercialSummary =
+    commercialSnapshot.latestSubmittedQuoteSummary ??
+    commercialSnapshot.latestQuoteSummary;
+  const linkedEvidenceCount = activeCommercialSummary
+    ? activeCommercialSummary._count.requestPhotoLinks +
+      activeCommercialSummary._count.jobPhotoLinks
+    : 0;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -249,6 +277,108 @@ export default async function RequestDetailPage({
 
         </CardContent>
       </Card>
+
+      {false && (
+      <Card>
+        <CardHeader>
+          <CardTitle>Commercial</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                Quote Policy
+              </p>
+              <p className="mt-1 text-sm text-gray-900">
+                {formatCommercialLabel(commercialSnapshot.quotePolicy)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                Vendor Disposition
+              </p>
+              <p className="mt-1 text-sm text-gray-900">
+                {formatCommercialLabel(commercialSnapshot.quoteDisposition)}
+              </p>
+            </div>
+          </div>
+
+          {activeCommercialSummary ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Latest Quote
+                  </p>
+                  <p className="mt-1 text-sm font-medium text-gray-900">
+                    {formatCurrency(activeCommercialSummary!.amount)}
+                    {" · "}
+                    {formatCommercialLabel(activeCommercialSummary!.status)}
+                  </p>
+                </div>
+                <Badge variant="bg-slate-100 text-slate-800">
+                  {formatCommercialLabel(activeCommercialSummary!.source)}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 text-sm text-gray-700 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Scope Summary
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap">
+                    {activeCommercialSummary!.scopeSummary}
+                  </p>
+                </div>
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Submitted
+                    </p>
+                    <p className="mt-1">
+                      {formatDate(
+                        activeCommercialSummary!.submittedAt ??
+                          activeCommercialSummary!.createdAt
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Valid Until
+                    </p>
+                    <p className="mt-1">
+                      {activeCommercialSummary!.validUntil
+                        ? formatDate(activeCommercialSummary!.validUntil as Date)
+                        : "Not specified"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                      Supporting Evidence
+                    </p>
+                    <p className="mt-1">
+                      {linkedEvidenceCount} linked photo
+                      {linkedEvidenceCount === 1 ? "" : "s"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+              No quote has been created for this request yet.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      )}
+
+      <OperatorQuoteReviewCard
+        requestId={req.id}
+        requestStatus={req.status}
+        commercialSnapshot={commercialSnapshot}
+        initialDispositionNote={req.job?.quoteDispositionNote ?? null}
+      />
 
       {/* AI Triage */}
       {(() => {

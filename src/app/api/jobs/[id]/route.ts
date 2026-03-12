@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { generateCompletionAssist } from "@/lib/ai-assist";
 import { prisma } from "@/lib/prisma";
+import {
+  buildCommercialSnapshot,
+  isQuoteDisposition,
+  latestQuoteSummaryRelationArgs,
+} from "@/lib/quotes";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 import { ensureVendorIsActiveForMutation } from "@/lib/vendor-lifecycle";
 import {
@@ -23,6 +28,7 @@ const JOB_INCLUDE = {
     include: {
       property: true,
       photos: true,
+      quotes: latestQuoteSummaryRelationArgs,
     },
   },
   vendor: true,
@@ -70,7 +76,14 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  return NextResponse.json(job);
+  return NextResponse.json({
+    ...job,
+    commercialSnapshot: buildCommercialSnapshot({
+      quotePolicy: job.serviceRequest.quotePolicy,
+      quoteDisposition: job.quoteDisposition,
+      quotes: job.serviceRequest.quotes,
+    }),
+  });
 }
 
 export async function PATCH(
@@ -93,6 +106,8 @@ export async function PATCH(
     totalLabourHours,
     totalMaterialsCost,
     totalCost,
+    quoteDisposition,
+    quoteDispositionNote,
     declineReason,
   } = body;
 
@@ -123,9 +138,11 @@ export async function PATCH(
     totalLabourHours !== undefined ||
     totalMaterialsCost !== undefined ||
     totalCost !== undefined;
+  const isQuoteFieldUpdate =
+    quoteDisposition !== undefined || quoteDispositionNote !== undefined;
 
   if (user.role !== "ADMIN" && SUBMISSION_LOCKED_STATUSES.has(job.serviceRequest.status)) {
-    if (action || isCompletionFieldUpdate) {
+    if (action || isCompletionFieldUpdate || isQuoteFieldUpdate) {
       return NextResponse.json(
         { error: "Completion proof is locked after submission." },
         { status: 409 }
@@ -141,6 +158,24 @@ export async function PATCH(
   if (totalLabourHours !== undefined) jobData.totalLabourHours = totalLabourHours;
   if (totalMaterialsCost !== undefined) jobData.totalMaterialsCost = totalMaterialsCost;
   if (totalCost !== undefined) jobData.totalCost = totalCost;
+  if (quoteDisposition !== undefined) {
+    if (quoteDisposition !== null && !isQuoteDisposition(String(quoteDisposition))) {
+      return NextResponse.json({ error: "Invalid quote disposition." }, { status: 400 });
+    }
+
+    jobData.quoteDisposition = quoteDisposition;
+    jobData.quoteDispositionAt = quoteDisposition ? new Date() : null;
+
+    if (quoteDisposition === null && quoteDispositionNote === undefined) {
+      jobData.quoteDispositionNote = null;
+    }
+  }
+  if (quoteDispositionNote !== undefined) {
+    jobData.quoteDispositionNote =
+      typeof quoteDispositionNote === "string" && quoteDispositionNote.trim()
+        ? quoteDispositionNote.trim().slice(0, 500)
+        : null;
+  }
 
   let newStatus: string | null = null;
 
@@ -246,6 +281,18 @@ export async function PATCH(
     where: { id },
     include: JOB_INCLUDE,
   });
+
+  const responseBody =
+    updated == null
+      ? updated
+      : {
+          ...updated,
+          commercialSnapshot: buildCommercialSnapshot({
+            quotePolicy: updated.serviceRequest.quotePolicy,
+            quoteDisposition: updated.quoteDisposition,
+            quotes: updated.serviceRequest.quotes,
+          }),
+        };
 
   // Fire-and-forget SMS + email + in-app notifications
   if (action && updated) {
@@ -390,7 +437,7 @@ export async function PATCH(
     });
   }
 
-  return NextResponse.json(updated);
+  return NextResponse.json(responseBody);
 }
 
 export async function POST(

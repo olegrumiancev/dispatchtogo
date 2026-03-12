@@ -45,6 +45,7 @@ export default async function DashboardLayout({
         <DashboardShell
           role={user.role}
           userName={user.name ?? user.email}
+          userEmail={user.email}
           smsRedirectEnabled={smsRedirectEnabled}
         >
             {organizationState && !isOrganizationActive(organizationState.status) && (

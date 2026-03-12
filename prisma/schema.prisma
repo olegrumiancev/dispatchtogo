@@ -157,6 +157,7 @@ model Vendor {
   skills           VendorSkill[]
   credentials      VendorCredential[]
   jobs             Job[]
+  quotes           Quote[]
   preferredVendors PreferredVendor[]
 
   @@index([status])
@@ -217,6 +218,7 @@ model ServiceRequest {
   organizationId   String
   urgency          String   @default("MEDIUM")
   status           String   @default("SUBMITTED")
+  quotePolicy      String   @default("VENDOR_DECIDES")
   aiTriageSummary  String?
   aiUrgencyScore   Int?
   rejectionReason  String?
@@ -229,6 +231,7 @@ model ServiceRequest {
   job          Job?
   invoice      Invoice?
   photos       Photo[]
+  quotes       Quote[]
   chatMessages ChatMessage[]
   aiClassifications AiClassification[]
   requestViews      RequestView[]
@@ -246,6 +249,9 @@ model Job {
   vendorId           String
   organizationId     String?
   status             String    @default("OFFERED")
+  quoteDisposition   String?
+  quoteDispositionAt DateTime?
+  quoteDispositionNote String?
   acceptedAt         DateTime?
   enRouteAt          DateTime?
   arrivedAt          DateTime?
@@ -302,6 +308,7 @@ model JobPhoto {
   createdAt DateTime @default(now())
 
   job Job @relation(fields: [jobId], references: [id])
+  quoteLinks QuoteJobPhoto[]
 
   @@index([jobId])
 }
@@ -319,6 +326,7 @@ model Photo {
   createdAt        DateTime @default(now())
 
   serviceRequest ServiceRequest @relation(fields: [serviceRequestId], references: [id])
+  quoteLinks      QuoteRequestPhoto[]
 
   @@index([serviceRequestId])
 }
@@ -334,6 +342,66 @@ model JobMaterial {
   job Job @relation(fields: [jobId], references: [id])
 
   @@index([jobId])
+}
+
+model Quote {
+  id                    String   @id @default(cuid())
+  serviceRequestId      String
+  vendorId              String
+  createdByUserId       String
+  status                String   @default("DRAFT")
+  source                String   @default("REMOTE")
+  supersedesQuoteId     String?
+  amount                Float
+  currency              String   @default("CAD")
+  scopeSummary          String
+  assumptions           String?
+  exclusions            String?
+  validUntil            DateTime?
+  submittedAt           DateTime?
+  decidedAt             DateTime?
+  decidedByUserId       String?
+  decisionNote          String?
+  requestTitleSnapshot  String?
+  propertyNameSnapshot  String
+  propertyAddressSnapshot String?
+  vendorNameSnapshot    String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  request          ServiceRequest    @relation(fields: [serviceRequestId], references: [id])
+  vendor           Vendor            @relation(fields: [vendorId], references: [id])
+  requestPhotoLinks QuoteRequestPhoto[]
+  jobPhotoLinks    QuoteJobPhoto[]
+
+  @@index([serviceRequestId, vendorId, status])
+  @@index([serviceRequestId, createdAt])
+  @@index([vendorId, createdAt])
+  @@index([supersedesQuoteId])
+}
+
+model QuoteRequestPhoto {
+  quoteId    String
+  photoId    String
+  sortOrder  Int    @default(0)
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  photo Photo @relation(fields: [photoId], references: [id])
+
+  @@id([quoteId, photoId])
+  @@index([photoId])
+}
+
+model QuoteJobPhoto {
+  quoteId    String
+  photoId    String
+  sortOrder  Int    @default(0)
+
+  quote Quote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  photo JobPhoto @relation(fields: [photoId], references: [id])
+
+  @@id([quoteId, photoId])
+  @@index([photoId])
 }
 
 model Invoice {

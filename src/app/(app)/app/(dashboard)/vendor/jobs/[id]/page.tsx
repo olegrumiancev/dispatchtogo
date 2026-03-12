@@ -2,6 +2,10 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { getStoredTriageArtifact } from "@/lib/ai-assist";
 import { prisma } from "@/lib/prisma";
+import {
+  buildCommercialSnapshot,
+  latestQuoteSummaryRelationArgs,
+} from "@/lib/quotes";
 import { VendorJobDetail } from "@/components/forms/vendor-job-detail";
 
 export default async function VendorJobDetailPage({
@@ -23,6 +27,7 @@ export default async function VendorJobDetailPage({
         include: {
           property: true,
           photos: true,
+          quotes: latestQuoteSummaryRelationArgs,
           aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },
         },
       },
@@ -62,9 +67,20 @@ export default async function VendorJobDetailPage({
           reasoning: triageArtifact?.data.reasoning ?? aiClass?.reasoning ?? null,
         }
       : null;
+  const commercialSnapshot = buildCommercialSnapshot({
+    quotePolicy: job.serviceRequest.quotePolicy,
+    quoteDisposition: job.quoteDisposition,
+    quotes: job.serviceRequest.quotes,
+  });
 
   // Serialize dates so they can be passed to client components
-  const serialized = JSON.parse(JSON.stringify({ ...job, vendorBrief }));
+  const serialized = JSON.parse(
+    JSON.stringify({
+      ...job,
+      vendorBrief,
+      commercialSnapshot,
+    })
+  );
 
   return <VendorJobDetail job={serialized} />;
 }
