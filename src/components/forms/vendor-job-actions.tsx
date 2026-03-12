@@ -8,7 +8,7 @@ import { Check, X, ChevronDown } from "lucide-react";
 interface VendorJobActionsProps {
   jobId: string;
   mode: "available";
-  layout?: "stacked" | "inline";
+  layout?: "stacked" | "inline" | "compact";
 }
 
 type DeclineKey = "capacity" | "wont_service" | "other";
@@ -95,21 +95,42 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
     (selectedKey !== "other" || otherReason.trim().length > 0);
 
   const isInline = layout === "inline";
+  const isCompact = layout === "compact";
+  const declineLabel = isCompact ? "Pass" : "Decline";
 
   return (
-    <div className={`flex flex-col gap-2 ${isInline ? "items-end" : ""}`}>
+    <div
+      className={`flex flex-col gap-2 ${
+        isInline ? "items-end" : isCompact ? "col-span-2" : ""
+      }`}
+    >
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      <div className={`flex gap-2 ${isInline ? "items-center" : "flex-col"}`}>
+      <div
+        className={`gap-2 ${
+          isInline
+            ? "flex items-center"
+            : isCompact
+              ? "grid grid-cols-2"
+              : "flex flex-col"
+        }`}
+      >
         <Button
           variant="primary"
           size="sm"
           loading={accepting}
           disabled={showDeclineOptions}
           onClick={handleAccept}
-          className={`${isInline ? "min-h-[38px]" : "w-full min-h-[44px]"} justify-center`}
+          aria-label="Accept job"
+          className={`${
+            isInline
+              ? "min-h-[38px]"
+              : isCompact
+                ? "w-full min-h-[40px] px-2"
+                : "w-full min-h-[44px]"
+          } justify-center`}
         >
-          <Check className="w-4 h-4" />
+          <Check className={isCompact ? "h-3.5 w-3.5" : "w-4 h-4"} />
           Accept
         </Button>
 
@@ -120,20 +141,44 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
             size="sm"
             disabled={accepting}
             onClick={() => setShowDeclineOptions(true)}
-            className={`${isInline ? "min-h-[38px]" : "w-full min-h-[44px]"} justify-between`}
+            aria-label="Decline job"
+            className={`${
+              isInline
+                ? "min-h-[38px]"
+                : isCompact
+                  ? "w-full min-h-[40px] px-2"
+                  : "w-full min-h-[44px]"
+            } ${
+              isCompact
+                ? "justify-center gap-1.5 border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
+                : "justify-between"
+            }`}
           >
-            <span className="flex items-center gap-1.5">
-              <X className="w-4 h-4" />
-              Decline
-            </span>
-            <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+            {isCompact ? (
+              <>
+                <X className="h-3.5 w-3.5" />
+                {declineLabel}
+              </>
+            ) : (
+              <>
+                <span className="flex items-center gap-1.5">
+                  <X className="w-4 h-4" />
+                  {declineLabel}
+                </span>
+                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+              </>
+            )}
           </Button>
         )}
       </div>
 
       {/* Expanded decline options */}
       {showDeclineOptions && (
-        <div className={`rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5 ${isInline ? "w-[240px]" : ""}`}>
+        <div
+          className={`rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5 ${
+            isInline ? "w-[240px]" : ""
+          }`}
+        >
           <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">
             Reason for declining
           </p>

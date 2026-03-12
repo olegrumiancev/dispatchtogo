@@ -145,7 +145,7 @@ export default async function VendorJobsPage({
         )}
       </div>
 
-      <div className="border-b border-gray-200">
+      <div className="sticky top-16 z-20 -mx-4 border-b border-gray-200 bg-white/90 px-4 backdrop-blur-sm md:-mx-6 md:px-6">
         <nav className="flex gap-3 overflow-x-auto sm:gap-6">
           <Link
             href="/app/vendor/jobs?tab=available"
@@ -313,14 +313,17 @@ export default async function VendorJobsPage({
                             </span>
                           </div>
 
-                          <div className="flex w-full flex-col gap-2">
+                          <div className="grid w-full grid-cols-3 gap-2">
                             <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
-                              <button className="inline-flex w-full min-h-[44px] items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900">
-                                <ExternalLink className="h-4 w-4" />
-                                View Details
+                              <button
+                                aria-label={`Open details for ${sr.referenceNumber}`}
+                                className="inline-flex w-full min-h-[40px] items-center justify-center gap-1.5 rounded-md border border-gray-200 px-2 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Open
                               </button>
                             </Link>
-                            <VendorJobActions jobId={job.id} mode="available" />
+                            <VendorJobActions jobId={job.id} mode="available" layout="compact" />
                           </div>
                         </div>
                       </CardContent>

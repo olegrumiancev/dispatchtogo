@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/modal";
 import {
   RequestProgressCard,
   getLinearRequestProgressSteps,
+  type RequestProgressEvent,
 } from "@/components/ui/request-progress-card";
 import { optimizeImageFileForUpload } from "@/lib/client-image";
 import {
@@ -21,6 +22,7 @@ import {
   MapPin,
   Navigation,
   CheckCircle,
+  Clock3,
   Camera,
   Plus,
   Trash2,
@@ -240,6 +242,64 @@ function AssistSummaryText({ text }: { text: string }) {
       </ol>
       {tail && <p className="text-sm text-blue-900">{tail}</p>}
     </div>
+  );
+}
+
+function MobileJobHistoryCard({ events }: { events: RequestProgressEvent[] }) {
+  const visibleEvents = events.filter((event) => Boolean(event.value));
+
+  if (visibleEvents.length === 0) {
+    return null;
+  }
+
+  const latestEvent = visibleEvents[visibleEvents.length - 1];
+
+  return (
+    <Card className="sm:hidden">
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900">Job History</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Last update: {latestEvent.label} on {formatDate(latestEvent.value!)}
+            </p>
+          </div>
+          <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-400 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-gray-200 px-4 py-4">
+          <div className="space-y-3">
+            {visibleEvents.map((event, index) => (
+              <div key={`${event.label}-${String(event.value)}`} className="flex gap-3">
+                <div className="flex flex-col items-center">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full border ${
+                      event.tone === "warning"
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : "border-blue-200 bg-blue-50 text-blue-700"
+                    }`}
+                  >
+                    <Clock3 className="h-3.5 w-3.5" />
+                  </span>
+                  {index < visibleEvents.length - 1 && (
+                    <span className="mt-2 h-full w-px bg-gray-200" aria-hidden="true" />
+                  )}
+                </div>
+                <div className="min-w-0 pb-3">
+                  <p className="text-sm font-medium text-gray-900">{event.label}</p>
+                  <p
+                    className={`mt-1 text-xs ${
+                      event.tone === "warning" ? "text-amber-800" : "text-gray-500"
+                    }`}
+                  >
+                    {formatDate(event.value!)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </details>
+    </Card>
   );
 }
 
@@ -562,6 +622,19 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     : blockingCompletionItems.some((item) => item.step === "proof")
       ? "Continue Work Proof"
       : "Finish Completion Summary";
+  const progressEvents: RequestProgressEvent[] = [
+    { label: "Submitted", value: sr.createdAt },
+    { label: "Accepted", value: job.acceptedAt },
+    { label: "En Route", value: job.enRouteAt },
+    { label: "Arrived", value: job.arrivedAt },
+    {
+      label: "Paused",
+      value: job.isPaused ? job.pausedAt : null,
+      tone: "warning",
+    },
+    { label: "Completed", value: job.completedAt },
+    { label: "Resolved", value: sr.resolvedAt },
+  ];
   const defaultOpenSections: Record<VendorSectionKey, boolean> = {
     requestPhotos: true,
     workPhotos: true,
@@ -1239,23 +1312,120 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </div>
       )}
 
-      <RequestProgressCard
-        currentStatus={sr.status}
-        steps={getLinearRequestProgressSteps(getStatusLabel, sr.status)}
-        events={[
-          { label: "Submitted", value: sr.createdAt },
-          { label: "Accepted", value: job.acceptedAt },
-          { label: "En Route", value: job.enRouteAt },
-          { label: "Arrived", value: job.arrivedAt },
-          {
-            label: "Paused",
-            value: job.isPaused ? job.pausedAt : null,
-            tone: "warning",
-          },
-          { label: "Completed", value: job.completedAt },
-          { label: "Resolved", value: sr.resolvedAt },
-        ]}
-      />
+      <div className="hidden sm:block">
+        <RequestProgressCard
+          currentStatus={sr.status}
+          steps={getLinearRequestProgressSteps(getStatusLabel, sr.status)}
+          events={progressEvents}
+        />
+      </div>
+
+      {/* Status action button */}
+      {sr.status !== "COMPLETED" &&
+        sr.status !== "VERIFIED" &&
+        sr.status !== "CANCELLED" &&
+        !job.isPaused && (
+          <Card>
+            <CardContent className="py-5">
+              <div className="flex flex-col gap-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-700">
+                    Current Status
+                  </p>
+                  <div className="mt-2 flex items-start gap-2 sm:items-center">
+                    <Badge
+                      variant={currentStage.badge}
+                      className="shrink-0"
+                    >
+                      {currentStage.label}
+                    </Badge>
+                    <p className="min-w-0 flex-1 text-[11px] leading-4 text-gray-500 sm:text-xs">
+                      {currentStage.detail}
+                    </p>
+                  </div>
+                  {actionError && (
+                    <p className="text-xs text-red-600 mt-0.5">{actionError}</p>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  {sr.status === "DISPATCHED" && (
+                    <Button
+                      variant="danger"
+                      loading={actionLoading}
+                      onClick={() => setShowDeclineModal(true)}
+                      className="w-full min-h-[44px] justify-center gap-2 sm:w-auto"
+                    >
+                      <X className="w-4 h-4" />
+                      Decline Job
+                      <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+                    </Button>
+                  )}
+                  {sr.status === "ACCEPTED" && !job.enRouteAt && (
+                    <Button
+                      variant="primary"
+                      loading={actionLoading}
+                      onClick={() => handleStatusAction("enroute")}
+                      className="w-full min-h-[44px] justify-center sm:w-auto"
+                    >
+                      <Navigation className="w-4 h-4" />
+                      En Route
+                    </Button>
+                  )}
+                  {sr.status === "ACCEPTED" &&
+                    job.enRouteAt &&
+                    !job.arrivedAt && (
+                      <Button
+                        variant="primary"
+                        loading={actionLoading}
+                        onClick={() => handleStatusAction("arrive")}
+                        className="w-full min-h-[44px] justify-center sm:w-auto"
+                      >
+                        <MapPin className="w-4 h-4" />
+                        Arrived on Site
+                      </Button>
+                    )}
+                  {sr.status === "DISPATCHED" && (
+                    <Button
+                      variant="primary"
+                      loading={actionLoading}
+                      onClick={() => handleStatusAction("accept")}
+                      className="w-full min-h-[44px] justify-center sm:w-auto"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Accept Job
+                    </Button>
+                  )}
+                  {sr.status === "IN_PROGRESS" && (
+                    <>
+                      <Button
+                        variant="primary"
+                        onClick={goToCompletionWorkspace}
+                        className="w-full min-h-[44px] justify-center sm:w-auto"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                        {statusPrimaryActionLabel}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPauseReason("");
+                          setEstimatedReturnDate("");
+                          setPauseError(null);
+                          setShowPauseModal(true);
+                        }}
+                        disabled={actionLoading}
+                        className="inline-flex min-h-[44px] w-full items-center justify-center gap-1.5 rounded-md border border-amber-300 px-4 py-2 text-sm font-medium text-amber-700 transition-colors hover:bg-amber-50 disabled:opacity-50 sm:w-auto"
+                      >
+                        <Pause className="w-4 h-4" />
+                        Pause - Will Return
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
       {workflowSteps.length > 1 && (
         <Card className="border-gray-200/80">
@@ -1352,8 +1522,11 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
         </Card>
       )}
 
-      {/* Status action button */}
-      {sr.status !== "COMPLETED" &&
+      <MobileJobHistoryCard events={progressEvents} />
+
+      {/* Legacy position retained for future cleanup */}
+      {false &&
+        sr.status !== "COMPLETED" &&
         sr.status !== "VERIFIED" &&
         sr.status !== "CANCELLED" &&
         !job.isPaused && (

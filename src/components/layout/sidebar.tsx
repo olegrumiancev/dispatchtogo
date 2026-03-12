@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
-import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand/brand-logo";
 import {
@@ -17,7 +16,6 @@ import {
   Users,
   BarChart3,
   Bell,
-  Menu,
   X,
   LogOut,
   ShieldCheck,
@@ -66,11 +64,18 @@ interface SidebarProps {
   role: "OPERATOR" | "VENDOR" | "ADMIN";
   userName?: string | null;
   smsRedirectEnabled?: boolean;
+  mobileOpen: boolean;
+  onMobileOpenChange: (open: boolean) => void;
 }
 
-export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarProps) {
+export function Sidebar({
+  role,
+  userName,
+  smsRedirectEnabled = false,
+  mobileOpen,
+  onMobileOpenChange,
+}: SidebarProps) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
   const homeHref =
     role === "OPERATOR"
       ? "/app/operator"
@@ -113,7 +118,7 @@ export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarP
             <Link
               key={item.href}
               href={item.href}
-              onClick={() => setMobileOpen(false)}
+              onClick={() => onMobileOpenChange(false)}
               className={cn(
                 "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors",
                 active
@@ -157,25 +162,16 @@ export function Sidebar({ role, userName, smsRedirectEnabled = false }: SidebarP
         <SidebarContent />
       </aside>
 
-      {/* Mobile: hamburger button */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="fixed left-4 top-4 z-40 rounded-md bg-slate-950 p-2 text-white shadow-lg md:hidden"
-        aria-label="Open menu"
-      >
-        <Menu className="w-5 h-5" />
-      </button>
-
       {/* Mobile: overlay + drawer */}
       {mobileOpen && (
         <div className="md:hidden fixed inset-0 z-50 flex">
           <div
             className="absolute inset-0 bg-black/50"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => onMobileOpenChange(false)}
           />
           <aside className="relative h-full w-64 bg-slate-950 shadow-xl">
             <button
-              onClick={() => setMobileOpen(false)}
+              onClick={() => onMobileOpenChange(false)}
               className="absolute top-4 right-4 p-1 text-slate-400 hover:text-white"
               aria-label="Close menu"
             >
