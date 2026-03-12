@@ -18,7 +18,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: isDev ? "[DEV] DispatchToGo" : "DispatchToGo",
     description: "Dispatch with confidence.",
-    icons: isDev ? { icon: "/favicon-dev.svg" } : { icon: "/favicon.svg" },
+    icons: isDev
+      ? { icon: "/favicon-dev.svg" }
+      : { icon: "/brand/dispatch-van-source.svg" },
   };
 }
 
