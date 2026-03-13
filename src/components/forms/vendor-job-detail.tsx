@@ -13,7 +13,7 @@ import {
 } from "@/components/forms/vendor-commercial-card";
 import {
   RequestProgressCard,
-  getLinearRequestProgressSteps,
+  getVendorProgressSteps,
   type RequestProgressEvent,
 } from "@/components/ui/request-progress-card";
 import { optimizeImageFileForUpload } from "@/lib/client-image";
@@ -457,7 +457,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     quoteDisposition === "ASSESS_FIRST" ||
     Boolean(latestQuoteSummary || latestSubmittedQuoteSummary);
   const [quoteWorkspaceVisible, setQuoteWorkspaceVisible] = useState(
-    quoteStepTriggeredByState,
+    quoteStepTriggeredByState || !hasAcceptedJob,
   );
   const [quoteFocusPending, setQuoteFocusPending] = useState(false);
   const materialEntriesForReview = [
@@ -750,25 +750,30 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                   ? "Use the quote step to price the work from the current request details."
                   : commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK"
                     ? "A quote is expected before repair work proceeds."
-                    : "Open the quote step only if you want to price the work or document the path.";
-  const quoteSummaryActionLabel =
-    latestQuoteSummary?.status === "DRAFT"
-      ? "Resume Draft"
-      : quoteWorkspaceVisible
-        ? "Open Quote"
-        : "Set Quote Path";
+                    : "Open the quote step only if you want to price the work or mark that no quote is needed.";
+  const showQuoteSummaryAction = activeWorkflowStep !== "quote";
+  const quoteSummaryActionLabel = "Go to Quote Step";
+  const showQuoteSummaryCard =
+    Boolean(latestVisibleQuote) ||
+    quoteDisposition === "ASSESS_FIRST" ||
+    quoteDisposition === "NO_QUOTE" ||
+    quoteDisposition === "NEED_INFO" ||
+    commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK";
+  const latestVisibleQuoteEvidenceCount = latestVisibleQuote
+    ? latestVisibleQuote._count.requestPhotoLinks +
+      latestVisibleQuote._count.jobPhotoLinks
+    : 0;
   const progressEvents: RequestProgressEvent[] = [
-    { label: "Submitted", value: sr.createdAt },
     { label: "Accepted", value: job.acceptedAt },
     { label: "En Route", value: job.enRouteAt },
-    { label: "Arrived", value: job.arrivedAt },
+    { label: "On Site", value: job.arrivedAt },
     {
       label: "Paused",
       value: job.isPaused ? job.pausedAt : null,
       tone: "warning",
     },
     { label: "Completed", value: job.completedAt },
-    { label: "Resolved", value: sr.resolvedAt },
+    { label: "Closed", value: sr.resolvedAt },
   ];
   const defaultOpenSections: Record<VendorSectionKey, boolean> = {
     requestPhotos: true,
@@ -830,10 +835,10 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
   ];
 
   useEffect(() => {
-    if (quoteStepTriggeredByState) {
+    if (quoteStepTriggeredByState || !hasAcceptedJob) {
       setQuoteWorkspaceVisible(true);
     }
-  }, [quoteStepTriggeredByState]);
+  }, [hasAcceptedJob, quoteStepTriggeredByState]);
 
   useEffect(() => {
     if (!quoteWorkspaceVisible || !quoteFocusPending) return;
@@ -1475,8 +1480,9 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
       <div className="hidden sm:block">
         <RequestProgressCard
           currentStatus={sr.status}
-          steps={getLinearRequestProgressSteps(getStatusLabel, sr.status)}
+          steps={getVendorProgressSteps(getStatusLabel, sr.status)}
           events={progressEvents}
+          eventVariant="compact"
         />
       </div>
 
@@ -1587,102 +1593,60 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           </Card>
         )}
 
-      <Card className="border-gray-200/80">
-        <CardContent className="space-y-4 py-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <CircleDollarSign className="h-4 w-4 text-blue-600" />
-                <p className="text-sm font-semibold text-gray-900">Quote</p>
+      {showQuoteSummaryCard && (
+        <Card className="border-gray-200/80">
+          <CardContent className="py-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <CircleDollarSign className="h-4 w-4 text-blue-600" />
+                  <p className="text-sm font-semibold text-gray-900">Quote</p>
+                  <Badge variant="bg-slate-100 text-slate-800">
+                    {quoteSummaryStatus}
+                  </Badge>
+                  {commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK" &&
+                    !latestSubmittedQuoteSummary && (
+                      <Badge variant="bg-amber-100 text-amber-800">
+                        Approval before work
+                      </Badge>
+                    )}
+                </div>
+                <p className="text-sm text-gray-600">{quoteSummaryDetail}</p>
+                {latestVisibleQuote && (
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                    <span>
+                      {formatQuoteMoney(
+                        latestVisibleQuote.amount,
+                        latestVisibleQuote.currency,
+                      )}
+                    </span>
+                    <span>
+                      Updated{" "}
+                      {formatDate(
+                        latestVisibleQuote.submittedAt ?? latestVisibleQuote.createdAt,
+                      )}
+                    </span>
+                    <span>
+                      {latestVisibleQuoteEvidenceCount} linked photo
+                      {latestVisibleQuoteEvidenceCount === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                )}
               </div>
-              <p className="text-sm text-gray-600">{quoteSummaryDetail}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="bg-slate-100 text-slate-800">
-                {quoteSummaryStatus}
-              </Badge>
-              <Badge variant="bg-white text-slate-700 ring-1 ring-gray-200">
-                {formatQuoteLabel(commercialSnapshot.quotePolicy)}
-              </Badge>
-              {quoteDisposition && (
-                <Badge variant="bg-white text-slate-700 ring-1 ring-gray-200">
-                  {formatQuoteLabel(quoteDisposition)}
-                </Badge>
+              {showQuoteSummaryAction && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={openQuoteWorkspace}
+                  className="sm:shrink-0"
+                >
+                  {quoteSummaryActionLabel}
+                </Button>
               )}
             </div>
-          </div>
-
-          {latestVisibleQuote ? (
-            <div className="grid gap-3 text-sm sm:grid-cols-3">
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Latest Amount
-                </p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  {formatQuoteMoney(
-                    latestVisibleQuote.amount,
-                    latestVisibleQuote.currency,
-                  )}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Latest Status
-                </p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  {formatQuoteLabel(latestVisibleQuote.status)}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Evidence
-                </p>
-                <p className="mt-1 font-semibold text-gray-900">
-                  {latestVisibleQuote._count.requestPhotoLinks +
-                    latestVisibleQuote._count.jobPhotoLinks}{" "}
-                  linked photo
-                  {latestVisibleQuote._count.requestPhotoLinks +
-                    latestVisibleQuote._count.jobPhotoLinks ===
-                  1
-                    ? ""
-                    : "s"}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-4 text-sm text-gray-500">
-              No quote has been created yet. Open the quote step when you need
-              to price the work or document a no-quote path.
-            </div>
-          )}
-
-          <div className="flex flex-col gap-3 border-t border-gray-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-gray-500">
-              {latestVisibleQuote ? (
-                <span>
-                  Latest update{" "}
-                  {formatDate(
-                    latestVisibleQuote.submittedAt ?? latestVisibleQuote.createdAt,
-                  )}
-                </span>
-              ) : (
-                <span>
-                  {sr.photos.length} request photo{sr.photos.length === 1 ? "" : "s"} and{" "}
-                  {photos.length} work photo{photos.length === 1 ? "" : "s"} are
-                  available for quote evidence.
-                </span>
-              )}
-            </div>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={openQuoteWorkspace}
-            >
-              {quoteSummaryActionLabel}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {workflowSteps.length > 1 && (
         <Card className="border-gray-200/80">
@@ -1693,8 +1657,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                   Job Workspace
                 </p>
                 <p className="text-xs text-gray-500">
-                  Move through one step at a time instead of hunting through the
-                  full page.
+                  Click these tiles to open the different job sections.
                 </p>
               </div>
               {hasAcceptedJob && canEditSubmission && (

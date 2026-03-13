@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Check, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Check, X, ChevronDown } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
 
 interface VendorJobActionsProps {
   jobId: string;
@@ -14,19 +15,33 @@ interface VendorJobActionsProps {
 type DeclineKey = "capacity" | "wont_service" | "other";
 
 const DECLINE_OPTIONS: { key: DeclineKey; label: string; value: string | null }[] = [
-  { key: "capacity",     label: "Over capacity",          value: "Over capacity — currently unavailable to take on new jobs" },
-  { key: "wont_service", label: "Won't service",           value: "Unable to service this request" },
-  { key: "other",        label: "Other (provide reason)",  value: null },
+  {
+    key: "capacity",
+    label: "Over capacity",
+    value: "Over capacity - currently unavailable to take on new jobs",
+  },
+  {
+    key: "wont_service",
+    label: "Won't service",
+    value: "Unable to service this request",
+  },
+  {
+    key: "other",
+    label: "Other (provide reason)",
+    value: null,
+  },
 ];
 
-export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobActionsProps) {
+export function VendorJobActions({
+  jobId,
+  mode,
+  layout = "stacked",
+}: VendorJobActionsProps) {
   const router = useRouter();
   const [accepting, setAccepting] = useState(false);
   const [declining, setDeclining] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Decline expand state
-  const [showDeclineOptions, setShowDeclineOptions] = useState(false);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
   const [selectedKey, setSelectedKey] = useState<DeclineKey | null>(null);
   const [otherReason, setOtherReason] = useState("");
 
@@ -52,6 +67,12 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
     }
   };
 
+  const resetDecline = () => {
+    setShowDeclineModal(false);
+    setSelectedKey(null);
+    setOtherReason("");
+  };
+
   const doDecline = async (reason: string) => {
     setDeclining(true);
     setError(null);
@@ -66,6 +87,7 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
         setError(data.error ?? "Failed to decline job.");
         return;
       }
+      resetDecline();
       router.refresh();
     } catch {
       setError("Network error. Please try again.");
@@ -84,12 +106,6 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
     doDecline(reason);
   };
 
-  const resetDecline = () => {
-    setShowDeclineOptions(false);
-    setSelectedKey(null);
-    setOtherReason("");
-  };
-
   const canConfirm =
     selectedKey !== null &&
     (selectedKey !== "other" || otherReason.trim().length > 0);
@@ -97,6 +113,8 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
   const isInline = layout === "inline";
   const isCompact = layout === "compact";
   const declineLabel = isCompact ? "Pass" : "Decline";
+
+  void mode;
 
   return (
     <div
@@ -119,7 +137,6 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
           variant="primary"
           size="sm"
           loading={accepting}
-          disabled={showDeclineOptions}
           onClick={handleAccept}
           aria-label="Accept job"
           className={`${
@@ -134,65 +151,73 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
           Accept
         </Button>
 
-        {/* Decline trigger */}
-        {!showDeclineOptions && (
-          <Button
-            variant="secondary"
-            size="sm"
-            disabled={accepting}
-            onClick={() => setShowDeclineOptions(true)}
-            aria-label="Decline job"
-            className={`${
-              isInline
-                ? "min-h-[38px]"
-                : isCompact
-                  ? "w-full min-h-[40px] px-2"
-                  : "w-full min-h-[44px]"
-            } ${
-              isCompact
-                ? "justify-center gap-1.5 border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
-                : "justify-between"
-            }`}
-          >
-            {isCompact ? (
-              <>
-                <X className="h-3.5 w-3.5" />
-                {declineLabel}
-              </>
-            ) : (
-              <>
-                <span className="flex items-center gap-1.5">
-                  <X className="w-4 h-4" />
-                  {declineLabel}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-              </>
-            )}
-          </Button>
-        )}
-      </div>
-
-      {/* Expanded decline options */}
-      {showDeclineOptions && (
-        <div
-          className={`rounded-lg border border-red-200 bg-red-50 p-3 space-y-2.5 ${
-            isInline ? "w-[240px]" : ""
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={accepting}
+          onClick={() => {
+            setError(null);
+            setShowDeclineModal(true);
+          }}
+          aria-label="Decline job"
+          className={`${
+            isInline
+              ? "min-h-[38px]"
+              : isCompact
+                ? "w-full min-h-[40px] px-2"
+                : "w-full min-h-[44px]"
+          } ${
+            isCompact
+              ? "justify-center gap-1.5 border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 hover:text-rose-800"
+              : "justify-between"
           }`}
         >
-          <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">
-            Reason for declining
+          {isCompact ? (
+            <>
+              <X className="h-3.5 w-3.5" />
+              {declineLabel}
+            </>
+          ) : (
+            <>
+              <span className="flex items-center gap-1.5">
+                <X className="w-4 h-4" />
+                {declineLabel}
+              </span>
+              <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+            </>
+          )}
+        </Button>
+      </div>
+
+      <Modal
+        isOpen={showDeclineModal}
+        onClose={() => {
+          if (declining) return;
+          resetDecline();
+        }}
+        title="Decline Job"
+        className="max-w-md"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Choose a reason so the operator understands why you are passing on this job.
           </p>
 
-          <div className="flex flex-col gap-1.5">
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <div className="flex flex-col gap-2">
             {DECLINE_OPTIONS.map((opt) => (
               <button
                 key={opt.key}
                 type="button"
-                onClick={() => { setSelectedKey(opt.key); setOtherReason(""); }}
-                className={`text-left text-xs px-3 py-2.5 rounded-md border transition-colors ${
+                onClick={() => {
+                  setSelectedKey(opt.key);
+                  setOtherReason("");
+                }}
+                className={`rounded-md border px-3 py-3 text-left text-sm transition-colors ${
                   selectedKey === opt.key
-                    ? "border-red-400 bg-red-100 text-red-900 font-medium"
-                    : "border-red-200 bg-white text-red-700 hover:bg-red-50"
+                    ? "border-red-400 bg-red-50 text-red-900 font-medium"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50"
                 }`}
               >
                 {opt.label}
@@ -202,36 +227,37 @@ export function VendorJobActions({ jobId, mode, layout = "stacked" }: VendorJobA
 
           {selectedKey === "other" && (
             <textarea
-              rows={2}
-              placeholder="Describe the reason…"
+              rows={3}
+              placeholder="Describe the reason..."
               value={otherReason}
               onChange={(e) => setOtherReason(e.target.value)}
-              className="w-full rounded-md border border-red-200 bg-white px-3 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
+              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-red-400 resize-none"
             />
           )}
 
-          <div className="flex gap-2 pt-0.5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={declining}
+              onClick={resetDecline}
+              className="justify-center"
+            >
+              Cancel
+            </Button>
             <Button
               variant="danger"
               size="sm"
               loading={declining}
               disabled={!canConfirm}
               onClick={handleConfirmDecline}
-              className="flex-1 justify-center"
+              className="justify-center"
             >
               Confirm Decline
             </Button>
-            <button
-              type="button"
-              disabled={declining}
-              onClick={resetDecline}
-              className="px-3 text-xs text-gray-500 hover:text-gray-700 disabled:opacity-50 rounded-md hover:bg-gray-100 transition-colors"
-            >
-              Cancel
-            </button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }

@@ -207,66 +207,71 @@ export default async function VendorJobsPage({
                   return (
                     <Card key={job.id}>
                       <CardContent className="px-4 py-4">
-                        <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.25fr)_140px_auto] items-start gap-4">
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold text-gray-900">
-                                {sr.referenceNumber}
-                              </span>
-                              <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
-                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                                {getServiceCategoryLabel(serviceCategories, sr.category)}
-                              </span>
-                              {commercialIndicator && (
-                                <span
-                                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${commercialIndicator.className}`}
-                                >
-                                  {commercialIndicator.label}
+                        <div className="space-y-2.5">
+                          <div className="grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.25fr)_140px_auto] items-start gap-4">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-semibold text-gray-900">
+                                  {sr.referenceNumber}
                                 </span>
-                              )}
+                                <Badge variant={getUrgencyColor(sr.urgency)}>{sr.urgency}</Badge>
+                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                                  {getServiceCategoryLabel(serviceCategories, sr.category)}
+                                </span>
+                                {commercialIndicator && (
+                                  <span
+                                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${commercialIndicator.className}`}
+                                  >
+                                    {commercialIndicator.label}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <p className="mt-2 line-clamp-1 text-sm text-gray-700">{sr.description}</p>
+
+                            <div className="min-w-0">
+                              <div className="flex items-start gap-2 text-sm text-gray-700">
+                                <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
+                                <div className="min-w-0">
+                                  <p className="truncate font-medium text-gray-900">{sr.property.name}</p>
+                                  <p className="truncate text-xs text-gray-500">
+                                    {sr.property.address || "Address not provided"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5 text-xs text-gray-500">
+                              <div className="inline-flex items-center gap-1">
+                                <ImageIcon className="h-3.5 w-3.5 text-gray-400" />
+                                {sr._count.photos} photo{sr._count.photos !== 1 ? "s" : ""}
+                              </div>
+                              <div className="inline-flex items-center gap-1">
+                                <Clock className="h-3.5 w-3.5 text-gray-400" />
+                                {formatDate(sr.createdAt)}
+                              </div>
+                            </div>
+
+                            <div className="flex items-start justify-end gap-2">
+                              <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
+                                <button className="inline-flex min-h-[38px] items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900">
+                                  <ExternalLink className="h-4 w-4" />
+                                  Preview
+                                </button>
+                              </Link>
+                              <VendorJobActions jobId={job.id} mode="available" layout="inline" />
+                            </div>
+                          </div>
+
+                          <div className="min-w-0 space-y-2 border-t border-gray-100 pt-2.5">
+                            <p className="line-clamp-2 text-sm text-gray-700">{sr.description}</p>
                             {sr.aiTriageSummary && (
-                              <div className="mt-2 inline-flex max-w-full items-start gap-1.5 rounded-md bg-blue-50 px-2.5 py-1.5 text-xs text-blue-800 ring-1 ring-blue-100">
+                              <div className="flex w-full items-start gap-1.5 rounded-md bg-blue-50 px-2.5 py-1.5 text-xs text-blue-800 ring-1 ring-blue-100">
                                 <Brain className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-blue-500" />
                                 <span className="line-clamp-2">
                                   {sr.aiTriageSummary}
                                 </span>
                               </div>
                             )}
-                          </div>
-
-                          <div className="min-w-0">
-                            <div className="flex items-start gap-2 text-sm text-gray-700">
-                              <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
-                              <div className="min-w-0">
-                                <p className="truncate font-medium text-gray-900">{sr.property.name}</p>
-                                <p className="truncate text-xs text-gray-500">
-                                  {sr.property.address || "Address not provided"}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5 text-xs text-gray-500">
-                            <div className="inline-flex items-center gap-1">
-                              <ImageIcon className="h-3.5 w-3.5 text-gray-400" />
-                              {sr._count.photos} photo{sr._count.photos !== 1 ? "s" : ""}
-                            </div>
-                            <div className="inline-flex items-center gap-1">
-                              <Clock className="h-3.5 w-3.5 text-gray-400" />
-                              {formatDate(sr.createdAt)}
-                            </div>
-                          </div>
-
-                          <div className="flex items-start justify-end gap-2">
-                            <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
-                              <button className="inline-flex min-h-[38px] items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900">
-                                <ExternalLink className="h-4 w-4" />
-                                Preview
-                              </button>
-                            </Link>
-                            <VendorJobActions jobId={job.id} mode="available" layout="inline" />
                           </div>
                         </div>
                       </CardContent>

@@ -30,7 +30,10 @@ export function VendorJobsViewToggle({
   const navigation = useVendorJobsViewNavigation();
 
   return (
-    <div className="inline-flex max-w-full gap-1 overflow-x-auto rounded-lg bg-gray-100 p-1">
+    <div
+      className="inline-flex max-w-full touch-pan-y gap-1 overflow-x-auto rounded-lg bg-gray-100 p-1"
+      {...navigation?.swipeHandlers}
+    >
       {VIEW_ITEMS.map((item) => {
         const Icon = item.icon;
         const active = view === item.key;
