@@ -8,7 +8,6 @@ import {
   useMemo,
   useRef,
   useTransition,
-  type HTMLAttributes,
   type ReactNode,
 } from "react";
 import { Loader2 } from "lucide-react";
@@ -23,10 +22,6 @@ interface VendorJobsViewSwipeShellProps {
 interface VendorJobsViewNavigationContextValue {
   isNavigating: boolean;
   navigate: (nextView: VendorJobsView) => void;
-  swipeHandlers: Pick<
-    HTMLAttributes<HTMLDivElement>,
-    "onTouchStart" | "onTouchEnd" | "onTouchCancel" | "onClickCapture"
-  >;
 }
 
 const VIEW_ORDER: VendorJobsView[] = ["available", "mine", "completed"];
@@ -122,24 +117,24 @@ export function VendorJobsViewSwipeShell({
     () => ({
       isNavigating,
       navigate,
-      swipeHandlers: {
-        onTouchStart: handleTouchStart,
-        onTouchEnd: handleTouchEnd,
-        onTouchCancel: () => {
-          touchStartRef.current = null;
-        },
-        onClickCapture: (event) => {
-          if (!suppressClickRef.current) return;
-          event.preventDefault();
-        },
-      },
     }),
-    [isNavigating, view]
+    [isNavigating, links, view]
   );
 
   return (
     <VendorJobsViewNavigationContext.Provider value={navigationValue}>
-      <div>
+      <div
+        className="touch-pan-y"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={() => {
+          touchStartRef.current = null;
+        }}
+        onClickCapture={(event) => {
+          if (!suppressClickRef.current) return;
+          event.preventDefault();
+        }}
+      >
         {isNavigating && (
           <div className="fixed left-1/2 top-20 z-40 flex -translate-x-1/2 items-center gap-2 rounded-full bg-slate-950 px-3 py-1.5 text-xs font-medium text-white shadow-lg sm:top-6">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
