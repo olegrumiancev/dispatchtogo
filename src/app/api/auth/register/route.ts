@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getOrganizationTypes, getServiceCategories } from "@/lib/catalog";
 import { sendEmail } from "@/lib/email";
+import { renderEmailTemplate } from "@/lib/email-templates";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 import { verifyTurnstile } from "@/lib/turnstile";
 
@@ -210,23 +211,15 @@ export async function POST(request: NextRequest) {
     // Send verification email (fire-and-forget)
     if (NOTIFICATION_SETTINGS.emailEnabled) {
       const verifyUrl = `${process.env.NEXTAUTH_URL || "https://dispatchtogo.com"}/api/auth/verify-email?token=${emailVerificationToken}`;
+      const { subject, html } = await renderEmailTemplate("verification", {
+        name: user.name || "there",
+        verifyUrl,
+      });
 
       sendEmail(
         user.email,
-        "Verify Your Email \u2014 DispatchToGo",
-        `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-          <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-            <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-          </div>
-          <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-            <h2 style="margin:0 0 16px">Welcome to DispatchToGo!</h2>
-            <p>Hi ${user.name || "there"},</p>
-            <p>Thanks for signing up! Please verify your email address to get started:</p>
-            <a href="${verifyUrl}" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0;font-weight:bold">Verify Email Address</a>
-            <p style="color:#6b7280;font-size:13px;margin-top:24px">This link expires in 24 hours. If you didn't create this account, you can safely ignore this email.</p>
-            <p style="color:#6b7280;font-size:12px;word-break:break-all">If the button doesn't work: ${verifyUrl}</p>
-          </div>
-        </div>`,
+        subject,
+        html,
         undefined,
         { eventKey: "emailVerification" }
       ).then((r: any) => {

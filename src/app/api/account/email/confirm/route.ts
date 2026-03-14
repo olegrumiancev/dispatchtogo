@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES, writeAuditLog } from "@/lib/audit-log";
 import { sendEmail } from "@/lib/email";
+import { renderEmailTemplate } from "@/lib/email-templates";
 import { prisma } from "@/lib/prisma";
 
 function getAccountPath(role: string) {
@@ -86,20 +87,12 @@ export async function GET(request: NextRequest) {
     });
   });
 
-  sendEmail(
+  renderEmailTemplate("emailChangedOld", {
+    name: changeToken.user.name || "there",
     previousEmail,
-    "Your Login Email Was Changed — DispatchToGo",
-    `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Login email updated</h2>
-        <p>Hi ${changeToken.user.name || "there"},</p>
-        <p>Your DispatchToGo login email has been changed from <strong>${previousEmail}</strong> to <strong>${nextEmail}</strong>.</p>
-        <p style="color:#6b7280;font-size:13px;margin-top:24px">If you did not authorize this change, contact support immediately.</p>
-      </div>
-    </div>`
+    nextEmail,
+  }).then((template) =>
+    sendEmail(previousEmail, template.subject, template.html)
   ).catch((error) => {
     console.error("[GET /api/account/email/confirm] old-email confirmation failed", error);
   });

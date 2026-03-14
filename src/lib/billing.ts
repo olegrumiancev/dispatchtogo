@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { sendEmail } from "@/lib/email";
+import { renderEmailTemplate } from "@/lib/email-templates";
 import { BILLING_PLANS, BILLED_JOB_STATUSES } from "@/lib/constants";
 import type { Organization } from "@prisma/client";
 
@@ -408,16 +409,16 @@ export async function sendPlatformBill(platformBillId: string): Promise<void> {
       const invoiceLink = invoiceUrl
         ? `<p><a href="${invoiceUrl}" style="color:#2563eb">View your invoice on Stripe</a></p>`
         : "";
+      const emailTemplate = await renderEmailTemplate("platformInvoiceZero", {
+        orgName: bill.organization.name,
+        periodLabel,
+        invoiceLinkBlock: invoiceLink ? { value: invoiceLink, safe: true } : "",
+      });
 
       await sendEmail(
         recipientEmail,
-        `DispatchToGo — Platform invoice for ${periodLabel} ($0.00 CAD)`,
-        `<p>Hi ${bill.organization.name},</p>
-<p>Your DispatchToGo platform invoice for <strong>${periodLabel}</strong> has been issued.</p>
-<p><strong>Amount due: $0.00 CAD</strong><br/>
-You had no billable requests this period — this invoice has been automatically marked as paid.</p>
-${invoiceLink}
-<p>Thank you,<br/>The DispatchToGo Team</p>`
+        emailTemplate.subject,
+        emailTemplate.html
       );
     }
   }

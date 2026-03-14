@@ -7,6 +7,7 @@ import {
   type NotificationPreferenceScope,
 } from "@/lib/user-preferences";
 import type { SystemSettings } from "@prisma/client";
+import { renderEmailTemplate } from "@/lib/email-templates";
 
 const SMTP_HOST = process.env.SMTP_HOST || "";
 const SMTP_PORT = parseInt(process.env.SMTP_PORT || "465", 10);
@@ -126,27 +127,15 @@ export async function sendVendorDispatchEmail(
   preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const appUrl = details.appUrl || "https://app.dispatchtogo.com";
-  const subject = `New Job Dispatched – ${details.refNumber}`;
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">New Job Dispatched</h2>
-        <p>Hi ${vendorCompanyName},</p>
-        <p>A new job has been dispatched to you:</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;width:140px">Reference</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${details.refNumber}</td></tr>
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Property</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${details.propertyName}</td></tr>
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Category</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${details.category}</td></tr>
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Urgency</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${details.urgency}</td></tr>
-        </table>
-        <p style="margin:0 0 8px"><strong>Description:</strong></p>
-        <p style="background:#f9fafb;padding:12px;border-radius:6px">${details.description}</p>
-        <a href="${appUrl}/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View & Accept Job</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("vendorDispatch", {
+    vendorCompanyName,
+    refNumber: details.refNumber,
+    propertyName: details.propertyName,
+    category: details.category,
+    urgency: details.urgency,
+    description: details.description,
+    jobsUrl: `${appUrl}/app/vendor/jobs`,
+  });
   return sendEmail(vendorEmail, subject, html, undefined, {
     eventKey: "emailVendorDispatch",
     preferenceScope,
@@ -162,19 +151,12 @@ export async function sendOperatorStatusEmail(
   preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
-  const who = vendorName ? ` by ${vendorName}` : "";
-  const subject = `Job ${refNumber} – Status: ${status}`;
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Job Status Update</h2>
-        <p>Job <strong>${refNumber}</strong> has been updated to <strong>${status}</strong>${who}.</p>
-        <a href="${appBase}/app/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Details</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("operatorStatusUpdate", {
+    refNumber,
+    status,
+    vendorNameSuffix: vendorName ? ` by ${vendorName}` : "",
+    requestsUrl: `${appBase}/app/operator/requests`,
+  });
   return sendEmail(operatorEmail, subject, html, undefined, {
     eventKey: "emailOperatorStatusUpdate",
     preferenceScope,
@@ -189,19 +171,11 @@ export async function sendJobCompletionEmail(
   preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
-  const subject = `Job ${refNumber} – Completed by ${vendorName}`;
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#16a34a;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Job Completed</h2>
-        <p>Job <strong>${refNumber}</strong> has been completed by <strong>${vendorName}</strong>.</p>
-        <p>You can now review the proof of service packet and approve the work.</p>
-        <a href="${appBase}/app/operator/requests" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Review Proof Packet</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("jobCompletion", {
+    refNumber,
+    vendorName,
+    requestsUrl: `${appBase}/app/operator/requests`,
+  });
   return sendEmail(operatorEmail, subject, html, undefined, {
     eventKey: "emailJobCompletion",
     preferenceScope,
@@ -215,19 +189,11 @@ export async function sendWelcomeEmail(
   role: string
 ): Promise<EmailResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
-  const subject = "Welcome to DispatchToGo";
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Welcome, ${name}!</h2>
-        <p>Your ${role.toLowerCase()} account has been created on DispatchToGo.</p>
-        <p>DispatchToGo is a managed vendor dispatch platform for tourism and hospitality operators in Cornwall &amp; SDG, Ontario.</p>
-        <a href="${appBase}/app/login" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Log In</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("welcome", {
+    name,
+    role: role.toLowerCase(),
+    loginUrl: `${appBase}/app/login`,
+  });
   return sendEmail(email, subject, html, undefined, { eventKey: "emailWelcome" });
 }
 
@@ -256,26 +222,20 @@ export async function sendVendorRejectionEmail(
 ): Promise<EmailResult> {
   const typeLabel = REJECTION_TYPE_LABELS[rejectionType] ?? "Rejected";
   const message = REJECTION_TYPE_VENDOR_MSGS[rejectionType] ?? "Your completed work has been rejected.";
-  const subject = `Work Rejected on Job ${refNumber} – ${typeLabel}`;
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#dc2626;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Work Rejected – ${typeLabel}</h2>
-        <p>Hi ${vendorCompanyName},</p>
-        <p>${message}</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;width:140px">Reference</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${refNumber}</td></tr>
-          ${property ? `<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Property</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${property.name ?? ""}${property.address ? ` – ${property.address}` : ""}</td></tr>` : ""}
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Outcome</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${typeLabel}</td></tr>
-        </table>
-        <p style="margin:0 0 8px"><strong>Operator's reason:</strong></p>
-        <p style="background:#fef2f2;border-left:4px solid #dc2626;padding:12px;border-radius:0 6px 6px 0">${reason}</p>
-        <a href="${process.env.APP_BASE_URL ?? 'https://app.dispatchtogo.com'}/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Job in App</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("vendorRejection", {
+    vendorCompanyName,
+    typeLabel,
+    message,
+    refNumber,
+    propertyRow: property
+      ? {
+          value: `<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Property</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${property.name ?? ""}${property.address ? ` - ${property.address}` : ""}</td></tr>`,
+          safe: true,
+        }
+      : "",
+    reason,
+    jobsUrl: `${process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com"}/app/vendor/jobs`,
+  });
   return sendEmail(vendorEmail, subject, html, undefined, {
     eventKey: "emailVendorRejection",
     preferenceScope,
@@ -291,23 +251,18 @@ export async function sendVendorDeclinedOperatorEmail(
   declineReason?: string | null,
   preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
-  const subject = `Vendor Declined – Job ${refNumber} Needs Re-Dispatch`;
-  const reasonHtml = declineReason
-    ? `<p style="margin:0 0 8px"><strong>Reason given:</strong></p><p style="background:#fef9c3;border-left:4px solid #ca8a04;padding:12px;border-radius:0 6px 6px 0">${declineReason}</p>`
-    : "";
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#d97706;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Vendor Declined – Re-Dispatch Required</h2>
-        <p><strong>${vendorName}</strong> has declined job <strong>${refNumber}</strong> at <strong>${propertyName}</strong>.</p>
-        <p>This job is now back in the dispatch queue and requires assignment to another vendor.</p>
-        ${reasonHtml}
-        <a href="${process.env.APP_BASE_URL ?? 'https://app.dispatchtogo.com'}/app/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Request</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("vendorDeclinedOperator", {
+    vendorName,
+    refNumber,
+    propertyName,
+    reasonBlock: declineReason
+      ? {
+          value: `<p style="margin:0 0 8px"><strong>Reason given:</strong></p><p style="background:#fef9c3;border-left:4px solid #ca8a04;padding:12px;border-radius:0 6px 6px 0">${declineReason}</p>`,
+          safe: true,
+        }
+      : "",
+    requestsUrl: `${process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com"}/app/operator/requests`,
+  });
   return sendEmail(operatorEmail, subject, html, undefined, {
     eventKey: "emailOperatorStatusUpdate",
     preferenceScope,
@@ -322,19 +277,12 @@ export async function sendJobCancelledToVendorEmail(
   propertyName: string,
   preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
-  const subject = `Job Cancelled – ${refNumber}`;
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#6b7280;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Job Cancelled</h2>
-        <p>Hi ${vendorCompanyName},</p>
-        <p>Job <strong>${refNumber}</strong> at <strong>${propertyName}</strong> has been cancelled by the operator. No further action is required on your part.</p>
-        <a href="https://app.dispatchtogo.com/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View My Jobs</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("jobCancelledToVendor", {
+    vendorCompanyName,
+    refNumber,
+    propertyName,
+    jobsUrl: `${process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com"}/app/vendor/jobs`,
+  });
   return sendEmail(vendorEmail, subject, html, undefined, {
     eventKey: "emailVendorDispatch",
     preferenceScope,
@@ -349,20 +297,12 @@ export async function sendWorkVerifiedToVendorEmail(
   propertyName: string,
   preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
-  const subject = `Work Approved – Job ${refNumber}`;
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#16a34a;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Work Approved ✓</h2>
-        <p>Hi ${vendorCompanyName},</p>
-        <p>Your work on job <strong>${refNumber}</strong> at <strong>${propertyName}</strong> has been reviewed and approved by the operator.</p>
-        <p style="color:#16a34a;font-weight:bold">Great work — the job is now fully verified.</p>
-        <a href="https://app.dispatchtogo.com/app/vendor/jobs" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View My Jobs</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("workVerifiedToVendor", {
+    vendorCompanyName,
+    refNumber,
+    propertyName,
+    jobsUrl: `${process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com"}/app/vendor/jobs`,
+  });
   return sendEmail(vendorEmail, subject, html, undefined, {
     eventKey: "emailJobCompletion",
     preferenceScope,
@@ -389,7 +329,7 @@ export async function sendOperatorDailyDigest(
   appUrl?: string
 ): Promise<EmailResult> {
   const base = appUrl || "https://app.dispatchtogo.com";
-  const subject = `Daily Activity Summary – ${new Date().toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric" })}`;
+  const dateLabel = new Date().toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric" });
 
   const statusBadge = (s: string, paused?: boolean) => {
     if (paused) return `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:12px;font-size:12px">PAUSED</span>`;
@@ -414,33 +354,27 @@ export async function sendOperatorDailyDigest(
       <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb">${statusBadge(j.status, j.isPaused)}</td>
     </tr>`).join("");
 
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto">
-      <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo – Daily Summary</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <p style="margin:0 0 4px;color:#6b7280;font-size:13px">${orgName}</p>
-        <h2 style="margin:0 0 20px;font-size:18px">Activity in the last 24 hours</h2>
-        ${jobs.length === 0
-          ? `<p style="color:#6b7280">No job activity in the last 24 hours.</p>`
-          : `<table style="width:100%;border-collapse:collapse">
-              <thead>
-                <tr style="background:#f9fafb">
-                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">REF</th>
-                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">PROPERTY</th>
-                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">CATEGORY</th>
-                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">VENDOR</th>
-                  <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">STATUS</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>`}
-        <a href="${base}/app/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:20px 0 12px">View All Requests</a>
-        <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">You're receiving this because daily digest emails are enabled for your account.
-          <a href="${base}/api/unsubscribe?token=${unsubscribeToken}" style="color:#9ca3af">Unsubscribe</a></p>
-      </div>
-    </div>`;
+  const activityBlock = jobs.length === 0
+    ? `<p style="color:#6b7280">No job activity in the last 24 hours.</p>`
+    : `<table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr style="background:#f9fafb">
+            <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">REF</th>
+            <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">PROPERTY</th>
+            <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">CATEGORY</th>
+            <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">VENDOR</th>
+            <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">STATUS</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  const { subject, html } = await renderEmailTemplate("operatorDailyDigest", {
+    dateLabel,
+    orgName,
+    activityBlock: { value: activityBlock, safe: true },
+    requestsUrl: `${base}/app/operator/requests`,
+    unsubscribeUrl: `${base}/api/unsubscribe?token=${unsubscribeToken}`,
+  });
   return sendEmail(operatorEmail, subject, html);
 }
 
@@ -461,7 +395,7 @@ export async function sendVendorOpenJobsReminder(
 ): Promise<EmailResult> {
   const base = appUrl || "https://app.dispatchtogo.com";
   const count = openJobs.length;
-  const subject = `You have ${count} pending job offer${count === 1 ? "" : "s"} – DispatchToGo`;
+  const pluralSuffix = count === 1 ? "" : "s";
 
   const rows = openJobs.map(j => `
     <tr>
@@ -474,31 +408,26 @@ export async function sendVendorOpenJobsReminder(
       </td>
     </tr>`).join("");
 
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:640px;margin:0 auto">
-      <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo – Open Jobs</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 8px;font-size:18px">Hi ${vendorName},</h2>
-        <p>You have <strong>${count} pending job offer${count === 1 ? "" : "s"}</strong> waiting for your response:</p>
-        <table style="width:100%;border-collapse:collapse">
-          <thead>
-            <tr style="background:#f9fafb">
-              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">REF</th>
-              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">PROPERTY</th>
-              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">CATEGORY</th>
-              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">URGENCY</th>
-              <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb"></th>
-            </tr>
-          </thead>
-          <tbody>${rows}</tbody>
-        </table>
-        <a href="${base}/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:20px 0 12px">View & Accept Jobs</a>
-        <p style="color:#9ca3af;font-size:11px;margin:8px 0 0">You're receiving this reminder because daily digest emails are enabled for your account.
-          <a href="${base}/api/unsubscribe?token=${unsubscribeToken}" style="color:#9ca3af">Unsubscribe</a></p>
-      </div>
-    </div>`;
+  const jobsTable = `<table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#f9fafb">
+        <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">REF</th>
+        <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">PROPERTY</th>
+        <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">CATEGORY</th>
+        <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb">URGENCY</th>
+        <th style="padding:8px;text-align:left;font-size:12px;color:#6b7280;border-bottom:2px solid #e5e7eb"></th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+  const { subject, html } = await renderEmailTemplate("vendorOpenJobsReminder", {
+    vendorName,
+    count: String(count),
+    pluralSuffix,
+    jobsTable: { value: jobsTable, safe: true },
+    jobsUrl: `${base}/app/vendor/jobs`,
+    unsubscribeUrl: `${base}/api/unsubscribe?token=${unsubscribeToken}`,
+  });
   return sendEmail(vendorEmail, subject, html);
 }
 
@@ -511,28 +440,23 @@ export async function sendAdminRejectionEmail(
   vendorName: string
 ): Promise<EmailResult> {
   const typeLabel = REJECTION_TYPE_LABELS[rejectionType] ?? "Rejected";
-  const subject = `Completion Rejected – Job ${refNumber} (${typeLabel})`;
   const isDispute = rejectionType === "dispute";
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:${isDispute ? "#7c3aed" : "#1e40af"};color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo${isDispute ? " – Dispute" : ""}</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px">Completion Rejected – ${typeLabel}</h2>
-        <p>Hi ${adminName},</p>
-        <p>An operator has rejected completed work on job <strong>${refNumber}</strong> assigned to <strong>${vendorName}</strong>.</p>
-        <table style="width:100%;border-collapse:collapse;margin:16px 0">
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;width:140px">Reference</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${refNumber}</td></tr>
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Vendor</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${vendorName}</td></tr>
-          <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Outcome</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${typeLabel}</td></tr>
-        </table>
-        <p style="margin:0 0 8px"><strong>Reason given:</strong></p>
-        <p style="background:#f9fafb;padding:12px;border-radius:6px">${reason}</p>
-        ${isDispute ? `<p style="color:#7c3aed;font-weight:bold">⚠ This job has been escalated and requires admin mediation.</p>` : ""}
-        <a href="${process.env.APP_BASE_URL ?? 'https://app.dispatchtogo.com'}/app/admin/dispatch" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View in Admin Panel</a>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("adminRejection", {
+    headerTitle: `DispatchToGo${isDispute ? " - Dispute" : ""}`,
+    heading: `Completion Rejected - ${typeLabel}`,
+    adminName,
+    refNumber,
+    vendorName,
+    typeLabel,
+    reason,
+    disputeCallout: isDispute
+      ? {
+          value: `<p style="color:#7c3aed;font-weight:bold">&#9888; This job has been escalated and requires admin mediation.</p>`,
+          safe: true,
+        }
+      : "",
+    adminDispatchUrl: `${process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com"}/app/admin/dispatch`,
+  });
   return sendEmail(adminEmail, subject, html, undefined, { eventKey: "emailAdminRejection" });
 }
 
@@ -544,29 +468,14 @@ export async function sendPaymentFailedEmail(
 ): Promise<EmailResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const billingUrl = `${appBase}/app/operator/billing`;
-  const subject = "Payment failed for your DispatchToGo invoice";
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <div style="background:#dc2626;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-        <h1 style="margin:0;font-size:20px">DispatchToGo — Payment Failed</h1>
-      </div>
-      <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-        <h2 style="margin:0 0 16px;color:#dc2626">We couldn&apos;t collect your payment</h2>
-        <p>Hi ${orgName},</p>
-        <p>We were unable to process your DispatchToGo platform invoice for
-          <strong>$${amountCad.toFixed(2)} CAD</strong>.
-          Your service will continue uninterrupted, but please update your payment method
-          as soon as possible to avoid any disruption.</p>
-        ${invoiceUrl ? `<p><a href="${invoiceUrl}" style="color:#1e40af">View invoice →</a></p>` : ""}
-        <a href="${billingUrl}" style="display:inline-block;background:#dc2626;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">
-          Update Payment Method
-        </a>
-        <p style="color:#6b7280;font-size:13px;margin-top:24px">
-          If you believe this is an error, please contact
-          <a href="mailto:support@dispatchtogo.com" style="color:#1e40af">support@dispatchtogo.com</a>.
-        </p>
-      </div>
-    </div>`;
+  const { subject, html } = await renderEmailTemplate("paymentFailed", {
+    orgName,
+    amountCad: amountCad.toFixed(2),
+    invoiceLinkBlock: invoiceUrl
+      ? { value: `<p><a href="${invoiceUrl}" style="color:#1e40af">View invoice →</a></p>`, safe: true }
+      : "",
+    billingUrl,
+  });
   const text = `Payment failed for your DispatchToGo invoice.\n\nAmount: $${amountCad.toFixed(2)} CAD\n\nPlease update your payment method at: ${billingUrl}`;
   return sendEmail(to, subject, html, text);
 }

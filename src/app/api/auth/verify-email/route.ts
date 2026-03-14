@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { renderEmailTemplate } from "@/lib/email-templates";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 
 export async function GET(request: NextRequest) {
@@ -60,29 +61,28 @@ export async function GET(request: NextRequest) {
 
       const appUrl = process.env.NEXTAUTH_URL || "https://dispatchtogo.com";
       const roleName = user.role === "OPERATOR" ? "Property Operator" : "Service Vendor";
+      const reviewUrl = `${appUrl}/admin/users`;
 
       for (const admin of admins) {
+        const { subject, html } = await renderEmailTemplate("newRegistration", {
+          adminName: admin.name || "Admin",
+          userName: user.name || user.email,
+          userEmail: user.email,
+          roleName,
+          organizationLabel: user.role === "OPERATOR" ? "Organization" : "Company",
+          organizationValue: orgOrCompany,
+          organizationRow: orgOrCompany
+            ? {
+                value: `<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">${user.role === "OPERATOR" ? "Organization" : "Company"}</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${orgOrCompany}</td></tr>`,
+                safe: true,
+              }
+            : "",
+          reviewUrl,
+        });
         sendEmail(
           admin.email,
-          `New Registration Awaiting Approval — ${user.name || user.email}`,
-          `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-            <div style="background:#1e40af;color:#fff;padding:20px;border-radius:8px 8px 0 0">
-              <h1 style="margin:0;font-size:20px">DispatchToGo</h1>
-            </div>
-            <div style="padding:24px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px">
-              <h2 style="margin:0 0 16px">New Account Pending Approval</h2>
-              <p>Hi ${admin.name || "Admin"},</p>
-              <p>A new user has verified their email and is waiting for your approval to access the platform.</p>
-              <table style="width:100%;border-collapse:collapse;margin:16px 0">
-                <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold;width:140px">Name</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${user.name || "—"}</td></tr>
-                <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Email</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${user.email}</td></tr>
-                <tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">Role</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${roleName}</td></tr>
-                ${orgOrCompany ? `<tr><td style="padding:8px;border-bottom:1px solid #e5e7eb;font-weight:bold">${user.role === "OPERATOR" ? "Organization" : "Company"}</td><td style="padding:8px;border-bottom:1px solid #e5e7eb">${orgOrCompany}</td></tr>` : ""}
-              </table>
-              <a href="${appUrl}/admin/users" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0;font-weight:bold">Review & Approve</a>
-              <p style="color:#6b7280;font-size:13px;margin-top:24px">The user cannot log in until you approve their account.</p>
-            </div>
-          </div>`,
+          subject,
+          html,
           undefined,
           { eventKey: "emailNewRegistration" }
         ).then((r) => {

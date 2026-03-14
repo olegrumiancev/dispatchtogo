@@ -11,6 +11,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
+import { renderEmailTemplate } from "@/lib/email-templates";
 import { NOTIFICATION_SETTINGS } from "@/lib/notification-config";
 
 const CREDENTIAL_TYPE_LABELS: Record<string, string> = {
@@ -81,17 +82,12 @@ export async function runCredentialExpiryJob(): Promise<{ invalidated: number }>
 
       for (const user of vendor.user) {
         if (!user.email) continue;
-        sendEmail(
-          user.email,
-          `Action Required: Expired Credential(s) — ${vendor.companyName}`,
-          `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-            <h2 style="color:#dc2626">Credential Expiry Notice</h2>
-            <p>Hi${user.name ? ` ${user.name}` : ""},</p>
-            <p>The following credential(s) on your <strong>${vendor.companyName}</strong> profile have expired and have been automatically marked as <strong>unverified</strong>:</p>
-            <ul style="margin:12px 0;padding-left:20px">${credList}</ul>
-            <p>Please upload renewed documentation and contact support to have your credentials re-verified.</p>
-            <p style="color:#6b7280;font-size:13px;margin-top:24px">— DispatchToGo</p>
-          </div>`
+        renderEmailTemplate("credentialExpiry", {
+          recipientName: user.name || "there",
+          vendorCompanyName: vendor.companyName,
+          credentialList: { value: credList, safe: true },
+        }).then((template) =>
+          sendEmail(user.email, template.subject, template.html)
         ).catch(() => {/* swallow — do not fail the job */});
       }
     }

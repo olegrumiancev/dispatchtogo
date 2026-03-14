@@ -614,6 +614,11 @@ model SystemSettings {
   // Empty object means use built-in defaults for all templates.
   smsTemplates Json @default("{}")
 
+  // ── Email message templates ──────────────────────────────────────────────
+  // JSON map of template key → { subject, html } objects with {variable}
+  // placeholders. Empty object means use built-in defaults for all templates.
+  emailTemplates Json @default("{}")
+
   // Admin-managed service/request catalog configuration
   serviceCategories Json?
   organizationTypes Json?

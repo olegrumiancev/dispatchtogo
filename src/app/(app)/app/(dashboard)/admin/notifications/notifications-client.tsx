@@ -15,6 +15,7 @@ import {
   Pencil,
   Copy,
 } from "lucide-react";
+import { EMAIL_TEMPLATE_META, type EmailTemplateKey } from "@/lib/email-templates";
 import { SMS_TEMPLATE_META, type SmsTemplateKey } from "@/lib/sms-templates";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -80,6 +81,13 @@ const EMAIL_EVENTS: { key: keyof EmailSettings; label: string; description: stri
 interface TemplateEntry {
   key: SmsTemplateKey;
   value: string;
+  isDefault: boolean;
+}
+
+interface EmailTemplateEntry {
+  key: EmailTemplateKey;
+  subject: string;
+  html: string;
   isDefault: boolean;
 }
 
@@ -189,19 +197,30 @@ export function NotificationsClient({
   }
 
   // ── Template state ─────────────────────────────────────────────────────────
+  const [templateMode, setTemplateMode] = useState<"sms" | "email">("sms");
   const [templates, setTemplates] = useState<TemplateEntry[]>([]);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplateEntry[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [editingKey, setEditingKey] = useState<SmsTemplateKey | null>(null);
+  const [editingEmailKey, setEditingEmailKey] = useState<EmailTemplateKey | null>(null);
+  const [emailTemplateViews, setEmailTemplateViews] = useState<Partial<Record<EmailTemplateKey, "code" | "preview">>>({});
   const [editValue, setEditValue] = useState("");
+  const [editEmailSubject, setEditEmailSubject] = useState("");
+  const [editEmailHtml, setEditEmailHtml] = useState("");
   const [templateSaving, setTemplateSaving] = useState(false);
   const [templateToast, setTemplateToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     if (activeTab !== "templates") return;
     setTemplatesLoading(true);
-    fetch("/api/admin/settings?section=sms-templates")
-      .then((r) => r.json())
-      .then((data) => setTemplates(data))
+    Promise.all([
+      fetch("/api/admin/settings?section=sms-templates").then((r) => r.json()),
+      fetch("/api/admin/settings?section=email-templates").then((r) => r.json()),
+    ])
+      .then(([smsData, emailData]) => {
+        setTemplates(smsData);
+        setEmailTemplates(emailData);
+      })
       .catch(() => setTemplateToast({ type: "error", message: "Failed to load templates." }))
       .finally(() => setTemplatesLoading(false));
   }, [activeTab]);
@@ -214,7 +233,23 @@ export function NotificationsClient({
 
   function startEdit(entry: TemplateEntry) {
     setEditingKey(entry.key);
+    setEditingEmailKey(null);
     setEditValue(entry.value);
+  }
+
+  function startEmailEdit(entry: EmailTemplateEntry) {
+    setEditingEmailKey(entry.key);
+    setEditingKey(null);
+    setEditEmailSubject(entry.subject);
+    setEditEmailHtml(entry.html);
+  }
+
+  function getEmailTemplateView(key: EmailTemplateKey) {
+    return emailTemplateViews[key] ?? "code";
+  }
+
+  function setEmailTemplateView(key: EmailTemplateKey, view: "code" | "preview") {
+    setEmailTemplateViews((prev) => ({ ...prev, [key]: view }));
   }
 
   async function saveTemplate(key: SmsTemplateKey, value: string) {
@@ -254,6 +289,47 @@ export function NotificationsClient({
       setTemplateToast({ type: "success", message: "Reset to default." });
     } catch {
       setTemplateToast({ type: "error", message: "Failed to reset template." });
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
+
+  async function saveEmailTemplate(key: EmailTemplateKey, subject: string, html: string) {
+    setTemplateSaving(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailTemplate: { key, subject, html } }),
+      });
+      if (!res.ok) throw new Error();
+      setEmailTemplates((prev) =>
+        prev.map((t) => (t.key === key ? { ...t, subject, html, isDefault: false } : t))
+      );
+      setEditingEmailKey(null);
+      setTemplateToast({ type: "success", message: "Email template saved." });
+    } catch {
+      setTemplateToast({ type: "error", message: "Failed to save email template." });
+    } finally {
+      setTemplateSaving(false);
+    }
+  }
+
+  async function resetEmailTemplate(key: EmailTemplateKey) {
+    setTemplateSaving(true);
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emailTemplate: { key, subject: null, html: null } }),
+      });
+      if (!res.ok) throw new Error();
+      const refreshed = await fetch("/api/admin/settings?section=email-templates").then((r) => r.json());
+      setEmailTemplates(refreshed);
+      setEditingEmailKey(null);
+      setTemplateToast({ type: "success", message: "Email template reset to default." });
+    } catch {
+      setTemplateToast({ type: "error", message: "Failed to reset email template." });
     } finally {
       setTemplateSaving(false);
     }
@@ -329,11 +405,13 @@ export function NotificationsClient({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Message</label>
+                <label htmlFor="testSmsMessage" className="block text-sm font-medium text-slate-700 mb-1">Message</label>
                 <textarea
+                  id="testSmsMessage"
                   value={testForm.message}
                   onChange={(e) => setTestForm((p) => ({ ...p, message: e.target.value }))}
                   rows={3}
+                  title="Test SMS message"
                   className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   required
                 />
@@ -402,6 +480,7 @@ export function NotificationsClient({
                       <Toggle
                         checked={emailSettings[evt.key] as boolean}
                         onChange={() => toggleEmailEvent(evt.key)}
+                        label={evt.label}
                         disabled={emailSaving}
                       />
                     </div>
@@ -431,6 +510,7 @@ export function NotificationsClient({
                         setEmailSettings((prev) => ({ ...prev, bccEnabled: next }));
                         saveEmailSettings({ bccEnabled: next });
                       }}
+                      label="Enable BCC on all system emails"
                       disabled={emailSaving}
                     />
                   </div>
@@ -459,7 +539,28 @@ export function NotificationsClient({
       {activeTab === "templates" && (
         <div className="space-y-4">
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Customise the text sent in each SMS notification. Use <code className="bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-mono">{"{variable}"}</code> placeholders — they will be replaced with real values when the message is sent. Editing a template marks it as custom; you can reset to the built-in default at any time.
+            Customise the text sent in system notifications. Use <code className="bg-white border border-slate-200 rounded px-1 py-0.5 text-xs font-mono">{"{variable}"}</code> placeholders and keep any placeholders your workflow still needs. Email templates include both the subject line and HTML body.
+          </div>
+
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-1">
+            <button
+              type="button"
+              onClick={() => setTemplateMode("sms")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                templateMode === "sms" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              SMS Templates
+            </button>
+            <button
+              type="button"
+              onClick={() => setTemplateMode("email")}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                templateMode === "email" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              Email Templates
+            </button>
           </div>
 
           {templateToast && <Toast toast={templateToast} saving={templateSaving} />}
@@ -468,7 +569,7 @@ export function NotificationsClient({
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-5 h-5 animate-spin text-slate-400" />
             </div>
-          ) : (
+          ) : templateMode === "sms" ? (
             <div className="space-y-3">
               {SMS_TEMPLATE_META.map((meta) => {
                 const entry = templates.find((t) => t.key === meta.key);
@@ -511,10 +612,15 @@ export function NotificationsClient({
                       {/* Current value / edit area */}
                       {isEditing ? (
                         <div className="space-y-3">
+                          <label htmlFor={`template-${meta.key}`} className="sr-only">
+                            {meta.label} template
+                          </label>
                           <textarea
+                            id={`template-${meta.key}`}
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
                             rows={Math.max(3, editValue.split("\n").length + 1)}
+                            title={`${meta.label} template`}
                             className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
                             autoFocus
                           />
@@ -559,6 +665,161 @@ export function NotificationsClient({
                 );
               })}
             </div>
+          ) : (
+            <div className="space-y-3">
+              {EMAIL_TEMPLATE_META.map((meta) => {
+                const entry = emailTemplates.find((t) => t.key === meta.key);
+                const isEditing = editingEmailKey === meta.key;
+                const templateView = getEmailTemplateView(meta.key);
+
+                return (
+                  <section key={meta.key} className="rounded-lg border border-slate-200 bg-white">
+                    <div className="px-5 py-4">
+                      <div className="flex items-start justify-between gap-3 mb-1">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-slate-800">{meta.label}</p>
+                            {entry && !entry.isDefault && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">Custom</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-500 mt-0.5">{meta.description}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Recipient: {meta.recipient}</p>
+                        </div>
+                        {!isEditing && (
+                          <button
+                            type="button"
+                            onClick={() => entry && startEmailEdit(entry)}
+                            className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 bg-white text-slate-600 text-xs font-medium rounded-md hover:bg-slate-50"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            Edit
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 mt-2 mb-3">
+                        {meta.variables.map((v) => (
+                          <code key={v} className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">{v}</code>
+                        ))}
+                      </div>
+
+                      <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1 mb-3">
+                        <button
+                          type="button"
+                          onClick={() => setEmailTemplateView(meta.key, "code")}
+                          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                            templateView === "code" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-white"
+                          }`}
+                        >
+                          Code
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEmailTemplateView(meta.key, "preview")}
+                          className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                            templateView === "preview" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-white"
+                          }`}
+                        >
+                          Preview
+                        </button>
+                      </div>
+
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          <div>
+                            <label htmlFor={`email-subject-${meta.key}`} className="block text-xs font-medium text-slate-600 mb-1">
+                              Subject
+                            </label>
+                            <input
+                              id={`email-subject-${meta.key}`}
+                              type="text"
+                              value={editEmailSubject}
+                              onChange={(e) => setEditEmailSubject(e.target.value)}
+                              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor={`email-html-${meta.key}`} className="block text-xs font-medium text-slate-600 mb-1">
+                              HTML Body
+                            </label>
+                            {templateView === "code" ? (
+                              <textarea
+                                id={`email-html-${meta.key}`}
+                                value={editEmailHtml}
+                                onChange={(e) => setEditEmailHtml(e.target.value)}
+                                rows={Math.max(10, editEmailHtml.split("\n").length + 1)}
+                                title={`${meta.label} HTML template`}
+                                className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                              />
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="text-xs text-slate-500">
+                                  Preview mode is read-only. Switch back to Code to edit the HTML.
+                                </p>
+                                <EmailTemplatePreview html={editEmailHtml} title={`${meta.label} preview`} />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => saveEmailTemplate(meta.key, editEmailSubject, editEmailHtml)}
+                              disabled={templateSaving}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {templateSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                              Save
+                            </button>
+                            {entry && !entry.isDefault && (
+                              <button
+                                type="button"
+                                onClick={() => resetEmailTemplate(meta.key)}
+                                disabled={templateSaving}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-300 bg-white text-slate-600 text-xs font-medium rounded-md hover:bg-slate-50 disabled:opacity-50"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Reset to default
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setEditingEmailKey(null)}
+                              disabled={templateSaving}
+                              className="px-3 py-1.5 border border-slate-200 bg-white text-slate-500 text-xs font-medium rounded-md hover:bg-slate-50 disabled:opacity-50"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Subject</p>
+                            <pre className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 font-mono whitespace-pre-wrap break-words">
+                              {entry?.subject ?? "Loading…"}
+                            </pre>
+                          </div>
+                          <div>
+                            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1">HTML Body</p>
+                            {templateView === "code" ? (
+                              <pre className="text-xs text-slate-700 bg-slate-50 border border-slate-200 rounded-md px-3 py-2.5 font-mono whitespace-pre-wrap break-words max-h-72 overflow-auto">
+                                {entry?.html ?? "Loading…"}
+                              </pre>
+                            ) : (
+                              <EmailTemplatePreview
+                                html={entry?.html ?? "<p>Loading…</p>"}
+                                title={`${meta.label} preview`}
+                              />
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
           )}
         </div>
       )}
@@ -596,29 +857,36 @@ function TabButton({
 function Toggle({
   checked,
   onChange,
+  label,
   disabled,
 }: {
   checked: boolean;
   onChange: () => void;
+  label: string;
   disabled?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={onChange}
-      disabled={disabled}
-      className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${
-        checked ? "bg-blue-600" : "bg-slate-200"
-      }`}
+    <label
+      className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-200 ease-in-out ${
+        disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"
+      } ${checked ? "bg-blue-600" : "bg-slate-200"}`}
+      title={label}
     >
+      <span className="sr-only">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+        className="peer sr-only"
+      />
       <span
-        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+        aria-hidden="true"
+        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 peer-focus:ring-offset-2 ${
           checked ? "translate-x-5" : "translate-x-0"
         }`}
       />
-    </button>
+    </label>
   );
 }
 
@@ -643,6 +911,23 @@ function Toast({
       {toast.message}
       {saving && <Loader2 className="w-4 h-4 animate-spin ml-auto" />}
     </div>
+  );
+}
+
+function EmailTemplatePreview({
+  html,
+  title,
+}: {
+  html: string;
+  title: string;
+}) {
+  return (
+    <iframe
+      title={title}
+      srcDoc={html}
+      sandbox=""
+      className="w-full min-h-80 rounded-md border border-slate-200 bg-white"
+    />
   );
 }
 
@@ -737,296 +1022,6 @@ function StatusRow({
       <div>
         <p className="text-sm font-medium text-slate-700">{label}</p>
         {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
-      </div>
-    </div>
-  );
-}
-
-
-interface TestSMSState {
-  phone: string;
-  message: string;
-  status: "idle" | "sending" | "success" | "error";
-  feedback: string;
-}
-
-export function NotificationsClient({
-  smsEnabled,
-  notifyVendorOnDispatch,
-  notifyOperatorOnStatusChange,
-  notifyOperatorOnCompletion,
-  smsRedirectEnabled: initialSmsRedirectEnabled,
-  smsRedirectNumber,
-}: Props) {
-  const router = useRouter();
-  const [redirectEnabled, setRedirectEnabled] = useState(initialSmsRedirectEnabled);
-  const [form, setForm] = useState<TestSMSState>({
-    phone: "",
-    message: "DispatchToGo: This is a test message from your admin panel.",
-    status: "idle",
-    feedback: "",
-  });
-
-  async function handleSendTest(e: React.FormEvent) {
-    e.preventDefault();
-    if (!form.phone.trim() || !form.message.trim()) return;
-
-    setForm((prev) => ({ ...prev, status: "sending", feedback: "" }));
-
-    try {
-      const res = await fetch("/api/admin/test-sms", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: form.phone, message: form.message }),
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setForm((prev) => ({
-          ...prev,
-          status: "success",
-          feedback: data.sid
-            ? `Sent! Message ID: ${data.sid}`
-            : "Message logged to console (textbee not configured).",
-        }));
-      } else {
-        setForm((prev) => ({
-          ...prev,
-          status: "error",
-          feedback: data.error ?? "Unknown error",
-        }));
-      }
-    } catch {
-      setForm((prev) => ({
-        ...prev,
-        status: "error",
-        feedback: "Network error — check console",
-      }));
-    }
-  }
-
-  return (
-    <>
-      {/* Configuration Status */}
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="text-base font-semibold text-slate-800 mb-4">
-          Configuration Status
-        </h2>
-        <div className="space-y-3">
-          <StatusRow
-            label="textbee Integration"
-            enabled={smsEnabled}
-            description={
-              smsEnabled
-                ? "Credentials detected — SMS will be delivered via textbee."
-                : "TEXTBEE_API_KEY / TEXTBEE_DEVICE_ID not set — messages are logged to console only."
-            }
-          />
-          <StatusRow
-            label="Notify vendor on dispatch"
-            enabled={notifyVendorOnDispatch}
-          />
-          <StatusRow
-            label="Notify operator on status change"
-            enabled={notifyOperatorOnStatusChange}
-          />
-          <StatusRow
-            label="Notify operator on job completion"
-            enabled={notifyOperatorOnCompletion}
-          />
-        </div>
-      </section>
-
-      {/* SMS Redirect Failsafe */}
-      <section className={`rounded-lg border p-6 ${redirectEnabled ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white"}`}>
-        <h2 className="text-base font-semibold text-slate-800 mb-1 flex items-center gap-2">
-          <AlertTriangle className={`w-4 h-4 ${redirectEnabled ? "text-amber-500" : "text-slate-400"}`} />
-          SMS Redirect
-          {redirectEnabled && (
-            <span className="ml-1 text-xs bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full font-semibold tracking-wide">
-              ACTIVE
-            </span>
-          )}
-        </h2>
-        <p className="text-sm text-slate-500 mb-4">
-          When enabled, <strong>all outbound SMS</strong> are re-routed to the number below
-          instead of real recipients. Use during system testing only.
-        </p>
-        <RedirectForm
-          initialEnabled={redirectEnabled}
-          initialNumber={smsRedirectNumber}
-          onEnabledChange={setRedirectEnabled}
-          onSaved={() => router.refresh()}
-        />
-      </section>
-
-      {/* Test SMS */}
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <h2 className="text-base font-semibold text-slate-800 mb-1">
-          Send a Test SMS
-        </h2>
-        <p className="text-sm text-slate-500 mb-4">
-          Verify your textbee credentials by sending a test message.
-        </p>
-
-        <form onSubmit={handleSendTest} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Phone Number
-            </label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-              placeholder="+16135550000"
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">
-              Message
-            </label>
-            <textarea
-              value={form.message}
-              onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
-              rows={3}
-              className="w-full border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={form.status === "sending"}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50"
-          >
-            {form.status === "sending" ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-            {form.status === "sending" ? "Sending…" : "Send Test SMS"}
-          </button>
-
-          {form.feedback && (
-            <div
-              className={`flex items-start gap-2 p-3 rounded-md text-sm ${
-                form.status === "success"
-                  ? "bg-emerald-50 text-emerald-800"
-                  : "bg-red-50 text-red-800"
-              }`}
-            >
-              {form.status === "success" ? (
-                <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              ) : (
-                <XCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-              )}
-              {form.feedback}
-            </div>
-          )}
-        </form>
-      </section>
-    </>
-  );
-}
-
-function RedirectForm({
-  initialEnabled,
-  initialNumber,
-  onEnabledChange,
-  onSaved,
-}: {
-  initialEnabled: boolean;
-  initialNumber: string;
-  onEnabledChange: (val: boolean) => void;
-  onSaved: () => void;
-}) {
-  const [enabled, setEnabled] = useState(initialEnabled);
-  const [number, setNumber] = useState(initialNumber);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-
-  function handleEnabledChange(val: boolean) {
-    setEnabled(val);
-    onEnabledChange(val);
-  }
-
-  async function save() {
-    setSaveStatus("saving");
-    try {
-      const res = await fetch("/api/admin/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ smsRedirectEnabled: enabled, smsRedirectNumber: number }),
-      });
-      if (res.ok) {
-        setSaveStatus("saved");
-        onSaved();
-      } else {
-        setSaveStatus("error");
-      }
-    } catch {
-      setSaveStatus("error");
-    }
-    setTimeout(() => setSaveStatus("idle"), 2500);
-  }
-
-  return (
-    <div className="space-y-3">
-      <label className="flex items-center gap-3 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => handleEnabledChange(e.target.checked)}
-          className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
-        />
-        <span className="text-sm font-medium text-slate-700">
-          Redirect all SMS to test number
-        </span>
-      </label>
-      <div className="flex gap-2">
-        <input
-          type="tel"
-          value={number}
-          onChange={(e) => setNumber(e.target.value)}
-          placeholder="+16135550000"
-          className="flex-1 border border-slate-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-        />
-        <button
-          onClick={save}
-          disabled={saveStatus === "saving"}
-          className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 disabled:opacity-50"
-        >
-          {saveStatus === "saving" && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-          {saveStatus === "saved" ? "Saved!" : saveStatus === "error" ? "Error" : "Save"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function StatusRow({
-  label,
-  enabled,
-  description,
-}: {
-  label: string;
-  enabled: boolean;
-  description?: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      {enabled ? (
-        <CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
-      ) : (
-        <XCircle className="w-4 h-4 text-slate-300 mt-0.5 flex-shrink-0" />
-      )}
-      <div>
-        <p className="text-sm font-medium text-slate-700">{label}</p>
-        {description && (
-          <p className="text-xs text-slate-500 mt-0.5">{description}</p>
-        )}
       </div>
     </div>
   );

@@ -8,6 +8,12 @@ import {
   getSmsTemplates,
   type SmsTemplateKey,
 } from "@/lib/sms-templates";
+import {
+  EMAIL_TEMPLATE_KEYS,
+  DEFAULT_EMAIL_TEMPLATES,
+  getEmailTemplates,
+  type EmailTemplateKey,
+} from "@/lib/email-templates";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -27,6 +33,20 @@ export async function GET(request: NextRequest) {
       key,
       value: templates[key],
       isDefault: templates[key] === defaults[key],
+    }));
+    return NextResponse.json(payload);
+  }
+
+  if (searchParams.get("section") === "email-templates") {
+    const templates = await getEmailTemplates();
+    const defaults = DEFAULT_EMAIL_TEMPLATES;
+    const payload = EMAIL_TEMPLATE_KEYS.map((key) => ({
+      key,
+      subject: templates[key].subject,
+      html: templates[key].html,
+      isDefault:
+        templates[key].subject === defaults[key].subject &&
+        templates[key].html === defaults[key].html,
     }));
     return NextResponse.json(payload);
   }
@@ -104,6 +124,36 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(updated);
     }
     return NextResponse.json({ error: "Unknown template key" }, { status: 400 });
+  }
+
+  if (body.emailTemplate && typeof body.emailTemplate === "object") {
+    const { key, subject, html } = body.emailTemplate as {
+      key: string;
+      subject: string | null;
+      html: string | null;
+    };
+    if (EMAIL_TEMPLATE_KEYS.includes(key as EmailTemplateKey)) {
+      const row = await (prisma.systemSettings.findUnique as any)({
+        where: { id: "singleton" },
+        select: { emailTemplates: true },
+      });
+      const existing =
+        row && typeof row.emailTemplates === "object" && row.emailTemplates !== null
+          ? (row.emailTemplates as Record<string, { subject: string; html: string }>)
+          : {};
+      if (subject === null || html === null) {
+        delete existing[key];
+      } else {
+        existing[key] = { subject, html };
+      }
+      const updated = await (prisma.systemSettings.upsert as any)({
+        where: { id: "singleton" },
+        create: { id: "singleton", emailTemplates: existing },
+        update: { emailTemplates: existing },
+      });
+      return NextResponse.json(updated);
+    }
+    return NextResponse.json({ error: "Unknown email template key" }, { status: 400 });
   }
 
   if (Object.keys(data).length === 0) {
