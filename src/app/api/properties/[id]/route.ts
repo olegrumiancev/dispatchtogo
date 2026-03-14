@@ -25,9 +25,9 @@ async function countActiveRequests(propertyId: string) {
   });
 }
 
-/** PATCH /api/properties/[id]  — toggle isActive */
+/** PATCH /api/properties/[id]  — update details or toggle isActive */
 export async function PATCH(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
@@ -43,6 +43,62 @@ export async function PATCH(
 
   const property = await getPropertyForOperator(id, orgId);
   if (!property) return NextResponse.json({ error: "Property not found" }, { status: 404 });
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+
+  const hasEditableField = [
+    "name",
+    "address",
+    "description",
+    "contactName",
+    "contactPhone",
+    "contactEmail",
+  ].some((key) => key in body);
+
+  if (hasEditableField) {
+    const data: Record<string, string | null> = {};
+
+    if (typeof body.name === "string") {
+      const nextName = body.name.trim();
+      if (!nextName) {
+        return NextResponse.json({ error: "Property name is required." }, { status: 400 });
+      }
+      data.name = nextName;
+    }
+
+    if (typeof body.address === "string") {
+      const nextAddress = body.address.trim();
+      if (!nextAddress) {
+        return NextResponse.json({ error: "Address is required." }, { status: 400 });
+      }
+      data.address = nextAddress;
+    }
+
+    if (typeof body.description === "string") {
+      data.description = body.description.trim() || null;
+    }
+    if (typeof body.contactName === "string") {
+      data.contactName = body.contactName.trim() || null;
+    }
+    if (typeof body.contactPhone === "string") {
+      data.contactPhone = body.contactPhone.trim() || null;
+    }
+    if (typeof body.contactEmail === "string") {
+      data.contactEmail = body.contactEmail.trim() || null;
+    }
+
+    const updatedProperty = await prisma.property.update({
+      where: { id },
+      data,
+    });
+
+    return NextResponse.json(updatedProperty);
+  }
 
   // Only block when trying to DISABLE (not when re-enabling)
   if (property.isActive) {

@@ -43,6 +43,9 @@ import {
   AlertTriangle,
   HelpCircle,
   CircleDollarSign,
+  Phone,
+  Mail,
+  User,
 } from "lucide-react";
 import Link from "next/link";
 import { formatDate, formatCurrency } from "@/lib/utils";
@@ -58,6 +61,15 @@ const MATERIAL_HINT_PATTERN =
 interface Property {
   name: string;
   address: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+}
+
+interface OrganizationContact {
+  name: string;
+  contactPhone: string | null;
+  contactEmail: string | null;
 }
 
 interface JobMaterial {
@@ -97,7 +109,11 @@ interface ServiceRequest {
   createdAt: Date | string;
   resolvedAt: Date | string | null;
   rejectionReason: string | null;
+  siteContactName: string | null;
+  siteContactPhone: string | null;
+  siteContactEmail: string | null;
   property: Property;
+  organization: OrganizationContact;
   photos: JobPhoto[];
 }
 
@@ -446,6 +462,39 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
     (m) => m.description.trim() || Number(m.unitCost) > 0,
   );
   const commercialSnapshot = job.commercialSnapshot;
+  const siteContact =
+    sr.siteContactName || sr.siteContactPhone || sr.siteContactEmail
+      ? {
+          name: sr.siteContactName,
+          phone: sr.siteContactPhone,
+          email: sr.siteContactEmail,
+        }
+      : sr.property.contactName || sr.property.contactPhone || sr.property.contactEmail
+        ? {
+            name: sr.property.contactName,
+            phone: sr.property.contactPhone,
+            email: sr.property.contactEmail,
+          }
+        : sr.organization.contactPhone || sr.organization.contactEmail
+          ? {
+              name: sr.organization.name,
+              phone: sr.organization.contactPhone,
+              email: sr.organization.contactEmail,
+            }
+          : null;
+  const dispatchContact =
+    sr.organization.contactPhone || sr.organization.contactEmail
+      ? {
+          name: sr.organization.name,
+          phone: sr.organization.contactPhone,
+          email: sr.organization.contactEmail,
+        }
+      : null;
+  const siteAndDispatchMatch =
+    Boolean(siteContact && dispatchContact) &&
+    siteContact?.name === dispatchContact?.name &&
+    siteContact?.phone === dispatchContact?.phone &&
+    siteContact?.email === dispatchContact?.email;
   const quoteDisposition = commercialSnapshot.quoteDisposition;
   const latestQuoteSummary = commercialSnapshot.latestQuoteSummary;
   const latestSubmittedQuoteSummary =
@@ -602,14 +651,13 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
                     ? "Ready to quote"
                     : "Optional";
   const initialWorkflowStep: WorkflowStepKey =
-    quoteStepTriggeredByState &&
-    (!hasAcceptedJob ||
-      latestQuoteSummary?.status === "DRAFT" ||
-      (commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK" &&
-        !latestSubmittedQuoteSummary))
-      ? "quote"
-      : !hasAcceptedJob
-        ? "overview"
+    !hasAcceptedJob
+      ? "overview"
+      : quoteStepTriggeredByState &&
+          (latestQuoteSummary?.status === "DRAFT" ||
+            (commercialSnapshot.quotePolicy === "REQUEST_BEFORE_WORK" &&
+              !latestSubmittedQuoteSummary))
+        ? "quote"
         : sr.status === "COMPLETED" || sr.status === "VERIFIED"
           ? "complete"
           : canCompleteNow
@@ -1416,7 +1464,7 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
           </Badge>
           {job.isPaused ? (
             <Badge variant="bg-amber-100 text-amber-800">
-              Paused — Will Return
+              Paused - Will Return
             </Badge>
           ) : (
             <Badge variant={getStatusColor(sr.status)}>
@@ -1965,6 +2013,117 @@ export function VendorJobDetail({ job }: VendorJobDetailProps) {
             </p>
             <p className="text-sm text-gray-700 mt-1">{sr.description}</p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Contacts</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+              Site Contact
+            </p>
+            {siteContact ? (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-gray-400" />
+                  <p className="text-sm font-medium text-gray-900">
+                    {siteContact.name || "Site contact"}
+                  </p>
+                </div>
+                {siteContact.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-gray-400" />
+                    <a
+                      href={`tel:${siteContact.phone}`}
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      {siteContact.phone}
+                    </a>
+                  </div>
+                )}
+                {siteContact.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-gray-400" />
+                    <a
+                      href={`mailto:${siteContact.email}`}
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      {siteContact.email}
+                    </a>
+                  </div>
+                )}
+                {siteContact.phone && (
+                  <a
+                    href={`tel:${siteContact.phone}`}
+                    className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                  >
+                    <Phone className="h-4 w-4" />
+                    Call Site Contact
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-gray-600">
+                No site-specific contact was provided for this property. Use the dispatch contact below.
+              </p>
+            )}
+          </div>
+
+          {!siteAndDispatchMatch && (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+              Dispatch Contact
+            </p>
+            {dispatchContact ? (
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-gray-400" />
+                  <p className="text-sm font-medium text-gray-900">
+                    {dispatchContact.name}
+                  </p>
+                </div>
+                {dispatchContact.phone && (
+                  <div className="flex items-center gap-2">
+                    <Phone className="h-4 w-4 text-gray-400" />
+                    <a
+                      href={`tel:${dispatchContact.phone}`}
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      {dispatchContact.phone}
+                    </a>
+                  </div>
+                )}
+                {dispatchContact.email && (
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-gray-400" />
+                    <a
+                      href={`mailto:${dispatchContact.email}`}
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                    >
+                      {dispatchContact.email}
+                    </a>
+                  </div>
+                )}
+                {dispatchContact.phone && (
+                  <a
+                    href={`tel:${dispatchContact.phone}`}
+                    className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50"
+                  >
+                    <Phone className="h-4 w-4" />
+                    Call Dispatch
+                  </a>
+                )}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-gray-600">
+                No dispatch contact is configured yet.
+              </p>
+            )}
+          </div>
+          )}
         </CardContent>
       </Card>
 

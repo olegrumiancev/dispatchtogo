@@ -1,6 +1,43 @@
 import { prisma } from "@/lib/prisma";
 import type { UserNotificationPreferences } from "@prisma/client";
 
+export type NotificationPreferenceScope =
+  | { userId: string }
+  | { organizationId: string }
+  | { vendorId: string };
+
+export const EMAIL_NOTIFICATION_PREFERENCE_KEYS = [
+  "emailDispatchEnabled",
+  "emailStatusEnabled",
+  "emailCompletionEnabled",
+  "emailIssueEnabled",
+] as const;
+
+export const SMS_NOTIFICATION_PREFERENCE_KEYS = [
+  "smsDispatchEnabled",
+  "smsStatusEnabled",
+  "smsCompletionEnabled",
+  "smsIssueEnabled",
+] as const;
+
+export type EmailNotificationPreferenceKey =
+  (typeof EMAIL_NOTIFICATION_PREFERENCE_KEYS)[number];
+export type SmsNotificationPreferenceKey =
+  (typeof SMS_NOTIFICATION_PREFERENCE_KEYS)[number];
+
+const PREFERENCE_SELECT = {
+  smsOptOut: true,
+  emailOptOut: true,
+  emailDispatchEnabled: true,
+  emailStatusEnabled: true,
+  emailCompletionEnabled: true,
+  emailIssueEnabled: true,
+  smsDispatchEnabled: true,
+  smsStatusEnabled: true,
+  smsCompletionEnabled: true,
+  smsIssueEnabled: true,
+} as const;
+
 /**
  * Return the notification preferences for a user, creating them with safe
  * defaults if they don't exist yet. Safe to call from any server context.
@@ -34,7 +71,12 @@ export async function updatePreferences(
   data: Partial<
     Pick<
       UserNotificationPreferences,
-      "digestEnabled" | "digestFrequency" | "smsOptOut" | "emailOptOut"
+      | "digestEnabled"
+      | "digestFrequency"
+      | "smsOptOut"
+      | "emailOptOut"
+      | EmailNotificationPreferenceKey
+      | SmsNotificationPreferenceKey
     >
   >
 ): Promise<UserNotificationPreferences> {
@@ -67,4 +109,78 @@ export async function isEmailOptedOut(userId: string): Promise<boolean> {
     select: { emailOptOut: true },
   });
   return prefs?.emailOptOut ?? false;
+}
+
+async function getScopedUsers(scope: NotificationPreferenceScope) {
+  if ("userId" in scope) {
+    return prisma.user.findMany({
+      where: { id: scope.userId },
+      select: {
+        id: true,
+        notificationPreferences: {
+          select: PREFERENCE_SELECT,
+        },
+      },
+    });
+  }
+
+  if ("organizationId" in scope) {
+    return prisma.user.findMany({
+      where: {
+        organizationId: scope.organizationId,
+        role: "OPERATOR",
+        isApproved: true,
+        isDisabled: false,
+      },
+      select: {
+        id: true,
+        notificationPreferences: {
+          select: PREFERENCE_SELECT,
+        },
+      },
+    });
+  }
+
+  return prisma.user.findMany({
+    where: {
+      vendorId: scope.vendorId,
+      role: "VENDOR",
+      isApproved: true,
+      isDisabled: false,
+    },
+    select: {
+      id: true,
+      notificationPreferences: {
+        select: PREFERENCE_SELECT,
+      },
+    },
+  });
+}
+
+export async function isEmailAllowedForScope(
+  scope: NotificationPreferenceScope,
+  key?: EmailNotificationPreferenceKey
+): Promise<boolean> {
+  const users = await getScopedUsers(scope);
+  if (users.length === 0) return true;
+
+  return users.some((user) => {
+    const prefs = user.notificationPreferences;
+    if (prefs?.emailOptOut) return false;
+    return key ? (prefs?.[key] ?? true) : true;
+  });
+}
+
+export async function isSmsAllowedForScope(
+  scope: NotificationPreferenceScope,
+  key?: SmsNotificationPreferenceKey
+): Promise<boolean> {
+  const users = await getScopedUsers(scope);
+  if (users.length === 0) return true;
+
+  return users.some((user) => {
+    const prefs = user.notificationPreferences;
+    if (prefs?.smsOptOut) return false;
+    return key ? (prefs?.[key] ?? true) : true;
+  });
 }

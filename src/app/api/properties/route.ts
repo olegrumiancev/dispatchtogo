@@ -31,14 +31,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
 
-  let body: { name?: string; address?: string; description?: string };
+  let body: {
+    name?: string;
+    address?: string;
+    description?: string;
+    contactName?: string;
+    contactPhone?: string;
+    contactEmail?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { name, address, description } = body;
+  const { name, address, description, contactName, contactPhone, contactEmail } = body;
 
   if (!name || typeof name !== "string" || name.trim() === "") {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -52,6 +59,9 @@ export async function POST(req: NextRequest) {
       name: name.trim(),
       address: address.trim(),
       description: description?.trim() || null,
+      contactName: contactName?.trim() || null,
+      contactPhone: contactPhone?.trim() || null,
+      contactEmail: contactEmail?.trim() || null,
       organizationId: orgId,
     },
   });

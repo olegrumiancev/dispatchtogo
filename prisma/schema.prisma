@@ -122,6 +122,9 @@ model Property {
   name           String
   address        String
   description    String?
+  contactName    String?
+  contactPhone   String?
+  contactEmail   String?
   organizationId String
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
@@ -219,6 +222,9 @@ model ServiceRequest {
   urgency          String   @default("MEDIUM")
   status           String   @default("SUBMITTED")
   quotePolicy      String   @default("VENDOR_DECIDES")
+  siteContactName  String?
+  siteContactPhone String?
+  siteContactEmail String?
   aiTriageSummary  String?
   aiUrgencyScore   Int?
   rejectionReason  String?
@@ -367,7 +373,7 @@ model Quote {
   propertyAddressSnapshot String?
   vendorNameSnapshot    String
   createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  updatedAt             DateTime @default(now()) @updatedAt
 
   request          ServiceRequest    @relation(fields: [serviceRequestId], references: [id])
   vendor           Vendor            @relation(fields: [vendorId], references: [id])
@@ -465,6 +471,14 @@ model UserNotificationPreferences {
   digestFrequency    String   @default("DAILY")
   smsOptOut          Boolean  @default(false)
   emailOptOut        Boolean  @default(false)
+  emailDispatchEnabled   Boolean  @default(true)
+  emailStatusEnabled     Boolean  @default(true)
+  emailCompletionEnabled Boolean  @default(true)
+  emailIssueEnabled      Boolean  @default(true)
+  smsDispatchEnabled     Boolean  @default(true)
+  smsStatusEnabled       Boolean  @default(true)
+  smsCompletionEnabled   Boolean  @default(true)
+  smsIssueEnabled        Boolean  @default(true)
   // Used for one-click unsubscribe links in digest emails (no auth required)
   unsubscribeToken   String   @unique @default(cuid())
   createdAt          DateTime @default(now())

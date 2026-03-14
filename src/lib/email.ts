@@ -1,6 +1,11 @@
 import nodemailer from "nodemailer";
 import type { Transporter } from "nodemailer";
 import { isEmailEventEnabled, getBccRecipients } from "@/lib/settings";
+import {
+  isEmailAllowedForScope,
+  type EmailNotificationPreferenceKey,
+  type NotificationPreferenceScope,
+} from "@/lib/user-preferences";
 import type { SystemSettings } from "@prisma/client";
 
 const SMTP_HOST = process.env.SMTP_HOST || "";
@@ -42,7 +47,11 @@ export async function sendEmail(
   subject: string,
   html: string,
   text?: string,
-  options?: { eventKey?: keyof SystemSettings }
+  options?: {
+    eventKey?: keyof SystemSettings;
+    preferenceScope?: NotificationPreferenceScope;
+    preferenceKey?: EmailNotificationPreferenceKey;
+  }
 ): Promise<EmailResult> {
   // If an event key is provided, check whether this event is enabled
   if (options?.eventKey) {
@@ -50,6 +59,17 @@ export async function sendEmail(
     if (!enabled) {
       console.log(`[email] Event ${String(options.eventKey)} is disabled – skipping`);
       return { success: false, error: "Event disabled by admin settings" };
+    }
+  }
+
+  if (options?.preferenceScope) {
+    const allowed = await isEmailAllowedForScope(
+      options.preferenceScope,
+      options.preferenceKey
+    ).catch(() => true);
+    if (!allowed) {
+      console.log(`[email] Recipient preference opted out; skipping ${to}`);
+      return { success: false, error: "Recipient opted out of email notifications" };
     }
   }
 
@@ -102,7 +122,8 @@ export async function sendVendorDispatchEmail(
     description: string;
     refNumber: string;
     appUrl?: string;
-  }
+  },
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const appUrl = details.appUrl || "https://app.dispatchtogo.com";
   const subject = `New Job Dispatched – ${details.refNumber}`;
@@ -126,14 +147,19 @@ export async function sendVendorDispatchEmail(
         <a href="${appUrl}/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View & Accept Job</a>
       </div>
     </div>`;
-  return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailVendorDispatch" });
+  return sendEmail(vendorEmail, subject, html, undefined, {
+    eventKey: "emailVendorDispatch",
+    preferenceScope,
+    preferenceKey: "emailDispatchEnabled",
+  });
 }
 
 export async function sendOperatorStatusEmail(
   operatorEmail: string,
   refNumber: string,
   status: string,
-  vendorName?: string
+  vendorName?: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const who = vendorName ? ` by ${vendorName}` : "";
@@ -149,13 +175,18 @@ export async function sendOperatorStatusEmail(
         <a href="${appBase}/app/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Details</a>
       </div>
     </div>`;
-  return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailOperatorStatusUpdate" });
+  return sendEmail(operatorEmail, subject, html, undefined, {
+    eventKey: "emailOperatorStatusUpdate",
+    preferenceScope,
+    preferenceKey: "emailStatusEnabled",
+  });
 }
 
 export async function sendJobCompletionEmail(
   operatorEmail: string,
   refNumber: string,
-  vendorName: string
+  vendorName: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const subject = `Job ${refNumber} – Completed by ${vendorName}`;
@@ -171,7 +202,11 @@ export async function sendJobCompletionEmail(
         <a href="${appBase}/app/operator/requests" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">Review Proof Packet</a>
       </div>
     </div>`;
-  return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailJobCompletion" });
+  return sendEmail(operatorEmail, subject, html, undefined, {
+    eventKey: "emailJobCompletion",
+    preferenceScope,
+    preferenceKey: "emailCompletionEnabled",
+  });
 }
 
 export async function sendWelcomeEmail(
@@ -216,7 +251,8 @@ export async function sendVendorRejectionEmail(
   refNumber: string,
   reason: string,
   rejectionType: string,
-  property?: { name?: string; address?: string } | null
+  property?: { name?: string; address?: string } | null,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const typeLabel = REJECTION_TYPE_LABELS[rejectionType] ?? "Rejected";
   const message = REJECTION_TYPE_VENDOR_MSGS[rejectionType] ?? "Your completed work has been rejected.";
@@ -240,7 +276,11 @@ export async function sendVendorRejectionEmail(
         <a href="${process.env.APP_BASE_URL ?? 'https://app.dispatchtogo.com'}/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Job in App</a>
       </div>
     </div>`;
-  return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailVendorRejection" });
+  return sendEmail(vendorEmail, subject, html, undefined, {
+    eventKey: "emailVendorRejection",
+    preferenceScope,
+    preferenceKey: "emailIssueEnabled",
+  });
 }
 
 export async function sendVendorDeclinedOperatorEmail(
@@ -248,7 +288,8 @@ export async function sendVendorDeclinedOperatorEmail(
   refNumber: string,
   propertyName: string,
   vendorName: string,
-  declineReason?: string | null
+  declineReason?: string | null,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const subject = `Vendor Declined – Job ${refNumber} Needs Re-Dispatch`;
   const reasonHtml = declineReason
@@ -267,14 +308,19 @@ export async function sendVendorDeclinedOperatorEmail(
         <a href="${process.env.APP_BASE_URL ?? 'https://app.dispatchtogo.com'}/app/operator/requests" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View Request</a>
       </div>
     </div>`;
-  return sendEmail(operatorEmail, subject, html, undefined, { eventKey: "emailOperatorStatusUpdate" });
+  return sendEmail(operatorEmail, subject, html, undefined, {
+    eventKey: "emailOperatorStatusUpdate",
+    preferenceScope,
+    preferenceKey: "emailIssueEnabled",
+  });
 }
 
 export async function sendJobCancelledToVendorEmail(
   vendorEmail: string,
   vendorCompanyName: string,
   refNumber: string,
-  propertyName: string
+  propertyName: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const subject = `Job Cancelled – ${refNumber}`;
   const html = `
@@ -289,14 +335,19 @@ export async function sendJobCancelledToVendorEmail(
         <a href="https://app.dispatchtogo.com/app/vendor/jobs" style="display:inline-block;background:#1e40af;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View My Jobs</a>
       </div>
     </div>`;
-  return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailVendorDispatch" });
+  return sendEmail(vendorEmail, subject, html, undefined, {
+    eventKey: "emailVendorDispatch",
+    preferenceScope,
+    preferenceKey: "emailIssueEnabled",
+  });
 }
 
 export async function sendWorkVerifiedToVendorEmail(
   vendorEmail: string,
   vendorCompanyName: string,
   refNumber: string,
-  propertyName: string
+  propertyName: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<EmailResult> {
   const subject = `Work Approved – Job ${refNumber}`;
   const html = `
@@ -312,7 +363,11 @@ export async function sendWorkVerifiedToVendorEmail(
         <a href="https://app.dispatchtogo.com/app/vendor/jobs" style="display:inline-block;background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;margin:16px 0">View My Jobs</a>
       </div>
     </div>`;
-  return sendEmail(vendorEmail, subject, html, undefined, { eventKey: "emailJobCompletion" });
+  return sendEmail(vendorEmail, subject, html, undefined, {
+    eventKey: "emailJobCompletion",
+    preferenceScope,
+    preferenceKey: "emailCompletionEnabled",
+  });
 }
 
 // ── Digest email templates ───────────────────────────────────────────────────

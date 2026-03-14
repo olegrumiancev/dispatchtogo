@@ -38,6 +38,9 @@ export interface AdminDispatchBoardData {
       id: string;
       status: string;
       isPaused: boolean;
+      pauseReason: string | null;
+      estimatedReturnDate: string | null;
+      pausedAt: string | null;
       vendor: { companyName: string; phone: string };
     } | null;
   }>;
@@ -230,6 +233,9 @@ export async function getAdminDispatchBoardData(
         id: true,
         status: true,
         isPaused: true,
+        pauseReason: true,
+        estimatedReturnDate: true,
+        pausedAt: true,
         vendor: { select: { companyName: true, phone: true } },
       },
     },
@@ -312,6 +318,9 @@ export async function getAdminDispatchBoardData(
             id: request.job.id,
             status: request.job.status,
             isPaused: request.job.isPaused,
+            pauseReason: request.job.pauseReason,
+            estimatedReturnDate: request.job.estimatedReturnDate?.toISOString() ?? null,
+            pausedAt: request.job.pausedAt?.toISOString() ?? null,
             vendor: {
               companyName: request.job.vendor.companyName,
               phone: request.job.vendor.phone,

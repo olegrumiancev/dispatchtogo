@@ -81,6 +81,14 @@ export async function MyAccountPage({ userId, relatedSettings }: MyAccountPagePr
           digestFrequency: prefs.digestFrequency,
           smsOptOut: prefs.smsOptOut,
           emailOptOut: prefs.emailOptOut,
+          emailDispatchEnabled: prefs.emailDispatchEnabled,
+          emailStatusEnabled: prefs.emailStatusEnabled,
+          emailCompletionEnabled: prefs.emailCompletionEnabled,
+          emailIssueEnabled: prefs.emailIssueEnabled,
+          smsDispatchEnabled: prefs.smsDispatchEnabled,
+          smsStatusEnabled: prefs.smsStatusEnabled,
+          smsCompletionEnabled: prefs.smsCompletionEnabled,
+          smsIssueEnabled: prefs.smsIssueEnabled,
         }}
       />
     </AccountPageShell>

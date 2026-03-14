@@ -51,7 +51,7 @@ export default async function PropertiesPage({
   const orderByMap: Record<string, any> = {
     name:        { name: sortDir },
     address:     { address: sortDir },
-    description: { description: sortDir },
+    contact:     { contactName: sortDir },
     requests:    { serviceRequests: { _count: sortDir } },
     status:      { isActive: sortDir === "asc" ? "desc" : "asc" }, // asc = Active first
   };
@@ -117,7 +117,7 @@ export default async function PropertiesPage({
                   {([
                     { col: "name",        label: "Property Name", cls: "" },
                     { col: "address",     label: "Address",       cls: "hidden md:table-cell" },
-                    { col: "description", label: "Description",   cls: "hidden lg:table-cell" },
+                    { col: "contact",     label: "Site Contact",  cls: "hidden lg:table-cell" },
                     { col: "requests",    label: "Requests",      cls: "hidden sm:table-cell text-center" },
                     { col: "status",      label: "Status",        cls: "" },
                   ] as const).map(({ col, label, cls }) => {
@@ -152,9 +152,18 @@ export default async function PropertiesPage({
                       </p>
                     </td>
                     <td className="px-6 py-4 hidden lg:table-cell">
-                      <p className="text-sm text-gray-500 max-w-[220px] truncate">
-                        {property.description ?? <span className="text-gray-400">—</span>}
-                      </p>
+                      {property.contactName || property.contactPhone || property.contactEmail ? (
+                        <div className="max-w-[220px]">
+                          <p className="truncate text-sm font-medium text-gray-900">
+                            {property.contactName || "Site contact"}
+                          </p>
+                          <p className="truncate text-xs text-gray-500">
+                            {property.contactPhone || property.contactEmail || "Contact details saved"}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-400">Uses org default</p>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-center hidden sm:table-cell">
                       <Link
@@ -190,8 +199,13 @@ export default async function PropertiesPage({
                         <PropertyActions
                           propertyId={property.id}
                           propertyName={property.name}
+                          propertyAddress={property.address}
+                          propertyDescription={property.description}
                           isActive={property.isActive}
                           activeRequestCount={property.serviceRequests.length}
+                          contactName={property.contactName}
+                          contactPhone={property.contactPhone}
+                          contactEmail={property.contactEmail}
                         />
                       </div>
                     </td>

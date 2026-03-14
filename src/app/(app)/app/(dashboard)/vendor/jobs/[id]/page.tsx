@@ -26,6 +26,13 @@ export default async function VendorJobDetailPage({
       serviceRequest: {
         include: {
           property: true,
+          organization: {
+            select: {
+              name: true,
+              contactPhone: true,
+              contactEmail: true,
+            },
+          },
           photos: true,
           quotes: latestQuoteSummaryRelationArgs,
           aiClassifications: { take: 1, orderBy: { createdAt: "desc" } },

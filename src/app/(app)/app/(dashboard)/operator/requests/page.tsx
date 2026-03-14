@@ -11,7 +11,7 @@ import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
 } from "@/lib/admin-operator-request-status";
-import { Plus, Eye, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Camera } from "lucide-react";
+import { Plus, Eye, Phone, ChevronLeft, ChevronRight, Paperclip, ChevronUp, ChevronDown, ChevronsUpDown, Camera } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import { CancelRequestButton } from "@/components/forms/cancel-request-button";
 import { currentPeriodStart, currentPeriodEnd, getOrgBillingRankMap } from "@/lib/billing";
@@ -124,7 +124,7 @@ export default async function RequestsPage({
         quotes: latestQuoteSummaryRelationArgs,
         job: {
           include: {
-            vendor: { select: { companyName: true } },
+            vendor: { select: { companyName: true, contactName: true, phone: true } },
             notes: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
             _count: { select: { photos: true } },
           },
@@ -520,6 +520,18 @@ export default async function RequestsPage({
                     </td>
                     <td className="px-3 py-3 text-right align-top sm:px-6 sm:py-4">
                       <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-3">
+                        {req.job?.vendor?.phone && (
+                          <a
+                            href={`tel:${req.job.vendor.phone}`}
+                            title={`Call ${req.job.vendor.companyName}`}
+                            aria-label={`Call ${req.job.vendor.companyName}`}
+                          >
+                            <Button variant="ghost" size="sm" className="px-2 sm:px-3">
+                              <Phone className="w-4 h-4" />
+                              <span className="hidden sm:inline">Call</span>
+                            </Button>
+                          </a>
+                        )}
                         {view === "active" && ["SUBMITTED", "TRIAGING", "NEEDS_CLARIFICATION", "READY_TO_DISPATCH"].includes(req.status) && (
                           <CancelRequestButton requestId={req.id} compact />
                         )}

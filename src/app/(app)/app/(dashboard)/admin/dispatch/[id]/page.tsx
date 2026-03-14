@@ -248,6 +248,7 @@ export default async function AdminDispatchDetailPage({
           getAdminOperatorRequestStatusLabel,
           req.status
         )}
+        eventVariant="compact"
         events={[
           { label: "Submitted", value: req.createdAt },
           { label: "Accepted", value: job?.acceptedAt },

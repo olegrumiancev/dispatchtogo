@@ -30,6 +30,9 @@ interface Property {
   id: string;
   name: string;
   address: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
 }
 
 interface AvailableVendor {
@@ -469,6 +472,7 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
     value: p.id,
     label: p.address ? `${p.name} — ${p.address}` : p.name,
   }));
+  const selectedProperty = properties.find((property) => property.id === propertyId) ?? null;
 
   const getCategoryLabel = (value: string) =>
     serviceCategories.find(
@@ -624,6 +628,31 @@ export function NewRequestForm({ properties }: NewRequestFormProps) {
                   onChange={(e) => setPropertyId(e.target.value)}
                   required
                 />
+              )}
+
+              {selectedProperty && (
+                <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                    Contact Shared With Vendor
+                  </p>
+                  {selectedProperty.contactName || selectedProperty.contactPhone || selectedProperty.contactEmail ? (
+                    <div className="mt-2 space-y-1 text-sm text-gray-700">
+                      <p className="font-medium text-gray-900">
+                        {selectedProperty.contactName || "Site contact"}
+                      </p>
+                      {selectedProperty.contactPhone && (
+                        <p>{selectedProperty.contactPhone}</p>
+                      )}
+                      {selectedProperty.contactEmail && (
+                        <p>{selectedProperty.contactEmail}</p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-600">
+                      No property-specific contact is set. Vendors will use your organization dispatch contact instead.
+                    </p>
+                  )}
+                </div>
               )}
 
               {/* Description */}

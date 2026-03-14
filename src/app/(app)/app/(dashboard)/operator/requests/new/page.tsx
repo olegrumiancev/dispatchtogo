@@ -13,6 +13,14 @@ export default async function NewRequestPage() {
   const properties = await prisma.property.findMany({
     where: { organizationId: user.organizationId, isActive: true },
     orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      address: true,
+      contactName: true,
+      contactPhone: true,
+      contactEmail: true,
+    },
   });
 
   return <NewRequestForm properties={properties} />;

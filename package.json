@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "prisma:migrate:dev:local": "powershell -NoProfile -Command \"$env:DATABASE_URL='postgresql://dispatchtogo:dispatchtogo@localhost:5435/dispatchtogo_local'; $env:SHADOW_DATABASE_URL='postgresql://dispatchtogo:dispatchtogo@localhost:5434/dispatchtogo_shadow'; npx prisma migrate dev\"",
+    "prisma:studio:local": "powershell -NoProfile -Command \"$env:DATABASE_URL='postgresql://dispatchtogo:dispatchtogo@localhost:5435/dispatchtogo_local'; npx prisma studio\"",
     "postinstall": "prisma generate"
   },
   "dependencies": {

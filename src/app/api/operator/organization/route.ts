@@ -44,9 +44,27 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: guard.error }, { status: guard.status });
   }
 
+  const currentOrg = await prisma.organization.findUnique({
+    where: { id: user.organizationId },
+    select: { contactPhone: true },
+  });
+
+  if (!currentOrg) {
+    return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  }
+
   const body = await request.json();
   const { name, type, contactEmail, contactPhone, address } = body;
   const allowedTypes = new Set<string>((await getOrganizationTypes()).map((t) => t.value));
+  const trimmedContactPhone =
+    typeof contactPhone === "string" ? contactPhone.trim() : currentOrg.contactPhone?.trim() ?? "";
+
+  if (!trimmedContactPhone) {
+    return NextResponse.json(
+      { error: "A dispatch phone number is required." },
+      { status: 400 }
+    );
+  }
 
   const data: Record<string, any> = {};
 
@@ -61,8 +79,8 @@ export async function PATCH(request: NextRequest) {
     data.email = contactEmail.trim() || null;
   }
   if (typeof contactPhone === "string") {
-    data.contactPhone = contactPhone.trim() || null;
-    data.phone = contactPhone.trim() || null;
+    data.contactPhone = trimmedContactPhone;
+    data.phone = trimmedContactPhone;
   }
   if (typeof address === "string") {
     data.address = address.trim() || null;

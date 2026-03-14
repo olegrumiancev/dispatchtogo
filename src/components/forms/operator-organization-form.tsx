@@ -68,7 +68,7 @@ export default function OperatorOrganizationForm({ initialOrg }: Props) {
       <CardHeader>
         <h2 className="text-base font-semibold text-gray-900">Organization Details</h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          Update your organization&apos;s name, contact info, and address.
+          Update your organization&apos;s name, dispatch contact info, and address.
         </p>
       </CardHeader>
       <CardContent>
@@ -128,8 +128,12 @@ export default function OperatorOrganizationForm({ initialOrg }: Props) {
                 onChange={handleChange}
                 className={inputClass}
                 placeholder="613-555-0000"
+                required
                 disabled={saving}
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Vendors rely on this number when they need dispatch help quickly.
+              </p>
             </div>
           </div>
 

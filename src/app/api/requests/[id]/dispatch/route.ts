@@ -147,7 +147,8 @@ export async function POST(
     sendVendorDispatchNotification(
       vendor.phone,
       vendor.companyName,
-      details
+      details,
+      { vendorId: vendor.id }
     ).then((result) => {
       if (!result.success) {
         console.error(
@@ -161,7 +162,8 @@ export async function POST(
       sendVendorDispatchEmail(
         vendor.email,
         vendor.companyName,
-        details
+        details,
+        { vendorId: vendor.id }
       ).then((result) => {
         if (!result.success) {
           console.error(

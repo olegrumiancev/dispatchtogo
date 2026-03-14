@@ -16,7 +16,7 @@ import {
   getAdminOperatorRequestStatusColor,
   getAdminOperatorRequestStatusLabel,
 } from "@/lib/admin-operator-request-status";
-import { ArrowLeft, MapPin, Calendar, User, Wrench, Phone, FileText, Package, Download } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar, User, Wrench, Phone, Mail, FileText, Package, Download } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/utils";
 import { CompletionReviewActions } from "@/components/forms/completion-review-actions";
 import { TriageSection } from "@/components/forms/triage-section";
@@ -62,6 +62,13 @@ export default async function RequestDetailPage({
       where: { id, organizationId: orgId },
       include: {
         property: true,
+        organization: {
+          select: {
+            name: true,
+            contactPhone: true,
+            contactEmail: true,
+          },
+        },
         photos: true,
         quotes: latestQuoteSummaryRelationArgs,
         job: {
@@ -97,7 +104,26 @@ export default async function RequestDetailPage({
       )
     : null;
 
-  const primaryContact = null;
+  const primaryContact =
+    req.siteContactName || req.siteContactPhone || req.siteContactEmail
+      ? {
+          name: req.siteContactName,
+          phone: req.siteContactPhone,
+          email: req.siteContactEmail,
+        }
+      : req.property.contactName || req.property.contactPhone || req.property.contactEmail
+        ? {
+            name: req.property.contactName,
+            phone: req.property.contactPhone,
+            email: req.property.contactEmail,
+          }
+        : req.organization.contactPhone || req.organization.contactEmail
+          ? {
+              name: req.organization.name,
+              phone: req.organization.contactPhone,
+              email: req.organization.contactEmail,
+            }
+          : null;
   const commercialSnapshot = buildCommercialSnapshot({
     quotePolicy: req.quotePolicy,
     quoteDisposition: req.job?.quoteDisposition,
@@ -243,13 +269,21 @@ export default async function RequestDetailPage({
                 </p>
                 <div className="flex items-center gap-1 mt-1">
                   <User className="w-4 h-4 text-gray-400" />
-                  <p className="text-sm text-gray-900">{(primaryContact as any).name}</p>
+                  <p className="text-sm text-gray-900">{(primaryContact as any).name || "Site contact"}</p>
                 </div>
                 {(primaryContact as any).phone && (
                   <div className="flex items-center gap-1 mt-0.5 ml-5">
                     <Phone className="w-3 h-3 text-gray-400" />
                     <a href={`tel:${(primaryContact as any).phone}`} className="text-xs text-blue-600 hover:text-blue-700">
                       {(primaryContact as any).phone}
+                    </a>
+                  </div>
+                )}
+                {(primaryContact as any).email && (
+                  <div className="flex items-center gap-1 mt-0.5 ml-5">
+                    <Mail className="w-3 h-3 text-gray-400" />
+                    <a href={`mailto:${(primaryContact as any).email}`} className="text-xs text-blue-600 hover:text-blue-700">
+                      {(primaryContact as any).email}
                     </a>
                   </div>
                 )}
@@ -464,6 +498,23 @@ export default async function RequestDetailPage({
                   <a href={`tel:${req.job.vendor.phone}`}>{req.job.vendor.phone}</a>
                 </p>
               </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <a
+                href={`tel:${req.job.vendor.phone}`}
+                className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-md border border-blue-200 px-3 py-2 text-sm font-medium text-blue-700 transition-colors hover:bg-blue-50"
+              >
+                <Phone className="w-4 h-4" />
+                Call Vendor
+              </a>
+              <a
+                href={`mailto:${req.job.vendor.email}`}
+                className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <Mail className="w-4 h-4" />
+                Email Vendor
+              </a>
             </div>
 
             {req.job.vendorNotes && (

@@ -308,15 +308,16 @@ export async function PATCH(
       .then(async (org) => {
         const phone = org?.contactPhone;
         const email = org?.contactEmail || org?.email;
+        const preferenceScope = orgId ? { organizationId: orgId } : undefined;
 
         // ── COMPLETED ───────────────────────────────────────────────────────
         if (newStatus === "COMPLETED" && NOTIFICATION_SETTINGS.notifyOperatorOnCompletion) {
           if (phone) {
-            sendJobCompletionNotification(phone, refNumber, vendorName)
+            sendJobCompletionNotification(phone, refNumber, vendorName, preferenceScope)
               .catch((e) => console.error("[job PATCH] Completion SMS failed:", e));
           }
           if (email && NOTIFICATION_SETTINGS.emailEnabled) {
-            sendJobCompletionEmail(email, refNumber, vendorName)
+            sendJobCompletionEmail(email, refNumber, vendorName, preferenceScope)
               .catch((e) => console.error("[job PATCH] Completion email failed:", e));
           }
         }
@@ -324,11 +325,11 @@ export async function PATCH(
         // ── ACCEPTED / IN_PROGRESS ───────────────────────────────────────────
         else if ((newStatus === "ACCEPTED" || newStatus === "IN_PROGRESS") && NOTIFICATION_SETTINGS.notifyOperatorOnStatusChange) {
           if (phone) {
-            sendOperatorStatusUpdate(phone, refNumber, newStatus, vendorName)
+            sendOperatorStatusUpdate(phone, refNumber, newStatus, vendorName, preferenceScope)
               .catch((e) => console.error("[job PATCH] Status SMS failed:", e));
           }
           if (email && NOTIFICATION_SETTINGS.emailEnabled) {
-            sendOperatorStatusEmail(email, refNumber, newStatus, vendorName)
+            sendOperatorStatusEmail(email, refNumber, newStatus, vendorName, preferenceScope)
               .catch((e) => console.error("[job PATCH] Status email failed:", e));
           }
         }
@@ -336,7 +337,7 @@ export async function PATCH(
         // ── EN ROUTE ────────────────────────────────────────────────────────
         else if (action === "enroute" && NOTIFICATION_SETTINGS.notifyOperatorOnStatusChange) {
           if (phone) {
-            sendVendorEnrouteNotification(phone, refNumber, propertyName, vendorName)
+            sendVendorEnrouteNotification(phone, refNumber, propertyName, vendorName, preferenceScope)
               .catch((e) => console.error("[job PATCH] En-route SMS failed:", e));
           }
         }
@@ -349,7 +350,8 @@ export async function PATCH(
               refNumber,
               propertyName,
               body.pauseReason ?? null,
-              body.estimatedReturnDate ? new Date(body.estimatedReturnDate) : null
+              body.estimatedReturnDate ? new Date(body.estimatedReturnDate) : null,
+              preferenceScope
             ).catch((e) => console.error("[job PATCH] Pause SMS failed:", e));
           }
           // In-app notification for operator users
@@ -377,7 +379,7 @@ export async function PATCH(
         // ── RESUME ──────────────────────────────────────────────────────────
         else if (action === "resume") {
           if (phone) {
-            sendWorkResumedNotification(phone, refNumber, propertyName)
+            sendWorkResumedNotification(phone, refNumber, propertyName, preferenceScope)
               .catch((e) => console.error("[job PATCH] Resume SMS failed:", e));
           }
           prisma.user.findMany({
@@ -401,11 +403,11 @@ export async function PATCH(
         else if (action === "decline") {
           // SMS + email to operator
           if (phone) {
-            sendJobDeclinedNotification(phone, refNumber, propertyName, vendorName)
+            sendJobDeclinedNotification(phone, refNumber, propertyName, vendorName, preferenceScope)
               .catch((e) => console.error("[job PATCH] Decline SMS failed:", e));
           }
           if (email && NOTIFICATION_SETTINGS.emailEnabled) {
-            sendVendorDeclinedOperatorEmail(email, refNumber, propertyName, vendorName, body.declineReason ?? null)
+            sendVendorDeclinedOperatorEmail(email, refNumber, propertyName, vendorName, body.declineReason ?? null, preferenceScope)
               .catch((e) => console.error("[job PATCH] Decline email failed:", e));
           }
           // In-app notification for admin users (re-dispatch attention needed)

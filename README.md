@@ -51,8 +51,8 @@ npm install
 cp .env.example .env
 # Edit .env with your database URL and secrets
 
-# Run database migrations
-npx prisma migrate dev
+# Run database migrations safely against the local Prisma dev database
+npm run prisma:migrate:dev:local -- --name init
 
 # Seed the database with demo data
 npx prisma db seed
@@ -68,6 +68,28 @@ docker-compose up -d
 ```
 
 This starts PostgreSQL and the Next.js app.
+
+## Prisma Workflow
+
+Use different Prisma commands for different database targets:
+
+```bash
+# Safe schema development against the local disposable Prisma database
+npm run prisma:migrate:dev:local -- --name your_migration_name
+
+# Open Prisma Studio against the local Prisma database
+npm run prisma:studio:local
+
+# Apply checked-in migrations to the configured remote/shared database
+npx prisma migrate deploy
+```
+
+Rules:
+
+- Use `prisma migrate dev` only through `npm run prisma:migrate:dev:local`.
+- Do not run `prisma migrate dev` directly against the remote/shared database.
+- Use `prisma migrate deploy` for the remote/shared database.
+- The local Prisma dev database runs on `localhost:5435` and the shadow database runs on `localhost:5434`.
 
 ## Project Structure
 

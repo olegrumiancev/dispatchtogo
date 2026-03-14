@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
 import {
   Send,
-  Users,
   BarChart3,
   Bell,
   ShieldCheck,
@@ -62,6 +61,7 @@ export default async function AdminDashboardPage() {
   const stats = [
     {
       label: "Pending Dispatch",
+      mobileLabel: "Pending",
       value: pendingDispatch,
       icon: Send,
       color: "bg-orange-100 text-orange-600",
@@ -69,6 +69,7 @@ export default async function AdminDashboardPage() {
     },
     {
       label: "Active Jobs",
+      mobileLabel: "Active",
       value: activeJobs,
       icon: Briefcase,
       color: "bg-blue-100 text-blue-600",
@@ -76,6 +77,7 @@ export default async function AdminDashboardPage() {
     },
     {
       label: "Completed This Month",
+      mobileLabel: "Done",
       value: completedThisMonth,
       icon: CheckCircle,
       color: "bg-emerald-100 text-emerald-600",
@@ -83,6 +85,7 @@ export default async function AdminDashboardPage() {
     },
     {
       label: "Emergencies",
+      mobileLabel: "Urgent",
       value: emergencyRequests,
       icon: AlertTriangle,
       color: "bg-red-100 text-red-600",
@@ -90,6 +93,7 @@ export default async function AdminDashboardPage() {
     },
     {
       label: "Requests This Month",
+      mobileLabel: "This Mo",
       value: requestsThisMonth,
       icon: TrendingUp,
       color: "bg-purple-100 text-purple-600",
@@ -97,6 +101,7 @@ export default async function AdminDashboardPage() {
     },
     {
       label: "Total Requests",
+      mobileLabel: "Total",
       value: totalRequests,
       icon: ClipboardList,
       color: "bg-gray-100 text-gray-600",
@@ -125,17 +130,30 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
         {stats.map((stat) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.label} className={stat.highlight ? "ring-2 ring-orange-300" : ""}>
-              <CardContent className="flex flex-col items-center py-5 gap-2">
-                <div className={`p-2 rounded-lg ${stat.color}`}>
-                  <Icon className="w-5 h-5" />
+            <Card key={stat.label} className={stat.highlight ? "h-full ring-2 ring-orange-300" : "h-full"}>
+              <CardContent className="flex items-center gap-2 px-3 py-3 sm:gap-4 sm:px-6 sm:py-5">
+                <div
+                  className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md ${stat.color} sm:h-11 sm:w-11 sm:rounded-lg`}
+                >
+                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-xs text-gray-500 text-center">{stat.label}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1">
+                    <p className="text-base font-bold leading-none text-gray-900 sm:text-2xl">
+                      {stat.value}
+                    </p>
+                    <p className="min-w-0 text-[11px] font-medium leading-4 text-gray-500 sm:hidden">
+                      {stat.mobileLabel}
+                    </p>
+                  </div>
+                  <p className="mt-1 hidden text-xs text-gray-500 sm:block">
+                    {stat.label}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           );

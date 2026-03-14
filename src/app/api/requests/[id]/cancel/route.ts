@@ -72,12 +72,12 @@ export async function POST(
     const refNum = (current as any).referenceNumber ?? id;
 
     // SMS to vendor (fire-and-forget)
-    sendJobCancelledToVendorSms(vendor.phone, refNum, propertyName)
+    sendJobCancelledToVendorSms(vendor.phone, refNum, propertyName, { vendorId: vendor.id })
       .catch((e) => console.error("[cancel] SMS to vendor failed:", e));
 
     // Email to vendor (fire-and-forget)
     if (NOTIFICATION_SETTINGS.emailEnabled && vendor.email) {
-      sendJobCancelledToVendorEmail(vendor.email, vendor.companyName, refNum, propertyName)
+      sendJobCancelledToVendorEmail(vendor.email, vendor.companyName, refNum, propertyName, { vendorId: vendor.id })
         .catch((e) => console.error("[cancel] Email to vendor failed:", e));
     }
 

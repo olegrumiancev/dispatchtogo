@@ -157,7 +157,8 @@ export async function autoDispatch(
         sendVendorDispatchNotification(
           vendor.phone,
           vendor.companyName,
-          notifDetails
+          notifDetails,
+          { vendorId: chosenVendorId }
         ).then((result) => {
           if (!result.success) {
             console.error("[auto-dispatch] SMS to vendor failed:", result.error);
@@ -168,7 +169,8 @@ export async function autoDispatch(
           sendVendorDispatchEmail(
             vendor.email,
             vendor.companyName,
-            notifDetails
+            notifDetails,
+            { vendorId: chosenVendorId }
           ).then((result) => {
             if (!result.success) {
               console.error("[auto-dispatch] Email to vendor failed:", result.error);

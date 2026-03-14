@@ -29,6 +29,14 @@ function formatSyncTime(iso: string) {
   });
 }
 
+function formatPauseReturnDate(iso: string) {
+  return new Date(iso).toLocaleDateString("en-CA", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
 export function AdminDispatchBoardClient({ initialData }: { initialData: AdminDispatchBoardData }) {
   const { serviceCategories } = useCatalogOptions();
   const [board, setBoard] = useState(initialData);
@@ -342,15 +350,18 @@ export function AdminDispatchBoardClient({ initialData }: { initialData: AdminDi
                 {board.requests.map((request) => {
                   const isUnassigned = !request.job || request.job.status === "DECLINED";
                   const isFresh = freshRequestIds.has(request.id);
+                  const isPaused = !!request.job?.isPaused;
                   return (
                     <tr
                       key={request.id}
                       className={cn(
                         "transition-colors",
-                        isFresh
-                          ? "bg-sky-50 hover:bg-sky-100"
-                          : request.status === "DISPUTED"
+                        request.status === "DISPUTED"
                           ? "bg-rose-50 hover:bg-rose-100"
+                          : isPaused
+                          ? "bg-amber-50 hover:bg-amber-100"
+                          : isFresh
+                          ? "bg-sky-50 hover:bg-sky-100"
                           : "hover:bg-gray-50"
                       )}
                     >
@@ -378,11 +389,27 @@ export function AdminDispatchBoardClient({ initialData }: { initialData: AdminDi
                         <Badge variant={getUrgencyColor(request.urgency)}>{request.urgency}</Badge>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex flex-col items-start gap-1">
+                        <div className="flex flex-col items-start gap-1.5">
                           <Badge variant={getAdminOperatorRequestStatusColor(request.status)}>
                             {getAdminOperatorRequestStatusLabel(request.status)}
                           </Badge>
-                          {request.job?.isPaused && <span className="text-xs font-medium text-amber-700">Paused</span>}
+                          {isPaused && (
+                            <>
+                              <Badge variant="bg-amber-100 text-amber-800">Paused - Will Return</Badge>
+                              {(request.job?.estimatedReturnDate || request.job?.pauseReason) && (
+                                <div className="max-w-[14rem] space-y-0.5 text-xs text-amber-700">
+                                  {request.job?.estimatedReturnDate && (
+                                    <p>Expected return: {formatPauseReturnDate(request.job.estimatedReturnDate)}</p>
+                                  )}
+                                  {request.job?.pauseReason && (
+                                    <p className="truncate" title={request.job.pauseReason}>
+                                      {request.job.pauseReason}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                          )}
                         </div>
                       </td>
                       <td className="hidden px-6 py-4 text-sm text-gray-500 md:table-cell">{formatDate(request.createdAt)}</td>

@@ -1,0 +1,9 @@
+ALTER TABLE "Property"
+ADD COLUMN IF NOT EXISTS "contactName" TEXT,
+ADD COLUMN IF NOT EXISTS "contactPhone" TEXT,
+ADD COLUMN IF NOT EXISTS "contactEmail" TEXT;
+
+ALTER TABLE "ServiceRequest"
+ADD COLUMN IF NOT EXISTS "siteContactName" TEXT,
+ADD COLUMN IF NOT EXISTS "siteContactPhone" TEXT,
+ADD COLUMN IF NOT EXISTS "siteContactEmail" TEXT;

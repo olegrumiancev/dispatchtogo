@@ -234,7 +234,7 @@ export async function PATCH(
 
       // Email to vendor
       if (NOTIFICATION_SETTINGS.emailEnabled && vendor.email) {
-        sendWorkVerifiedToVendorEmail(vendor.email, vendor.companyName, refNum, propertyName)
+        sendWorkVerifiedToVendorEmail(vendor.email, vendor.companyName, refNum, propertyName, { vendorId: vendor.id })
           .catch((e) => console.error("[verify] Email to vendor failed:", e));
       }
     }
@@ -346,11 +346,11 @@ export async function PATCH(
 
     if (vendor) {
       // SMS to vendor
-      sendVendorRejectionSms(vendor.phone, vendor.companyName, refNum, rejectionReason.trim(), rejectionType)
+      sendVendorRejectionSms(vendor.phone, vendor.companyName, refNum, rejectionReason.trim(), rejectionType, { vendorId: vendor.id })
         .catch((e) => console.error("[notify] vendor SMS rejection failed", e));
 
       // Email to vendor
-      sendVendorRejectionEmail(vendor.email, vendor.companyName, refNum, rejectionReason.trim(), rejectionType, current.property as any)
+      sendVendorRejectionEmail(vendor.email, vendor.companyName, refNum, rejectionReason.trim(), rejectionType, current.property as any, { vendorId: vendor.id })
         .catch((e) => console.error("[notify] vendor email rejection failed", e));
     }
 

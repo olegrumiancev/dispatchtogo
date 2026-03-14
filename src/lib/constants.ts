@@ -56,7 +56,7 @@ export const JOB_STATUSES = [
   { value: "OFFERED", label: "Offered", color: "bg-blue-100 text-blue-800" },
   { value: "ACCEPTED", label: "Accepted", color: "bg-teal-100 text-teal-800" },
   { value: "IN_PROGRESS", label: "In Progress", color: "bg-cyan-100 text-cyan-800" },
-  { value: "PAUSED", label: "Paused \u2014 Will Return", color: "bg-amber-100 text-amber-800" },
+  { value: "PAUSED", label: "Paused - Will Return", color: "bg-amber-100 text-amber-800" },
   { value: "COMPLETED", label: "Completed", color: "bg-emerald-100 text-emerald-800" },
   { value: "DECLINED", label: "Declined", color: "bg-gray-200 text-gray-600" },
   { value: "REJECTED", label: "Rejected", color: "bg-red-100 text-red-800" },

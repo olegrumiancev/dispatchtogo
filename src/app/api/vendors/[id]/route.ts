@@ -68,13 +68,31 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  const currentVendor = await prisma.vendor.findUnique({
+    where: { id },
+    select: { phone: true },
+  });
+
+  if (!currentVendor) {
+    return NextResponse.json({ error: "Vendor not found" }, { status: 404 });
+  }
+
   // Only allow specific fields to be updated
   const { companyName, contactName, phone, address, serviceRadiusKm, availabilityStatus, availabilityNote, categories, multipleTeams } = body;
+  const trimmedPhone =
+    typeof phone === "string" ? phone.trim() : currentVendor.phone.trim();
+
+  if (!trimmedPhone) {
+    return NextResponse.json(
+      { error: "A phone number is required." },
+      { status: 400 }
+    );
+  }
 
   const updateData: Record<string, any> = {};
   if (companyName !== undefined) updateData.companyName = String(companyName).trim();
   if (contactName !== undefined) updateData.contactName = String(contactName).trim();
-  if (phone !== undefined) updateData.phone = String(phone).trim();
+  if (phone !== undefined) updateData.phone = trimmedPhone;
   if (address !== undefined) updateData.address = address ? String(address).trim() : null;
   if (serviceRadiusKm !== undefined) {
     const radius = parseInt(serviceRadiusKm, 10);

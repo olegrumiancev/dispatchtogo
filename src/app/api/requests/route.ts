@@ -111,7 +111,32 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const organization = await prisma.organization.findUnique({
+    where: { id: user.organizationId },
+    select: {
+      name: true,
+      contactPhone: true,
+      contactEmail: true,
+    },
+  });
+
+  if (!organization?.contactPhone?.trim()) {
+    return NextResponse.json(
+      {
+        error:
+          "Your organization needs a dispatch phone number before requests can be submitted. Update Organization Settings first.",
+      },
+      { status: 400 }
+    );
+  }
+
   const referenceNumber = generateReferenceNumber("SR");
+  const resolvedSiteContactName =
+    property.contactName?.trim() || organization.name.trim() || null;
+  const resolvedSiteContactPhone =
+    property.contactPhone?.trim() || organization.contactPhone?.trim() || null;
+  const resolvedSiteContactEmail =
+    property.contactEmail?.trim() || organization.contactEmail?.trim() || null;
 
   const serviceRequest = await prisma.serviceRequest.create({
     data: {
@@ -122,6 +147,9 @@ export async function POST(request: NextRequest) {
       urgency: urgency ?? "MEDIUM",
       referenceNumber,
       status: "SUBMITTED",
+      siteContactName: resolvedSiteContactName,
+      siteContactPhone: resolvedSiteContactPhone,
+      siteContactEmail: resolvedSiteContactEmail,
     },
     include: {
       property: true,

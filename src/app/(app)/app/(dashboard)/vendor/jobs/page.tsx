@@ -9,6 +9,7 @@ import { getServiceCategories, getServiceCategoryLabel } from "@/lib/catalog";
 import {
   MapPin,
   Clock,
+  Phone,
   RotateCcw,
   PauseCircle,
   ShieldCheck,
@@ -77,7 +78,14 @@ export default async function VendorJobsPage({
       include: {
         serviceRequest: {
           include: {
-            property: { select: { name: true, address: true } },
+            property: {
+              select: {
+                name: true,
+                address: true,
+                contactName: true,
+                contactPhone: true,
+              },
+            },
             quotes: latestQuoteSummaryRelationArgs,
             _count: { select: { photos: true } },
           },
@@ -94,8 +102,21 @@ export default async function VendorJobsPage({
       include: {
         serviceRequest: {
           include: {
-            property: { select: { name: true, address: true } },
+            property: {
+              select: {
+                name: true,
+                address: true,
+                contactName: true,
+                contactPhone: true,
+              },
+            },
             quotes: latestQuoteSummaryRelationArgs,
+            organization: {
+              select: {
+                name: true,
+                contactPhone: true,
+              },
+            },
           },
         },
       },
@@ -112,7 +133,14 @@ export default async function VendorJobsPage({
       include: {
         serviceRequest: {
           include: {
-            property: { select: { name: true, address: true } },
+            property: {
+              select: {
+                name: true,
+                address: true,
+                contactName: true,
+                contactPhone: true,
+              },
+            },
             quotes: latestQuoteSummaryRelationArgs,
           },
         },
@@ -370,6 +398,16 @@ export default async function VendorJobsPage({
             activeJobs.map((job) => {
               const sr = job.serviceRequest as any;
               const commercialIndicator = getJobCommercialIndicator(job as any);
+              const sitePhone =
+                sr.siteContactPhone ??
+                sr.property?.contactPhone ??
+                sr.organization?.contactPhone ??
+                null;
+              const siteContactLabel =
+                sr.siteContactName ??
+                sr.property?.contactName ??
+                sr.organization?.name ??
+                "Site contact";
               const hasRejection = !!sr.rejectionReason;
               const isPaused = !!(job as any).isPaused;
               const borderClass = hasRejection ? "border-amber-300" : isPaused ? "border-orange-300" : "";
@@ -380,7 +418,7 @@ export default async function VendorJobsPage({
                       <div className="mb-2.5 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-3 py-2">
                         <PauseCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-600" />
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold text-orange-800">Paused â€” Will Return</p>
+                          <p className="text-xs font-semibold text-orange-800">Paused - Will Return</p>
                           {(job as any).pauseReason && (
                             <p className="mt-0.5 line-clamp-2 text-xs text-orange-700">{(job as any).pauseReason}</p>
                           )}
@@ -437,11 +475,25 @@ export default async function VendorJobsPage({
                         <p className="line-clamp-2 text-sm text-gray-600 md:line-clamp-1">{sr.description}</p>
                       </div>
 
-                      <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
-                        <button className="rounded-md border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700">
-                          View Details
-                        </button>
-                      </Link>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:flex-shrink-0">
+                        {sitePhone && (
+                          <a
+                            href={`tel:${sitePhone}`}
+                            title={`Call ${siteContactLabel}`}
+                            className="rounded-md border border-gray-200 px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                          >
+                            <span className="inline-flex items-center gap-1.5">
+                              <Phone className="h-4 w-4" />
+                              Call Site
+                            </span>
+                          </a>
+                        )}
+                        <Link href={`/app/vendor/jobs/${job.id}`} className="flex-shrink-0">
+                          <button className="rounded-md border border-blue-200 px-3 py-2 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700">
+                            View Details
+                          </button>
+                        </Link>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>

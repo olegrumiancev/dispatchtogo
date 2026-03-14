@@ -45,6 +45,15 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone =
+      typeof phone === "string" ? phone.trim() : "";
+
+    if ((role === "OPERATOR" || role === "VENDOR") && !normalizedPhone) {
+      return NextResponse.json(
+        { error: "A phone number is required." },
+        { status: 400 }
+      );
+    }
 
     const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) {
@@ -85,7 +94,9 @@ export async function POST(request: NextRequest) {
           name: organizationName,
           type: orgType,
           contactEmail: normalizedEmail,
-          contactPhone: phone ?? null,
+          contactPhone: normalizedPhone,
+          email: normalizedEmail,
+          phone: normalizedPhone,
           termsAcceptedAt: tosAccepted ? new Date() : null,
           termsAcceptedIp: tosAccepted ? (clientIp ?? null) : null,
         },
@@ -142,7 +153,7 @@ export async function POST(request: NextRequest) {
           companyName,
           contactName: name ?? companyName,
           email: normalizedEmail,
-          phone: phone ?? "",
+          phone: normalizedPhone,
           skills: {
             create: uniqueCategories.map((category) => ({ category })),
           },

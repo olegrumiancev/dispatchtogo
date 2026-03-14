@@ -19,6 +19,9 @@ export function AddPropertyDialog({ onSuccess }: AddPropertyDialogProps) {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
 
   function openDialog() {
     setIsOpen(true);
@@ -27,6 +30,9 @@ export function AddPropertyDialog({ onSuccess }: AddPropertyDialogProps) {
     setName("");
     setAddress("");
     setDescription("");
+    setContactName("");
+    setContactPhone("");
+    setContactEmail("");
   }
 
   function closeDialog() {
@@ -45,7 +51,14 @@ export function AddPropertyDialog({ onSuccess }: AddPropertyDialogProps) {
       const res = await fetch("/api/properties", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, address, description: description || undefined }),
+        body: JSON.stringify({
+          name,
+          address,
+          description: description || undefined,
+          contactName: contactName || undefined,
+          contactPhone: contactPhone || undefined,
+          contactEmail: contactEmail || undefined,
+        }),
       });
 
       if (!res.ok) {
@@ -177,6 +190,71 @@ export function AddPropertyDialog({ onSuccess }: AddPropertyDialogProps) {
                     placeholder="Any additional details about this property…"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500 resize-none"
                   />
+                </div>
+
+                <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-4 space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Site Contact</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      Optional. If provided, vendors will see this person as the property contact on service requests.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="property-contact-name"
+                      className="block text-sm font-medium text-gray-700 mb-1"
+                    >
+                      Contact Name
+                    </label>
+                    <input
+                      id="property-contact-name"
+                      type="text"
+                      value={contactName}
+                      onChange={(e) => setContactName(e.target.value)}
+                      disabled={isLoading}
+                      placeholder="e.g. Front Desk"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                    />
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label
+                        htmlFor="property-contact-phone"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Contact Phone
+                      </label>
+                      <input
+                        id="property-contact-phone"
+                        type="tel"
+                        value={contactPhone}
+                        onChange={(e) => setContactPhone(e.target.value)}
+                        disabled={isLoading}
+                        placeholder="613-555-0000"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        htmlFor="property-contact-email"
+                        className="block text-sm font-medium text-gray-700 mb-1"
+                      >
+                        Contact Email
+                      </label>
+                      <input
+                        id="property-contact-email"
+                        type="email"
+                        value={contactEmail}
+                        onChange={(e) => setContactEmail(e.target.value)}
+                        disabled={isLoading}
+                        placeholder="desk@property.com"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Error */}

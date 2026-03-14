@@ -1,4 +1,9 @@
 import { getSettings } from "@/lib/settings";
+import {
+  isSmsAllowedForScope,
+  type NotificationPreferenceScope,
+  type SmsNotificationPreferenceKey,
+} from "@/lib/user-preferences";
 
 const TEXTBEE_API_URL = process.env.TEXTBEE_API_URL;
 const TEXTBEE_API_KEY = process.env.TEXTBEE_API_KEY;
@@ -10,11 +15,26 @@ type SMSResult =
 
 export async function sendSMS(
   to: string,
-  body: string
+  body: string,
+  options?: {
+    preferenceScope?: NotificationPreferenceScope;
+    preferenceKey?: SmsNotificationPreferenceKey;
+  }
 ): Promise<SMSResult> {
   if (!TEXTBEE_API_URL || !TEXTBEE_API_KEY || !TEXTBEE_DEVICE_ID) {
     console.warn("[sms] textbee not configured – skipping SMS");
     return { success: false, error: "textbee not configured" };
+  }
+
+  if (options?.preferenceScope) {
+    const allowed = await isSmsAllowedForScope(
+      options.preferenceScope,
+      options.preferenceKey
+    ).catch(() => true);
+    if (!allowed) {
+      console.log(`[sms] Recipient preference opted out; skipping ${to}`);
+      return { success: false, error: "Recipient opted out of SMS notifications" };
+    }
   }
 
   // SMS redirect failsafe — re-route to test number if enabled in DB settings
@@ -69,7 +89,8 @@ export async function sendVendorDispatchNotification(
     urgency: string;
     description: string;
     refNumber: string;
-  }
+  },
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase =
     process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
@@ -84,28 +105,39 @@ export async function sendVendorDispatchNotification(
     `Accept or decline: ${appBase}/app/vendor/jobs`,
   ].join("\n");
 
-  return sendSMS(vendorPhone, body);
+  return sendSMS(vendorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsDispatchEnabled",
+  });
 }
 
 export async function sendOperatorStatusUpdate(
   operatorPhone: string,
   refNumber: string,
   status: string,
-  vendorName?: string
+  vendorName?: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const who = vendorName ? ` by ${vendorName}` : "";
   const body = `DispatchToGo: Job ${refNumber} status updated to ${status}${who}.`;
-  return sendSMS(operatorPhone, body);
+  return sendSMS(operatorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsStatusEnabled",
+  });
 }
 
 export async function sendJobCompletionNotification(
   operatorPhone: string,
   refNumber: string,
-  vendorName: string
+  vendorName: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const body = `DispatchToGo: Job ${refNumber} has been completed by ${vendorName}. Review the proof packet: ${appBase}/app/operator/requests`;
-  return sendSMS(operatorPhone, body);
+  return sendSMS(operatorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsCompletionEnabled",
+  });
 }
 
 // Map of rejection type → human-readable label for SMS messages
@@ -120,7 +152,8 @@ export async function sendVendorRejectionSms(
   vendorCompanyName: string,
   refNumber: string,
   reason: string,
-  rejectionType: string
+  rejectionType: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const label = REJECTION_TYPE_LABELS[rejectionType] ?? "rejected";
@@ -129,7 +162,10 @@ export async function sendVendorRejectionSms(
     `Reason: ${reason.length > 120 ? reason.slice(0, 117) + "..." : reason}`,
     `View details: ${appBase}/app/vendor/jobs`,
   ].join("\n");
-  return sendSMS(vendorPhone, body);
+  return sendSMS(vendorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsIssueEnabled",
+  });
 }
 
 // Kept for callers that send from the operator side
@@ -139,10 +175,14 @@ export async function sendVendorEnrouteNotification(
   operatorPhone: string,
   refNumber: string,
   propertyName: string,
-  vendorName: string
+  vendorName: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const body = `DispatchToGo: Your vendor (${vendorName}) is on the way to ${propertyName}. Ref: ${refNumber}.`;
-  return sendSMS(operatorPhone, body);
+  return sendSMS(operatorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsStatusEnabled",
+  });
 }
 
 export async function sendWorkPausedNotification(
@@ -150,7 +190,8 @@ export async function sendWorkPausedNotification(
   refNumber: string,
   propertyName: string,
   pauseReason: string | null,
-  estimatedReturn: Date | null
+  estimatedReturn: Date | null,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const reason = pauseReason ? ` Reason: ${pauseReason.length > 100 ? pauseReason.slice(0, 97) + "..." : pauseReason}.` : "";
@@ -158,34 +199,49 @@ export async function sendWorkPausedNotification(
     ? ` Est. return: ${estimatedReturn.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}.`
     : "";
   const body = `DispatchToGo: Work has been paused at ${propertyName} (Ref: ${refNumber}).${reason}${eta} View details: ${appBase}/app/operator/requests`;
-  return sendSMS(operatorPhone, body);
+  return sendSMS(operatorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsStatusEnabled",
+  });
 }
 
 export async function sendWorkResumedNotification(
   operatorPhone: string,
   refNumber: string,
-  propertyName: string
+  propertyName: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const body = `DispatchToGo: Work has resumed at ${propertyName} (Ref: ${refNumber}).`;
-  return sendSMS(operatorPhone, body);
+  return sendSMS(operatorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsStatusEnabled",
+  });
 }
 
 export async function sendJobDeclinedNotification(
   operatorPhone: string,
   refNumber: string,
   propertyName: string,
-  vendorName: string
+  vendorName: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
   const body = `DispatchToGo: Vendor ${vendorName} declined job ${refNumber} at ${propertyName}. Re-dispatch required: ${appBase}/app/operator/requests`;
-  return sendSMS(operatorPhone, body);
+  return sendSMS(operatorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsIssueEnabled",
+  });
 }
 
 export async function sendJobCancelledToVendorSms(
   vendorPhone: string,
   refNumber: string,
-  propertyName: string
+  propertyName: string,
+  preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const body = `DispatchToGo: Job ${refNumber} at ${propertyName} has been cancelled by the operator. No further action is required.`;
-  return sendSMS(vendorPhone, body);
+  return sendSMS(vendorPhone, body, {
+    preferenceScope,
+    preferenceKey: "smsIssueEnabled",
+  });
 }

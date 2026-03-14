@@ -1,11 +1,16 @@
 /**
  * GET  /api/user/preferences  — return the caller's notification preferences
- * PATCH /api/user/preferences  — update digestEnabled, digestFrequency, smsOptOut, emailOptOut
+ * PATCH /api/user/preferences  — update notification preference flags
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getOrCreatePreferences, updatePreferences } from "@/lib/user-preferences";
+import {
+  EMAIL_NOTIFICATION_PREFERENCE_KEYS,
+  SMS_NOTIFICATION_PREFERENCE_KEYS,
+  getOrCreatePreferences,
+  updatePreferences,
+} from "@/lib/user-preferences";
 
 export async function GET() {
   const session = await auth();
@@ -27,7 +32,14 @@ export async function PATCH(request: NextRequest) {
   const user = session.user as any;
   const body = await request.json();
 
-  const ALLOWED_KEYS = ["digestEnabled", "digestFrequency", "smsOptOut", "emailOptOut"] as const;
+  const ALLOWED_KEYS = [
+    "digestEnabled",
+    "digestFrequency",
+    "smsOptOut",
+    "emailOptOut",
+    ...EMAIL_NOTIFICATION_PREFERENCE_KEYS,
+    ...SMS_NOTIFICATION_PREFERENCE_KEYS,
+  ] as const;
   const VALID_FREQUENCIES = ["DAILY", "NONE"];
 
   const data: Record<string, any> = {};
