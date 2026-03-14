@@ -1,4 +1,5 @@
 import { getSettings } from "@/lib/settings";
+import { renderTemplate } from "@/lib/sms-templates";
 import {
   isSmsAllowedForScope,
   type NotificationPreferenceScope,
@@ -94,16 +95,19 @@ export async function sendVendorDispatchNotification(
 ): Promise<SMSResult> {
   const appBase =
     process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
-  const body = [
-    `DispatchToGo: New job dispatched to ${vendorCompanyName}.`,
-    `Ref: ${details.refNumber}`,
-    `Property: ${details.propertyName}`,
-    `Category: ${details.category} | Urgency: ${details.urgency}`,
+  const description =
     details.description.length > 120
       ? details.description.slice(0, 117) + "..."
-      : details.description,
-    `Accept or decline: ${appBase}/app/vendor/jobs`,
-  ].join("\n");
+      : details.description;
+  const body = await renderTemplate("vendorDispatch", {
+    vendorCompanyName,
+    refNumber: details.refNumber,
+    propertyName: details.propertyName,
+    category: details.category,
+    urgency: details.urgency,
+    description,
+    appBase,
+  });
 
   return sendSMS(vendorPhone, body, {
     preferenceScope,
@@ -118,8 +122,11 @@ export async function sendOperatorStatusUpdate(
   vendorName?: string,
   preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
-  const who = vendorName ? ` by ${vendorName}` : "";
-  const body = `DispatchToGo: Job ${refNumber} status updated to ${status}${who}.`;
+  const body = await renderTemplate("operatorStatusUpdate", {
+    refNumber,
+    status,
+    vendorName: vendorName ? ` by ${vendorName}` : "",
+  });
   return sendSMS(operatorPhone, body, {
     preferenceScope,
     preferenceKey: "smsStatusEnabled",
@@ -133,7 +140,11 @@ export async function sendJobCompletionNotification(
   preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
-  const body = `DispatchToGo: Job ${refNumber} has been completed by ${vendorName}. Review the proof packet: ${appBase}/app/operator/requests`;
+  const body = await renderTemplate("jobCompletion", {
+    refNumber,
+    vendorName,
+    appBase,
+  });
   return sendSMS(operatorPhone, body, {
     preferenceScope,
     preferenceKey: "smsCompletionEnabled",
@@ -156,12 +167,13 @@ export async function sendVendorRejectionSms(
   preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
-  const label = REJECTION_TYPE_LABELS[rejectionType] ?? "rejected";
-  const body = [
-    `DispatchToGo: Work on job ${refNumber} has been ${label}.`,
-    `Reason: ${reason.length > 120 ? reason.slice(0, 117) + "..." : reason}`,
-    `View details: ${appBase}/app/vendor/jobs`,
-  ].join("\n");
+  const rejectionLabel = REJECTION_TYPE_LABELS[rejectionType] ?? "rejected";
+  const body = await renderTemplate("vendorRejection", {
+    refNumber,
+    rejectionLabel,
+    reason: reason.length > 120 ? reason.slice(0, 117) + "..." : reason,
+    appBase,
+  });
   return sendSMS(vendorPhone, body, {
     preferenceScope,
     preferenceKey: "smsIssueEnabled",
@@ -178,7 +190,11 @@ export async function sendVendorEnrouteNotification(
   vendorName: string,
   preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
-  const body = `DispatchToGo: Your vendor (${vendorName}) is on the way to ${propertyName}. Ref: ${refNumber}.`;
+  const body = await renderTemplate("vendorEnroute", {
+    vendorName,
+    propertyName,
+    refNumber,
+  });
   return sendSMS(operatorPhone, body, {
     preferenceScope,
     preferenceKey: "smsStatusEnabled",
@@ -194,11 +210,19 @@ export async function sendWorkPausedNotification(
   preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
-  const reason = pauseReason ? ` Reason: ${pauseReason.length > 100 ? pauseReason.slice(0, 97) + "..." : pauseReason}.` : "";
+  const reason = pauseReason
+    ? ` Reason: ${pauseReason.length > 100 ? pauseReason.slice(0, 97) + "..." : pauseReason}.`
+    : "";
   const eta = estimatedReturn
     ? ` Est. return: ${estimatedReturn.toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}.`
     : "";
-  const body = `DispatchToGo: Work has been paused at ${propertyName} (Ref: ${refNumber}).${reason}${eta} View details: ${appBase}/app/operator/requests`;
+  const body = await renderTemplate("workPaused", {
+    propertyName,
+    refNumber,
+    reason,
+    eta,
+    appBase,
+  });
   return sendSMS(operatorPhone, body, {
     preferenceScope,
     preferenceKey: "smsStatusEnabled",
@@ -211,7 +235,7 @@ export async function sendWorkResumedNotification(
   propertyName: string,
   preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
-  const body = `DispatchToGo: Work has resumed at ${propertyName} (Ref: ${refNumber}).`;
+  const body = await renderTemplate("workResumed", { propertyName, refNumber });
   return sendSMS(operatorPhone, body, {
     preferenceScope,
     preferenceKey: "smsStatusEnabled",
@@ -226,7 +250,12 @@ export async function sendJobDeclinedNotification(
   preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
   const appBase = process.env.APP_BASE_URL ?? "https://app.dispatchtogo.com";
-  const body = `DispatchToGo: Vendor ${vendorName} declined job ${refNumber} at ${propertyName}. Re-dispatch required: ${appBase}/app/operator/requests`;
+  const body = await renderTemplate("jobDeclined", {
+    vendorName,
+    refNumber,
+    propertyName,
+    appBase,
+  });
   return sendSMS(operatorPhone, body, {
     preferenceScope,
     preferenceKey: "smsIssueEnabled",
@@ -239,7 +268,10 @@ export async function sendJobCancelledToVendorSms(
   propertyName: string,
   preferenceScope?: NotificationPreferenceScope
 ): Promise<SMSResult> {
-  const body = `DispatchToGo: Job ${refNumber} at ${propertyName} has been cancelled by the operator. No further action is required.`;
+  const body = await renderTemplate("jobCancelledToVendor", {
+    refNumber,
+    propertyName,
+  });
   return sendSMS(vendorPhone, body, {
     preferenceScope,
     preferenceKey: "smsIssueEnabled",

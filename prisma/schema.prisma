@@ -609,6 +609,11 @@ model SystemSettings {
   smsRedirectEnabled Boolean @default(false)
   smsRedirectNumber  String  @default("")
 
+  // ── SMS message templates ────────────────────────────────────────────────
+  // JSON map of template key → message string with {variable} placeholders.
+  // Empty object means use built-in defaults for all templates.
+  smsTemplates Json @default("{}")
+
   // Admin-managed service/request catalog configuration
   serviceCategories Json?
   organizationTypes Json?
